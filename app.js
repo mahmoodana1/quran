@@ -1,7 +1,7 @@
 'use strict';
 
 // bump when data/ or fonts/ change so phones fetch the new files
-const DATA_VERSION = 5;
+const DATA_VERSION = 6;
 const AUDIO_BASE = 'https://everyayah.com/data/Yasser_Ad-Dussary_128kbps/';
 const RUB_LABEL = ['الحزب', 'ربع الحزب', 'نصف الحزب', 'ثلاثة أرباع الحزب'];
 const $ = (s, el = document) => el.querySelector(s);
@@ -696,6 +696,118 @@ if ('mediaSession' in navigator) {
   navigator.mediaSession.setActionHandler('previoustrack', () => $('#plPrev').onclick());
 }
 
+// ---------------------------------------------------------------- offline audio
+// Every recitation file can be saved on the device (≈1.5 GB for all 6236
+// ayat). The service worker answers playback from this cache, ranges included.
+
+const AUDIO_CACHE = 'audio-yasser-128';
+const AUDIO_TOTAL_MB = 1500;
+const DL = { running: false, done: 0, total: 0, failed: 0, cached: null, wake: null };
+const allAudioUrls = () => META.hafs.map((_, h) => hafsUrl(h));
+
+async function audioCachedSet() {
+  if (!('caches' in window)) return new Set();
+  const c = await caches.open(AUDIO_CACHE);
+  return new Set((await c.keys()).map(r => r.url));
+}
+
+function audioPanelHTML() {
+  return `<div class="group-label">التلاوة دون اتصال</div>
+  <div class="group dl-card" id="dlCard">
+    <div class="dl-top">
+      <div><div class="t">الشيخ ياسر الدوسري</div><div class="s" id="dlText">جارٍ الفحص…</div></div>
+      <div class="dl-pct" id="dlPct"></div>
+    </div>
+    <div class="prog dl-prog"><i id="dlBar" style="width:0"></i></div>
+    <div class="dl-actions" id="dlActions"></div>
+  </div>
+  <p class="note">يُحفظ صوت كل آية على جهازك (قرابة ١٫٥ غيغابايت للمصحف كاملًا) لتستمع دون إنترنت. أبقِ التطبيق مفتوحًا أثناء التحميل؛ ويمكنك الإيقاف والمتابعة لاحقًا من حيث توقفت. الآيات التي تستمع إليها تُحفظ تلقائيًا أيضًا.</p>`;
+}
+
+async function refreshAudioPanel() {
+  if (!$('#dlCard')) return;
+  if (!DL.running) {
+    const set = await audioCachedSet();
+    DL.total = META.hafs.length;
+    DL.done = allAudioUrls().filter(u => set.has(u)).length;
+  }
+  paintAudioPanel();
+}
+
+function paintAudioPanel() {
+  if (!$('#dlCard')) return;
+  const pct = DL.total ? DL.done / DL.total : 0;
+  $('#dlBar').style.width = (pct * 100).toFixed(1) + '%';
+  $('#dlPct').textContent = ar(Math.floor(pct * 100)) + '٪';
+  const mb = Math.round(pct * AUDIO_TOTAL_MB);
+  const complete = DL.done >= DL.total && DL.total > 0;
+  $('#dlText').textContent = complete
+    ? `المصحف كاملًا محفوظ على جهازك ✓`
+    : `${ar(DL.done)} من ${ar(DL.total)} آية · ${ar(mb)} من ${ar(AUDIO_TOTAL_MB)} م.ب${DL.running ? ' · جارٍ التحميل…' : ''}${DL.failed ? ` · تعذّر ${ar(DL.failed)}` : ''}`;
+  $('#dlActions').innerHTML = (complete ? '' : DL.running
+    ? '<button data-dl="pause">إيقاف مؤقت</button>'
+    : `<button data-dl="start" class="primary">${DL.done ? 'متابعة التحميل' : 'تحميل المصحف كاملًا'}</button>`)
+    + (DL.done && !DL.running ? '<button data-dl="clear" class="danger">حذف التحميلات</button>' : '');
+}
+
+async function startAudioDownload() {
+  if (DL.running) return;
+  DL.running = true; DL.failed = 0;
+  paintAudioPanel();
+  try { await navigator.storage?.persist?.(); } catch {}
+  try { DL.wake = await navigator.wakeLock?.request('screen'); } catch {}
+  const cache = await caches.open(AUDIO_CACHE);
+  const have = await audioCachedSet();
+  const urls = allAudioUrls().filter(u => !have.has(u)); // 001001 doubles as the basmala
+  DL.total = META.hafs.length;
+  DL.done = allAudioUrls().filter(u => have.has(u)).length;
+  let next = 0, lastPaint = 0;
+  const worker = async () => {
+    while (DL.running && next < urls.length) {
+      const u = urls[next++];
+      let ok = false;
+      for (let attempt = 0; attempt < 3 && !ok && DL.running; attempt++) {
+        try {
+          const res = await fetch(u, { mode: 'cors' });
+          if (res.ok) { await cache.put(u, res); ok = true; }
+        } catch { await new Promise(r => setTimeout(r, 800 * (attempt + 1))); }
+      }
+      if (ok) DL.done++;
+      else if (DL.running) DL.failed++;
+      if (performance.now() - lastPaint > 400) { lastPaint = performance.now(); paintAudioPanel(); }
+    }
+  };
+  await Promise.all(Array.from({ length: 6 }, worker));
+  const finished = DL.running;
+  DL.running = false;
+  try { await DL.wake?.release(); } catch {}
+  DL.wake = null;
+  await refreshAudioPanel();
+  if (finished && !DL.failed) toast('اكتمل تحميل التلاوة');
+  else if (finished) toast('تعذّر تحميل بعض الآيات — اضغط متابعة');
+}
+
+// the wake lock drops when the app is hidden; take it back on return
+document.addEventListener('visibilitychange', async () => {
+  if (document.visibilityState === 'visible' && DL.running && !DL.wake) {
+    try { DL.wake = await navigator.wakeLock?.request('screen'); } catch {}
+  }
+  if (document.visibilityState === 'hidden') DL.wake = null;
+});
+
+async function clearAudioDownload(btn) {
+  if (!btn.dataset.armed) {
+    btn.dataset.armed = '1';
+    btn.textContent = 'اضغط مرة أخرى للحذف';
+    setTimeout(() => { if (btn.isConnected) { delete btn.dataset.armed; btn.textContent = 'حذف التحميلات'; } }, 2500);
+    return;
+  }
+  await caches.delete(AUDIO_CACHE);
+  DL.done = 0;
+  await refreshAudioPanel();
+  toast('حُذفت التحميلات');
+}
+
 // ---------------------------------------------------------------- search
 
 function norm(s) {
@@ -948,12 +1060,14 @@ function renderSheet() {
       }).join('') + '</div>';
     }
   } else if (tab === 'riwaya') {
-    html = '<div class="group-label">رواية المصحف</div><div class="group">' + META.riwayat.map(r =>
+    html = audioPanelHTML();
+    html += '<div class="group-label">رواية المصحف</div><div class="group">' + META.riwayat.map(r =>
       `<button class="row" data-riwaya="${r.id}"><span class="main"><span class="t">رواية ${r.name}</span><span class="s">${ar(r.ayas)} آية · بخط مجمع الملك فهد</span></span>${r.id === R.id ? '<span class="check">✓</span>' : ''}</button>`).join('') + '</div>';
     html += '<p class="note">لكل رواية رسمها وعلامات ضبطها ووقفها الخاصة. التلاوة الصوتية بصوت الشيخ ياسر الدوسري برواية حفص، وتُطابَق آيات الروايات الأخرى مع ما يقابلها في رواية حفص.</p>';
   }
   body.innerHTML = html;
   if (!q.trim()) body.scrollTop = 0;
+  if (tab === 'riwaya' && !q.trim()) refreshAudioPanel();
 }
 
 $('#sheetBody').addEventListener('click', async e => {
@@ -962,6 +1076,14 @@ $('#sheetBody').addEventListener('click', async e => {
     e.stopPropagation();
     const list = bookmarks(); list.splice(+del.dataset.delMark, 1); setBookmarks(list);
     refreshHeader(); renderSheet(); return;
+  }
+  const dl = e.target.closest('[data-dl]');
+  if (dl) {
+    const a = dl.dataset.dl;
+    if (a === 'start') startAudioDownload();
+    else if (a === 'pause') DL.running = false;
+    else if (a === 'clear') clearAudioDownload(dl);
+    return;
   }
   const row = e.target.closest('.row');
   if (!row) return;

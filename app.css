@@ -452,3 +452,20 @@ svg { fill: currentColor; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* ---------- offline audio ---------- */
+.dl-card { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.dl-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.dl-top .t { font-size: 16px; }
+.dl-top .s { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.dl-pct { font-size: 20px; font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; }
+.dl-prog { height: 6px; border-radius: 3px; }
+.dl-prog i { transition: width .4s ease; background: linear-gradient(90deg, var(--accent), #4f8fbf); }
+.dl-actions { display: flex; gap: 8px; }
+.dl-actions:empty { display: none; }
+.dl-actions button {
+  flex: 1; padding: 10px; border-radius: 11px; font-size: 15px; font-weight: 600;
+  background: var(--chip); color: var(--ink);
+}
+.dl-actions button.primary { background: var(--accent); color: #fff; }
+.dl-actions button.danger { background: none; color: #b3261e; font-weight: 500; }

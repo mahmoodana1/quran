@@ -2,8 +2,10 @@
 // falling back to the cache offline. Data and fonts are cache-first; app.js
 // requests data with ?v=N, so bumping DATA_VERSION there fetches new copies.
 // Hafs page fonts (verses.quran.foundation) are cached as pages are opened.
-// Recitation audio streams from everyayah.com.
-const VERSION = 'quran-v11';
+// Recitation audio: see audioResponse below.
+const VERSION = 'quran-v12';
+// recitation files saved by the app (or while listening); kept across versions
+const AUDIO = 'audio-yasser-128';
 // page fonts never change, so they live in their own cache across versions
 const FONTS = 'qcf-v2-fonts';
 const SHELL = ['./', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest', 'icons/icon-180.png'];
@@ -16,13 +18,17 @@ self.addEventListener('install', e => {
 
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys()
-    .then(keys => Promise.all(keys.filter(k => k !== VERSION && k !== FONTS).map(k => caches.delete(k))))
+    .then(keys => Promise.all(keys.filter(k => k !== VERSION && k !== FONTS && k !== AUDIO).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET') return;
+  if (url.hostname === 'everyayah.com') {
+    e.respondWith(audioResponse(e.request));
+    return;
+  }
   if (url.hostname === 'verses.quran.foundation') {
     e.respondWith(caches.open(FONTS).then(async c => {
       const hit = await c.match(e.request);
@@ -52,3 +58,39 @@ self.addEventListener('fetch', e => {
     }
   }));
 });
+
+// Serve a saved recitation file, honouring Range requests (Safari's <audio>
+// always asks for ranges). Unsaved files come from the network and, when the
+// full file is fetched, are saved for next time.
+async function audioResponse(req) {
+  const cache = await caches.open(AUDIO);
+  const hit = await cache.match(req.url);
+  if (!hit) {
+    if (req.headers.has('range')) {
+      // fetch the whole file once in the background so it's offline next time
+      fetch(req.url, { mode: 'cors' }).then(r => r.ok && cache.put(req.url, r)).catch(() => {});
+      return fetch(req);
+    }
+    const res = await fetch(req.url, { mode: 'cors' });
+    if (res.ok) cache.put(req.url, res.clone());
+    return res;
+  }
+  const range = req.headers.get('range');
+  if (!range) return hit;
+  const buf = await hit.arrayBuffer();
+  const size = buf.byteLength;
+  const m = /bytes=(\d*)-(\d*)/.exec(range) || [];
+  let start = m[1] ? +m[1] : 0;
+  let end = m[2] ? +m[2] : size - 1;
+  if (!m[1] && m[2]) { start = size - +m[2]; end = size - 1; } // suffix range
+  end = Math.min(end, size - 1);
+  return new Response(buf.slice(start, end + 1), {
+    status: 206,
+    headers: {
+      'Content-Type': 'audio/mpeg',
+      'Content-Range': `bytes ${start}-${end}/${size}`,
+      'Content-Length': String(end - start + 1),
+      'Accept-Ranges': 'bytes',
+    },
+  });
+}
