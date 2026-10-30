@@ -33,6 +33,26 @@ const S = {          // ui state
   lh: 48,
 };
 
+// ---------------------------------------------------------------- motion
+// Panels ease in via CSS when unhidden; hide() lets them ease out first.
+
+function show(el) {
+  el.classList.remove('leaving');
+  el.hidden = false;
+}
+function hide(el) {
+  if (el.hidden || el.classList.contains('leaving')) return;
+  el.classList.add('leaving');
+  const done = e => {
+    if (e && e.target !== el) return;
+    el.removeEventListener('animationend', done);
+    clearTimeout(t);
+    if (el.classList.contains('leaving')) { el.hidden = true; el.classList.remove('leaving'); }
+  };
+  el.addEventListener('animationend', done);
+  const t = setTimeout(done, 400); // in case animations are off
+}
+
 // ---------------------------------------------------------------- khatmas
 // Each khatma is its own mushaf: riwaya, reading position, marked aya and
 // bookmarks, saved separately so the Quran can be finished many times.
@@ -129,7 +149,11 @@ function ensurePageFont(p) {
     pf.ready = true;
     // swap the placeholder for the real page if it's on screen
     slots.forEach(sl => {
-      if (sl.firstElementChild?.dataset.page == p && sl.firstElementChild.classList.contains('pending')) sl.replaceChildren(renderPage(p));
+      if (sl.firstElementChild?.dataset.page == p && sl.firstElementChild.classList.contains('pending')) {
+        const pg = renderPage(p);
+        pg.classList.add('arrive');
+        sl.replaceChildren(pg);
+      }
     });
   }).catch(() => { delete pageFonts[p]; });
   return pf.promise;
@@ -249,7 +273,8 @@ function renderPage(p) {
 }
 
 function paintMarks(root = document) {
-  root.querySelectorAll('.w.sel, .w.play').forEach(e => e.classList.remove('sel', 'play'));
+  root.querySelectorAll('.w.sel, .w.play, .w.focus').forEach(e => e.classList.remove('sel', 'play', 'focus'));
+  if (S.focus != null) root.querySelectorAll(`.w[data-a="${S.focus}"]:not(.end)`).forEach(e => e.classList.add('focus'));
   if (S.sel != null) root.querySelectorAll(`.w[data-a="${S.sel}"]`).forEach(e => e.classList.add('sel'));
   if (S.play != null) root.querySelectorAll(`.w[data-a="${S.play}"]`).forEach(e => e.classList.add('play'));
 }
@@ -307,14 +332,21 @@ function goTo(p, { animate = false, from = 0 } = {}) {
 // swipe handling
 (() => {
   const vp = $('#viewport');
-  let x0, y0, t0, axis = null, dx = 0, id = null;
+  let x0, y0, t0, axis = null, dx = 0, id = null, pressT = null, pressed = false;
   vp.addEventListener('pointerdown', e => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     id = e.pointerId; x0 = e.clientX; y0 = e.clientY; t0 = performance.now(); axis = null; dx = 0;
+    pressed = false;
+    const w = e.target.closest('.w');
+    clearTimeout(pressT);
+    if (w && !w.classList.contains('end')) {
+      pressT = setTimeout(() => { pressed = true; openActions(+w.dataset.a); }, 420);
+    }
   });
   vp.addEventListener('pointermove', e => {
     if (e.pointerId !== id) return;
     const mx = e.clientX - x0, my = e.clientY - y0;
+    if (Math.hypot(mx, my) > 8) clearTimeout(pressT);
     if (!axis && Math.hypot(mx, my) > 8) axis = Math.abs(mx) > Math.abs(my) ? 'x' : 'y';
     if (axis !== 'x') return;
     dx = mx;
@@ -324,6 +356,8 @@ function goTo(p, { animate = false, from = 0 } = {}) {
   const end = e => {
     if (e.pointerId !== id) return;
     id = null;
+    clearTimeout(pressT);
+    if (pressed) { vp.dataset.swiped = '1'; setTimeout(() => delete vp.dataset.swiped, 400); }
     if (axis !== 'x') return;
     const v = dx / (performance.now() - t0);
     const W = window.innerWidth;
@@ -346,10 +380,12 @@ function goTo(p, { animate = false, from = 0 } = {}) {
       else if (a === 'bm') toggleBookmark(S.page);
       return;
     }
-    const w = e.target.closest('.w');
-    if (w) selectAya(+w.dataset.a);
-    else selectAya(null);
+    // only the aya number marks; tapping anywhere else just closes the actions
+    const w = e.target.closest('.w.end');
+    if (w) toggleMark(+w.dataset.a, w);
+    else closeActions();
   });
+  vp.addEventListener('contextmenu', e => e.preventDefault());
 })();
 
 document.addEventListener('keydown', e => {
@@ -368,41 +404,75 @@ function ayaLabel(i) {
   return `${suraName(a[0])} ${ar(a[1])}`;
 }
 
-// Tapping an aya marks its number (saved in the khatma as the reading place)
-// and opens the actions; tapping elsewhere just closes the actions.
-function selectAya(i, { bar = true } = {}) {
-  const ayaBar = $('#ayaBar');
-  if (i == null) { ayaBar.hidden = true; return; }
-  if (i === S.sel && !ayaBar.hidden) { ayaBar.hidden = true; return; }
+// The marked aya (blue number) is the khatma's saved reading place: tap its
+// number to mark it, tap again to clear. Actions open for the marked aya, or
+// for any aya after a long press on its text (S.act), without moving the mark.
+function toggleMark(i, el) {
+  if (S.sel === i) {
+    S.sel = null; K.mark = null; saveKh();
+    paintMarks();
+    closeActions();
+    return;
+  }
   S.sel = i;
   K.mark = i; K.read = Date.now(); saveKh();
   paintMarks();
-  if (!bar) return;
+  if (el) ripple(el);
+  openActions(i, { focus: false });
+}
+
+function openActions(i, { focus = true } = {}) {
+  S.act = i;
+  S.focus = focus ? i : null;
+  paintMarks();
   $('#ayaBarTitle').textContent = ayaLabel(i);
-  ayaBar.hidden = false;
-  if (P.ai == null) $('#player').hidden = true;
+  $('#ayaBar [data-act=bookmark] span').textContent = isBookmarked(R.ayas[i][2]) ? 'محفوظة' : 'علامة';
+  if (P.ai == null) hide($('#player'));
+  const bar = $('#ayaBar');
+  if (!bar.hidden && !bar.classList.contains('leaving')) { bar.classList.remove('swap'); void bar.offsetWidth; bar.classList.add('swap'); }
+  show(bar);
+}
+
+function closeActions() {
+  S.act = null;
+  if (S.focus != null) { S.focus = null; paintMarks(); }
+  hide($('#ayaBar'));
+  if (P.ai != null) show($('#player'));
+}
+
+// briefly glow an aya's text, e.g. after jumping to it from search
+function flashAya(i) {
+  S.focus = i; paintMarks();
+  setTimeout(() => { if (S.focus === i && S.act !== i) { S.focus = null; paintMarks(); } }, 2200);
+}
+
+function ripple(el) {
+  const r = document.createElement('i');
+  r.className = 'ripple';
+  el.appendChild(r);
+  r.addEventListener('animationend', () => r.remove());
 }
 
 $('#ayaBar').addEventListener('click', async e => {
   const b = e.target.closest('[data-act]');
-  if (!b || S.sel == null) return;
-  const i = S.sel;
-  if (b.dataset.act === 'play') { selectAya(null); $('#player').hidden = false; playFrom(i); }
+  if (!b || S.act == null) return;
+  const i = S.act;
+  if (b.dataset.act === 'play') { closeActions(); playFrom(i); }
   if (b.dataset.act === 'copy') {
     const a = R.ayas[i];
     const txt = R.text[i].replace(/\s*[٠-٩]+$/, '');
     try { await navigator.clipboard.writeText(`${txt} ﴿${suraName(a[0])}: ${ar(a[1])}﴾`); toast('تم النسخ'); }
     catch { toast('تعذر النسخ'); }
   }
-  if (b.dataset.act === 'bookmark') { addBookmark(R.ayas[i][2], i); }
-  if (b.dataset.act === 'close') selectAya(null);
+  if (b.dataset.act === 'bookmark') { addBookmark(R.ayas[i][2], i); closeActions(); }
+  if (b.dataset.act === 'close') closeActions();
 });
 
 let toastT;
 function toast(msg) {
   const t = $('#toast');
-  t.textContent = msg; t.hidden = false;
-  clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), 1600);
+  t.textContent = msg; show(t);
+  clearTimeout(toastT); toastT = setTimeout(() => hide(t), 1700);
 }
 
 // ---------------------------------------------------------------- bookmarks
@@ -490,14 +560,18 @@ function preloadNext() {
 }
 
 audio.addEventListener('ended', nextInQueue);
+audio.addEventListener('timeupdate', () => {
+  const f = audio.duration ? audio.currentTime / audio.duration : 0;
+  $('#plProg').style.transform = `scaleX(${f})`;
+});
 audio.addEventListener('play', () => $('#player').classList.remove('paused'));
 audio.addEventListener('pause', () => $('#player').classList.add('paused'));
 audio.addEventListener('error', () => { if (P.ai != null) toast('تعذر تحميل الصوت'); });
 
 function showPlayer() {
   $('#plTitle').textContent = ayaLabel(P.ai);
-  $('#player').hidden = false;
-  $('#ayaBar').hidden = true;
+  show($('#player'));
+  if (S.act == null) hide($('#ayaBar'));
   if ('mediaSession' in navigator) {
     navigator.mediaSession.metadata = new MediaMetadata({
       title: `سورة ${ayaLabel(P.ai)}`, artist: 'ياسر الدوسري', album: 'القرآن الكريم',
@@ -510,7 +584,7 @@ function stopAudio() {
   audio.pause();
   audio.removeAttribute('src');
   P.ai = null; S.play = null; P.queue = [];
-  $('#player').hidden = true;
+  hide($('#player'));
   paintMarks();
 }
 
@@ -688,12 +762,12 @@ let tab = 'suras';
 function openSheet(t = tab) {
   tab = t;
   $('#sheetTitle').textContent = K.name;
-  selectAya(null);
-  $('#sheet').hidden = false;
+  closeActions();
+  show($('#sheet'));
   $('#q').value = '';
   renderSheet();
 }
-function closeSheet() { $('#sheet').hidden = true; $('#q').blur(); }
+function closeSheet() { hide($('#sheet')); $('#q').blur(); }
 $('#sheetClose').onclick = closeSheet;
 $('#tabs').addEventListener('click', e => {
   const b = e.target.closest('[data-tab]');
@@ -799,13 +873,13 @@ $('#sheetBody').addEventListener('click', async e => {
     closeSheet();
     const ai = +d.goAya;
     goTo(R.ayas[ai][2]);
-    selectAya(ai);
+    setTimeout(() => flashAya(ai), 250);
   } else if (d.goMark) {
     const b = bookmarks()[+d.goMark];
     closeSheet();
     if (b.r !== R.id) await switchRiwaya(b.r, false);
     goTo(b.page);
-    if (b.aya != null) selectAya(b.aya);
+    if (b.aya != null) setTimeout(() => flashAya(b.aya), 250);
   } else if (d.riwaya && d.riwaya !== R.id) {
     await switchRiwaya(d.riwaya, true);
     renderSheet();
@@ -877,10 +951,10 @@ function coverHTML(k, small = false) {
 function renderShelf() {
   const riwayaName = id => META.riwayat.find(r => r.id === id)?.name || id;
   const sorted = [...KH].sort((a, b) => b.read - a.read);
-  $('#shelf').innerHTML = sorted.map(k => {
+  $('#shelf').innerHTML = sorted.map((k, idx) => {
     const total = 604;
     const pct = Math.round((k.page - 1) / (total - 1) * 100);
-    return `<div class="book${k.id === K.id ? ' current' : ''}" data-kh="${k.id}">
+    return `<div class="book${k.id === K.id ? ' current' : ''}" data-kh="${k.id}" style="--i:${idx}">
       <button class="book-open" data-open="${k.id}" aria-label="${esc(k.name)}">${coverHTML(k)}</button>
       <div class="book-info">
         <div class="book-row"><b>${esc(k.name)}</b><button class="dots" data-edit="${k.id}" aria-label="تعديل">•••</button></div>
@@ -889,17 +963,17 @@ function renderShelf() {
         <div class="book-sub">صفحة ${ar(k.page)} · ${ar(pct)}٪${k.done ? ` · ${ar(k.done)} ${k.done === 1 ? 'ختمة' : 'ختمات'} ✓` : ''}</div>
       </div>
     </div>`;
-  }).join('') + `<div class="book"><button class="book-open" data-new="1"><div class="cover new"><span>+</span><small>ختمة جديدة</small></div></button></div>`;
+  }).join('') + `<div class="book" style="--i:${sorted.length}"><button class="book-open" data-new="1"><div class="cover new"><span>+</span><small>ختمة جديدة</small></div></button></div>`;
 }
 
 function openLibrary() {
   closeSheet();
-  selectAya(null);
+  closeActions();
   renderShelf();
-  $('#library').hidden = false;
+  show($('#library'));
 }
 
-$('#libClose').onclick = () => ($('#library').hidden = true);
+$('#libClose').onclick = () => hide($('#library'));
 $('#libBtn').onclick = openLibrary;
 
 $('#shelf').addEventListener('click', async e => {
@@ -914,6 +988,7 @@ async function openKhatma(id) {
   const k = KH.find(x => x.id === id);
   if (!k) return;
   stopAudio();
+  closeActions();
   K = k; K.read = Date.now(); saveKh();
   $('#loading').hidden = false;
   try {
@@ -921,7 +996,7 @@ async function openKhatma(id) {
     S.page = K.page;
     S.sel = K.mark;
     renderAll();
-    $('#library').hidden = true;
+    hide($('#library'));
   } catch { toast('تعذر التحميل'); }
   finally { $('#loading').hidden = true; }
 }
@@ -941,14 +1016,14 @@ function openEditor(k) {
   $('#khRestart').hidden = $('#khDelete').hidden = !k;
   $('#khDelete').disabled = KH.length < 2;
   updatePreview();
-  $('#khEdit').hidden = false;
+  show($('#khEdit'));
 }
 function updatePreview() {
   const f = $('#khForm');
   $('#khPreview').innerHTML = coverHTML({ name: f.name.value || '—', cover: +f.cover.value }, true);
 }
 $('#khForm').addEventListener('input', updatePreview);
-$('#khCancel').onclick = () => ($('#khEdit').hidden = true);
+$('#khCancel').onclick = () => hide($('#khEdit'));
 $('#khForm').addEventListener('submit', async e => {
   e.preventDefault();
   const f = e.target;
@@ -961,13 +1036,13 @@ $('#khForm').addEventListener('submit', async e => {
       editing.mark = null; editing.page = 1;
     }
     saveKh();
-    $('#khEdit').hidden = true;
+    hide($('#khEdit'));
     if (editing === K && riwayaChanged) await openKhatma(K.id);
     renderShelf();
   } else {
     const k = newKhatma(name, f.riwaya.value, +f.cover.value);
     KH.push(k); saveKh();
-    $('#khEdit').hidden = true;
+    hide($('#khEdit'));
     await openKhatma(k.id);
     toast('بدأت ختمة جديدة');
   }
@@ -975,7 +1050,7 @@ $('#khForm').addEventListener('submit', async e => {
 $('#khRestart').onclick = () => {
   Object.assign(editing, { page: 1, mark: null, endShown: false });
   saveKh();
-  $('#khEdit').hidden = true;
+  hide($('#khEdit'));
   if (editing === K) { S.page = 1; S.sel = null; renderAll(); }
   renderShelf();
 };
@@ -988,7 +1063,7 @@ $('#khDelete').onclick = async () => {
     return;
   }
   KH = KH.filter(k => k !== editing);
-  $('#khEdit').hidden = true;
+  hide($('#khEdit'));
   if (editing === K) await openKhatma(KH[0].id);
   saveKh();
   renderShelf();
@@ -999,17 +1074,17 @@ function showDone() {
   K.endShown = true; saveKh();
   $('#doneCover').innerHTML = coverHTML(K, true);
   $('#doneText').textContent = `أتممت «${K.name}»${K.done ? ` — الختمة رقم ${ar(K.done + 1)}` : ''}`;
-  $('#done').hidden = false;
+  show($('#done'));
 }
 $('#doneAgain').onclick = () => {
   K.done = (K.done || 0) + 1;
   Object.assign(K, { page: 1, mark: null, endShown: false });
   saveKh();
-  $('#done').hidden = true;
+  hide($('#done'));
   S.page = 1; S.sel = null; renderAll();
   toast('بارك الله لك — بدأت الختمة من جديد');
 };
-$('#doneLater').onclick = () => ($('#done').hidden = true);
+$('#doneLater').onclick = () => hide($('#done'));
 
 // ---------------------------------------------------------------- boot
 
@@ -1022,7 +1097,7 @@ $('#doneLater').onclick = () => ($('#done').hidden = true);
     S.page = K.page;
     S.sel = K.mark;
     renderAll();
-    $('#loading').hidden = true;
+    hide($('#loading'));
   } catch (err) {
     $('#loading').textContent = 'تعذر التحميل — تحقق من الاتصال';
     console.error(err);

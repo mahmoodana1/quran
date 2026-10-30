@@ -32,6 +32,7 @@ html, body {
   background: var(--paper); color: var(--ink);
   font-family: var(--ui);
   -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
   -webkit-text-size-adjust: 100%;
   overscroll-behavior: none;
 }
@@ -62,7 +63,7 @@ svg { fill: currentColor; }
   display: flex; flex-direction: column;
   padding: 0 var(--pad-x);
   overflow: hidden;
-  background: var(--paper);
+  background: radial-gradient(130% 90% at 50% 42%, #fdfbf8 0%, var(--paper) 60%, #f5efe8 100%);
 }
 /* the double rule along the outer edge of the page, like a printed mushaf */
 .page::before {
@@ -101,6 +102,8 @@ svg { fill: currentColor; }
   padding: 2px 0;
   direction: rtl;
   isolation: isolate;
+  /* a touch more weight than the bare glyphs */
+  -webkit-text-stroke-width: .014em;
 }
 .page.opening .lines { grid-template-rows: none; gap: calc(var(--lh) * .25); }
 .page.opening .ln { height: var(--lh); }
@@ -111,7 +114,18 @@ svg { fill: currentColor; }
 }
 .ln.c { justify-content: center; gap: .28em; }
 .glyph .ln.c { gap: .06em; } /* glyph lines are sized with this gap */
-.w { position: relative; padding: .18em 0; }
+.w { position: relative; padding: .18em 0; transition: color .35s ease; }
+/* long-pressed / jumped-to aya: a soft tint on its words */
+.w.focus { color: color-mix(in srgb, var(--accent) 70%, var(--ink)); }
+.ripple {
+  position: absolute; left: 50%; top: 50%; width: .96em; height: .96em; border-radius: 50%;
+  border: .05em solid var(--accent); pointer-events: none;
+  transform: translate(-50%, -50%); animation: ripple .7s cubic-bezier(.2,.7,.3,1) forwards;
+}
+.glyph .ripple { top: 61.4%; }
+@keyframes ripple { to { transform: translate(-50%, -50%) scale(1.9); opacity: 0; } }
+.page.arrive .lines { animation: inkIn .5s ease both; }
+@keyframes inkIn { from { opacity: 0; } }
 
 /* the marked / playing aya: only its number turns into a blue disc */
 .w.end { padding: .18em .03em; transition: color .22s ease; }
@@ -193,9 +207,21 @@ svg { fill: currentColor; }
   -webkit-backdrop-filter: blur(18px) saturate(1.6); backdrop-filter: blur(18px) saturate(1.6);
   border-radius: 18px;
   box-shadow: 0 6px 30px rgba(0,0,0,.16), 0 0 0 .5px rgba(0,0,0,.08);
-  animation: rise .22s ease-out;
+  animation: rise .34s cubic-bezier(.2,.9,.3,1);
 }
-@keyframes rise { from { transform: translateY(20px); opacity: 0; } }
+@keyframes rise { from { transform: translateY(24px) scale(.98); opacity: 0; } }
+.bar.leaving { animation: sink .24s cubic-bezier(.4,0,.8,.4) forwards; }
+@keyframes sink { to { transform: translateY(24px) scale(.98); opacity: 0; } }
+.bar.swap .bar-title { animation: swapIn .3s ease; }
+@keyframes swapIn { from { opacity: 0; transform: translateY(4px); } }
+.pl-track {
+  position: absolute; left: 18px; right: 18px; bottom: 5px; height: 2px;
+  border-radius: 1px; background: rgba(0,0,0,.06); overflow: hidden;
+}
+.pl-track i {
+  display: block; height: 100%; background: var(--accent); opacity: .7;
+  transform-origin: right; transform: scaleX(0); transition: transform .3s linear;
+}
 .bar-title { font-size: 15px; font-weight: 600; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .bar-title small { font-weight: 400; color: var(--muted); font-size: 12px; }
 .bar-actions { display: flex; gap: 4px; align-items: center; }
@@ -212,6 +238,7 @@ svg { fill: currentColor; }
 #player.paused #plToggle .ic-pause { display: none; }
 #plToggle svg { width: 30px; height: 30px; }
 #toast {
+  animation: toastIn .3s cubic-bezier(.2,.9,.3,1);
   position: fixed; z-index: 40; left: 50%; top: calc(60px + env(safe-area-inset-top));
   transform: translateX(-50%);
   background: rgba(30,30,30,.86); color: #fff; font-size: 14px;
@@ -392,3 +419,26 @@ svg { fill: currentColor; }
 .card.done { text-align: center; }
 .card.done p { margin: 0; color: var(--muted); font-size: 15px; }
 .card.done .dua { font-family: rw-hafs; font-size: 19px; color: var(--ink); line-height: 1.9; }
+
+/* ---------- calm motion ---------- */
+@keyframes toastIn { from { opacity: 0; transform: translate(-50%, -8px); } }
+#toast.leaving { animation: toastOut .3s ease forwards; }
+@keyframes toastOut { to { opacity: 0; transform: translate(-50%, -8px); } }
+#sheet.leaving, #library.leaving { animation: sheetOut .26s cubic-bezier(.4,0,.8,.4) forwards; }
+@keyframes sheetOut { to { transform: translateY(40px); opacity: 0; } }
+#loading.leaving { animation: fadeOut .4s ease forwards; }
+.modal.leaving { animation: fadeOut .22s ease forwards; }
+.modal.leaving .card { animation: cardOut .22s ease forwards; }
+@keyframes fadeOut { to { opacity: 0; } }
+@keyframes cardOut { to { transform: scale(.96); opacity: 0; } }
+.card { animation: cardIn .34s cubic-bezier(.2,.9,.3,1); }
+@keyframes cardIn { from { transform: translateY(14px) scale(.97); opacity: 0; } }
+.book { animation: bookIn .5s cubic-bezier(.2,.9,.3,1) both; animation-delay: calc(var(--i, 0) * 60ms); }
+@keyframes bookIn { from { opacity: 0; transform: translateY(16px); } }
+.row, .phead button, .tabs button, .txt-btn, .lib-btn { transition: background-color .2s ease, opacity .2s ease, transform .15s ease; }
+.phead button:active, .txt-btn:active, .lib-btn:active { opacity: .5; }
+#sheetBody .group { animation: fadeIn .3s ease both; }
+@keyframes fadeIn { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
