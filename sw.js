@@ -1,11 +1,14 @@
-// Cache-first for the app itself, its fonts and data, so it works offline
-// after the first open. Recitation audio streams from everyayah.com.
-const VERSION = 'quran-v2';
-const SHELL = ['./', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest',
-  'data/meta.json', 'data/hafs.json', 'fonts/hafs.woff2', 'icons/icon-180.png'];
+// App files (html/css/js) are network-first so updates show up right away,
+// falling back to the cache offline. Data and fonts are cache-first; app.js
+// requests data with ?v=N, so bumping DATA_VERSION there fetches new copies.
+// Recitation audio streams from everyayah.com.
+const VERSION = 'quran-v3';
+const SHELL = ['./', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest', 'icons/icon-180.png'];
 
 self.addEventListener('install', e => {
-  e.waitUntil(caches.open(VERSION).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
+  e.waitUntil(caches.open(VERSION)
+    .then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' }))))
+    .then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', e => {
@@ -17,11 +20,21 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
+  const assets = /\/(data|fonts)\//.test(url.pathname);
   e.respondWith(caches.open(VERSION).then(async c => {
-    const hit = await c.match(e.request, { ignoreSearch: true });
-    if (hit) return hit;
-    const res = await fetch(e.request);
-    if (res.ok) c.put(e.request, res.clone());
-    return res;
+    if (assets) {
+      const hit = await c.match(e.request);
+      if (hit) return hit;
+      const res = await fetch(e.request);
+      if (res.ok) c.put(e.request, res.clone());
+      return res;
+    }
+    try {
+      const res = await fetch(e.request, { cache: 'no-cache' });
+      if (res.ok) c.put(e.request, res.clone());
+      return res;
+    } catch {
+      return (await c.match(e.request, { ignoreSearch: true })) || Response.error();
+    }
   }));
 });

@@ -19,7 +19,7 @@
   --card: #ffffff;
   --frame: #8c7a58;
   --ui: -apple-system, "SF Arabic", "SF Pro Text", system-ui, "Noto Sans Arabic", sans-serif;
-  --pad-x: max(14px, env(safe-area-inset-left), env(safe-area-inset-right));
+  --pad-x: max(10px, env(safe-area-inset-left), env(safe-area-inset-right));
   --fs: 24px;
   --lh: 48px;
   color-scheme: light;
@@ -97,7 +97,7 @@ svg { fill: currentColor; }
   display: grid; grid-template-rows: repeat(15, 1fr);
   font-size: var(--fs);
   line-height: 1;
-  padding: 2px 8px;
+  padding: 2px 4px;
   direction: rtl;
 }
 .page.opening .lines { grid-template-rows: none; align-content: center; gap: calc(var(--lh) * .25); }

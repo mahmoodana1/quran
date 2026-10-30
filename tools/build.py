@@ -250,7 +250,7 @@ def build_riwaya(r):
     words = [t for ai, t, _ in toks if ai == i30 and not DIGITS.match(t)]
     basmala = ' '.join(words[-4:])
     return {'pages': pages, 'ayas': ayas, 'basmala': basmala, 'lw': lw,
-            'em': allw[int(len(allw) * 0.9)]}
+            'em': allw[int(len(allw) * 0.8)]}
 
 
 os.makedirs(OUT, exist_ok=True)

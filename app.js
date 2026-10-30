@@ -1,5 +1,7 @@
 'use strict';
 
+// bump when data/ or fonts/ change so phones fetch the new files
+const DATA_VERSION = 3;
 const AUDIO_BASE = 'https://everyayah.com/data/Yasser_Ad-Dussary_128kbps/';
 const RUB_LABEL = ['الحزب', 'ربع الحزب', 'نصف الحزب', 'ثلاثة أرباع الحزب'];
 const $ = (s, el = document) => el.querySelector(s);
@@ -35,7 +37,7 @@ async function loadJSON(url) {
 
 async function loadRiwaya(id) {
   if (!cache[id]) {
-    const d = await loadJSON(`data/${id}.json`);
+    const d = await loadJSON(`data/${id}.json?v=${DATA_VERSION}`);
     d.id = id;
     d.font = 'rw-' + id;
     // per-aya text and the hafs -> riwaya index used by search and audio
@@ -73,11 +75,11 @@ function measure() {
   document.body.classList.toggle('landscape', S.landscape);
   const em = R ? R.em : 19.5;
   if (S.landscape) {
-    S.availW = Math.min(W - padL - padR - 16, 980);
+    S.availW = Math.min(W - padL - padR - 8, 980);
     S.fs = S.availW / em;
     S.lh = S.fs * 1.95;
   } else {
-    S.availW = W - padL - padR - 16;
+    S.availW = W - padL - padR - 8;
     const linesH = H - insetT - insetB - 46 - 40 - 4;
     S.lh = linesH / 15;
     S.fs = Math.min(S.availW / em, S.lh * 0.74);
@@ -729,7 +731,7 @@ async function switchRiwaya(id, keepPlace) {
 
 (async () => {
   try {
-    META = await loadJSON('data/meta.json');
+    META = await loadJSON(`data/meta.json?v=${DATA_VERSION}`);
     const id = store.get('riwaya', 'hafs');
     R = await loadRiwaya(META.riwayat.some(r => r.id === id) ? id : 'hafs');
     S.page = store.get('page.' + R.id, 1);
@@ -740,6 +742,9 @@ async function switchRiwaya(id, keepPlace) {
     console.error(err);
   }
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
+    // reload once when an updated service worker takes over, so updates show up
+    const hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController) location.reload(); });
+    navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
   }
 })();
