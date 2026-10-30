@@ -146,6 +146,25 @@ function ensurePageFont(p) {
       const words = ln.flatMap(([, t]) => t.split(' '));
       return words.reduce((sum, w) => sum + measureCtx.measureText(w.replace('*', '')).width, 0) + 6 * (words.length - 1);
     });
+    // every page font has its own metrics: centre the highlight disc on this
+    // page's aya-number ink (span box = 1em line + .18em padding top/bottom,
+    // .03em left/right)
+    const endTok = R.pages[p - 1].flat().find(x => Array.isArray(x) && /\*/.test(x[1]))?.[1]
+      .split(' ').find(t => t.endsWith('*'))?.replace('*', '');
+    if (endTok) {
+      const m = measureCtx.measureText(endTok);
+      const A = m.fontBoundingBoxAscent / 100, D = m.fontBoundingBoxDescent / 100;
+      const iA = m.actualBoundingBoxAscent / 100, iD = m.actualBoundingBoxDescent / 100;
+      const w = m.width / 100;
+      const inkL = -m.actualBoundingBoxLeft / 100, inkR = m.actualBoundingBoxRight / 100;
+      const cy = .18 + (1 - (A + D)) / 2 + A - (iA - iD) / 2;
+      const cx = .03 + (inkL + inkR) / 2;
+      pf.disc = {
+        top: (cy / 1.36 * 100).toFixed(2) + '%',
+        left: (cx / (w + .06) * 100).toFixed(2) + '%',
+        size: (Math.max(iA + iD, inkR - inkL) * .97).toFixed(3) + 'em',
+      };
+    }
     pf.ready = true;
     // swap the placeholder for the real page if it's on screen
     slots.forEach(sl => {
@@ -227,6 +246,11 @@ function renderPage(p) {
   if (R.glyph && !pending) {
     el.style.setProperty('--fs', fs.toFixed(2) + 'px');
     el.style.setProperty('--lh', lh.toFixed(2) + 'px');
+    if (pf.disc) {
+      el.style.setProperty('--disc-top', pf.disc.top);
+      el.style.setProperty('--disc-left', pf.disc.left);
+      el.style.setProperty('--disc-size', pf.disc.size);
+    }
   }
 
   const rub = la[4];

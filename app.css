@@ -103,7 +103,7 @@ svg { fill: currentColor; }
   direction: rtl;
   isolation: isolate;
   /* a touch more weight than the bare glyphs */
-  -webkit-text-stroke-width: .014em;
+  -webkit-text-stroke-width: .008em;
 }
 .page.opening .lines { grid-template-rows: none; gap: calc(var(--lh) * .25); }
 .page.opening .ln { height: var(--lh); }
@@ -122,7 +122,10 @@ svg { fill: currentColor; }
   border: .05em solid var(--accent); pointer-events: none;
   transform: translate(-50%, -50%); animation: ripple .7s cubic-bezier(.2,.7,.3,1) forwards;
 }
-.glyph .ripple { top: 61.4%; }
+.glyph .ripple {
+  top: var(--disc-top, 61.4%); left: var(--disc-left, 50%);
+  width: var(--disc-size, .96em); height: var(--disc-size, .96em);
+}
 @keyframes ripple { to { transform: translate(-50%, -50%) scale(1.9); opacity: 0; } }
 .page.arrive .lines { animation: inkIn .5s ease both; }
 @keyframes inkIn { from { opacity: 0; } }
@@ -136,8 +139,11 @@ svg { fill: currentColor; }
   transform: translate(-50%, -50%) scale(.2); opacity: 0;
   transition: transform .26s cubic-bezier(.3, 1.5, .5, 1), opacity .18s ease;
 }
-/* QCF marker ink is centred ~0.155em below the flex box centre */
-.glyph .w.end::before { top: 61.4%; width: .96em; height: .96em; }
+/* positioned per page from the font's measured marker ink (app.js) */
+.glyph .w.end::before {
+  top: var(--disc-top, 61.4%); left: var(--disc-left, 50%);
+  width: var(--disc-size, .96em); height: var(--disc-size, .96em);
+}
 .w.end.sel, .w.end.play { color: #fff; }
 .w.end.sel::before, .w.end.play::before { transform: translate(-50%, -50%) scale(1); opacity: 1; }
 .w.end.play::before { background: #2f8a6a; }
