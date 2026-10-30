@@ -239,7 +239,7 @@ def build_riwaya(r):
         for line in pg:
             if line and not isinstance(line[0], str):
                 ws = ' '.join(seg[1] for seg in line).split()
-                row.append(round(sum(width(t) for t in ws) / upem + 0.1 * (len(ws) - 1), 2))  # words + .1em css gap
+                row.append(round(sum(width(t) for t in ws) / upem + 0.06 * (len(ws) - 1), 2))  # words + .06em css gap
             else:
                 row.append(0)
         lw.append(row)
@@ -250,7 +250,7 @@ def build_riwaya(r):
     words = [t for ai, t, _ in toks if ai == i30 and not DIGITS.match(t)]
     basmala = ' '.join(words[-4:])
     return {'pages': pages, 'ayas': ayas, 'basmala': basmala, 'lw': lw,
-            'em': allw[int(len(allw) * 0.97)]}
+            'em': allw[int(len(allw) * 0.9)]}
 
 
 os.makedirs(OUT, exist_ok=True)

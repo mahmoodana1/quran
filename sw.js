@@ -1,6 +1,6 @@
 // Cache-first for the app itself, its fonts and data, so it works offline
 // after the first open. Recitation audio streams from everyayah.com.
-const VERSION = 'quran-v1';
+const VERSION = 'quran-v2';
 const SHELL = ['./', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest',
   'data/meta.json', 'data/hafs.json', 'fonts/hafs.woff2', 'icons/icon-180.png'];
 

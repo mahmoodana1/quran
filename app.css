@@ -22,21 +22,7 @@
   --pad-x: max(14px, env(safe-area-inset-left), env(safe-area-inset-right));
   --fs: 24px;
   --lh: 48px;
-  color-scheme: light dark;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --paper: #141311;
-    --ink: #ece6dc;
-    --muted: #9c958c;
-    --rule: #3d3934;
-    --chip: #2e2b28;
-    --accent: #5c9ccc;
-    --sel: rgba(92, 156, 204, .2);
-    --sheet: #1c1b19;
-    --card: #262422;
-    --frame: #b39f78;
-  }
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -119,7 +105,7 @@ svg { fill: currentColor; }
 
 .ln {
   display: flex; justify-content: space-between; align-items: center;
-  white-space: nowrap; min-width: 0; column-gap: .1em;
+  white-space: nowrap; min-width: 0; column-gap: .06em;
 }
 .ln.c { justify-content: center; gap: .28em; }
 .w { position: relative; padding: .18em 0; border-radius: .18em; }
