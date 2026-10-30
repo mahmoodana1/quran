@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="القرآن">
+<meta name="theme-color" content="#faf6f3" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#141311" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="app.css">
+<title>القرآن الكريم</title>
+</head>
+<body>
+<div id="probe"></div>
+
+<main id="viewport">
+  <div class="slot"></div>
+  <div class="slot"></div>
+  <div class="slot"></div>
+</main>
+
+<div id="loading">جارٍ التحميل…</div>
+
+<!-- actions for the selected aya -->
+<div id="ayaBar" class="bar" hidden>
+  <div class="bar-title" id="ayaBarTitle"></div>
+  <div class="bar-actions">
+    <button data-act="play" aria-label="استماع"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><span>استماع</span></button>
+    <button data-act="copy" aria-label="نسخ"><svg viewBox="0 0 24 24"><path d="M8 8h11v13H8zM5 3h11v3H7v11H5z"/></svg><span>نسخ</span></button>
+    <button data-act="bookmark" aria-label="علامة"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-6-4-6 4z"/></svg><span>علامة</span></button>
+    <button data-act="close" aria-label="إغلاق"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke-width="2.2" stroke="currentColor" fill="none" stroke-linecap="round"/></svg></button>
+  </div>
+</div>
+
+<!-- audio player -->
+<div id="player" class="bar" hidden>
+  <div class="bar-title"><span id="plTitle"></span><small>ياسر الدوسري</small></div>
+  <div class="bar-actions">
+    <button id="plPrev" aria-label="الآية السابقة"><svg viewBox="0 0 24 24"><path d="M18 6v12h-2V6zM14 12L5 18V6z"/></svg></button>
+    <button id="plToggle" aria-label="تشغيل/إيقاف"><svg viewBox="0 0 24 24" class="ic-pause"><path d="M7 5h4v14H7zM13 5h4v14h-4z"/></svg><svg viewBox="0 0 24 24" class="ic-play"><path d="M8 5v14l11-7z"/></svg></button>
+    <button id="plNext" aria-label="الآية التالية"><svg viewBox="0 0 24 24"><path d="M18 6v12h-2V6zM14 12L5 18V6z" transform="matrix(-1 0 0 1 24 0)"/></svg></button>
+    <button id="plStop" aria-label="إغلاق"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke-width="2.2" stroke="currentColor" fill="none" stroke-linecap="round"/></svg></button>
+  </div>
+</div>
+
+<div id="toast" hidden></div>
+
+<!-- index / search sheet -->
+<section id="sheet" hidden>
+  <div class="sheet-head">
+    <button id="sheetClose" class="txt-btn">تم</button>
+    <h1 id="sheetTitle">الفهرس</h1>
+    <span class="spacer"></span>
+  </div>
+  <div class="search">
+    <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15.5 15.5L21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+    <input id="q" type="search" placeholder="ابحث عن سورة أو آية… (مثال: البقرة ٢٥٥)" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search">
+  </div>
+  <nav class="tabs" id="tabs">
+    <button data-tab="suras" class="on">السور</button>
+    <button data-tab="juz">الأجزاء</button>
+    <button data-tab="marks">العلامات</button>
+    <button data-tab="riwaya">الروايات</button>
+  </nav>
+  <div id="sheetBody"></div>
+</section>
+
+<audio id="audio" preload="auto"></audio>
+<script src="app.js"></script>
+</body>
+</html>

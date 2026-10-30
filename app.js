@@ -1,0 +1,745 @@
+'use strict';
+
+const AUDIO_BASE = 'https://everyayah.com/data/Yasser_Ad-Dussary_128kbps/';
+const RUB_LABEL = ['الحزب', 'ربع الحزب', 'نصف الحزب', 'ثلاثة أرباع الحزب'];
+const $ = (s, el = document) => el.querySelector(s);
+
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('q.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('q.' + k, JSON.stringify(v)); } catch {} },
+};
+
+const ar = n => String(n).replace(/\d/g, d => '٠١٢٣٤٥٦٧٨٩'[d]);
+const isEnd = t => /^[٠-٩]+$/.test(t);
+
+let META;            // suras, hafs aya keys, emlaey text
+let R;               // current riwaya data
+const cache = {};    // riwaya id -> data
+const S = {          // ui state
+  page: 1,
+  sel: null,         // selected riwaya aya index
+  play: null,        // playing riwaya aya index
+  landscape: false,
+  availW: 300,
+  fs: 24,
+  lh: 48,
+};
+
+// ---------------------------------------------------------------- data
+
+async function loadJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(url + ' ' + r.status);
+  return r.json();
+}
+
+async function loadRiwaya(id) {
+  if (!cache[id]) {
+    const d = await loadJSON(`data/${id}.json`);
+    d.id = id;
+    d.font = 'rw-' + id;
+    // per-aya text and the hafs -> riwaya index used by search and audio
+    d.text = new Array(d.ayas.length).fill('');
+    for (const pg of d.pages) for (const ln of pg) {
+      if (!Array.isArray(ln) || typeof ln[0] === 'string') continue;
+      for (const [ai, t] of ln) d.text[ai] = d.text[ai] ? d.text[ai] + ' ' + t : t;
+    }
+    d.fromHafs = new Int32Array(META.hafs.length).fill(-1);
+    d.ayas.forEach((a, i) => {
+      for (let h = a[5]; h <= a[6]; h++) if (d.fromHafs[h] < 0) d.fromHafs[h] = i;
+    });
+    for (let h = 1; h < d.fromHafs.length; h++) if (d.fromHafs[h] < 0) d.fromHafs[h] = d.fromHafs[h - 1];
+    d.suraStart = {};
+    d.ayas.forEach((a, i) => { if (!(a[0] in d.suraStart)) d.suraStart[a[0]] = i; });
+    d.juzStart = {};
+    d.ayas.forEach((a, i) => { if (!(a[3] in d.juzStart)) d.juzStart[a[3]] = i; });
+    await document.fonts.load(`20px ${d.font}`, 'بسم');
+    cache[id] = d;
+  }
+  return cache[id];
+}
+
+const suraName = s => META.suras[s - 1][0];
+
+// ---------------------------------------------------------------- layout
+
+function measure() {
+  const probe = $('#probe');
+  const cs = getComputedStyle(probe);
+  const W = probe.clientWidth, H = probe.clientHeight;
+  const padL = parseFloat(cs.paddingLeft), padR = parseFloat(cs.paddingRight);
+  const insetT = parseFloat(cs.paddingTop), insetB = parseFloat(cs.paddingBottom);
+  S.landscape = W > H;
+  document.body.classList.toggle('landscape', S.landscape);
+  const em = R ? R.em : 19.5;
+  if (S.landscape) {
+    S.availW = Math.min(W - padL - padR - 16, 980);
+    S.fs = S.availW / em;
+    S.lh = S.fs * 1.95;
+  } else {
+    S.availW = W - padL - padR - 16;
+    const linesH = H - insetT - insetB - 46 - 40 - 4;
+    S.lh = linesH / 15;
+    S.fs = Math.min(S.availW / em, S.lh * 0.74);
+  }
+  document.documentElement.style.setProperty('--fs', S.fs.toFixed(2) + 'px');
+  document.documentElement.style.setProperty('--lh', S.lh.toFixed(2) + 'px');
+}
+
+function pageInfo(p) {
+  // first/last aya on the page
+  let first = null, last = null;
+  for (const ln of R.pages[p - 1]) {
+    if (!Array.isArray(ln) || typeof ln[0] === 'string') continue;
+    for (const seg of ln) { if (first == null) first = seg[0]; last = seg[0]; }
+  }
+  return { first, last };
+}
+
+function icon(name) {
+  const icons = {
+    grid: '<svg viewBox="0 0 28 28"><g fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="4" width="8.5" height="8.5" rx="2.6"/><rect x="15.5" y="4" width="8.5" height="8.5" rx="2.6"/><rect x="4" y="15.5" width="8.5" height="8.5" rx="2.6"/><rect x="15.5" y="15.5" width="8.5" height="8.5" rx="2.6"/></g></svg>',
+    bm: '<svg viewBox="0 0 22 26"><path d="M3 2.5h16v21l-8-5.6-8 5.6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
+    bmOn: '<svg viewBox="0 0 22 26"><path d="M3 2.5h16v21l-8-5.6-8 5.6z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
+    chev: '<svg viewBox="0 0 12 12"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  };
+  return icons[name];
+}
+
+function renderPage(p) {
+  const el = document.createElement('div');
+  if (p < 1 || p > R.pages.length) return el;
+  const lines = R.pages[p - 1];
+  const widths = R.lw[p - 1];
+  const opening = p <= 2;
+  const { first, last } = pageInfo(p);
+  const fa = R.ayas[first], la = R.ayas[last];
+  el.className = `page ${p % 2 ? 'odd' : 'even'}${opening ? ' opening' : ''}`;
+  el.dataset.page = p;
+
+  const rub = la[4];
+  const rubText = rub ? `${RUB_LABEL[(rub - 1) % 4]} ${ar(Math.floor((rub - 1) / 4) + 1)}` : '';
+  const marked = isBookmarked(p);
+
+  let html = `<header class="phead">
+    <button class="sura-btn" data-act="suras"><span>${suraName(fa[0])}</span><i class="chev">${icon('chev')}</i></button>
+    <button class="grid-btn" data-act="index" aria-label="الفهرس">${icon('grid')}</button>
+    <div class="side"><span class="juz">الجزء ${ar(fa[3])}</span><button class="bm-btn${marked ? ' on' : ''}" data-act="bm" aria-label="علامة">${icon(marked ? 'bmOn' : 'bm')}</button></div>
+  </header><div class="lines" style="font-family:${R.font}">`;
+
+  const n = opening ? lines.reduce((m, l, i) => (l ? i + 1 : m), 0) : 15;
+  for (let i = 0; i < n; i++) {
+    const ln = lines[i];
+    if (!ln) { html += '<div class="ln"></div>'; continue; }
+    if (ln[0] === 'H') {
+      html += `<div class="ln sura"><div class="frame"><span>سُورَةُ ${suraName(ln[1])}</span></div></div>`;
+      continue;
+    }
+    if (ln[0] === 'B') { html += `<div class="ln bsm">${R.basmala}</div>`; continue; }
+    const w = widths[i];
+    let style = '';
+    if (w * S.fs > S.availW * 0.985) style = ` style="font-size:${(S.availW * 0.985 / w).toFixed(2)}px"`;
+    const centred = opening || w < R.em * 0.62;
+    html += `<div class="ln${centred ? ' c' : ''}"${style}>`;
+    for (const [ai, text] of ln) {
+      for (const t of text.split(' ')) {
+        const cls = isEnd(t) ? 'w end' : 'w';
+        html += `<span class="${cls}" data-a="${ai}">${t}</span>`;
+      }
+    }
+    html += '</div>';
+  }
+  html += `</div><footer class="pfoot"><span class="pill"><span>${ar(p)}</span><span>${rubText}</span></span></footer>`;
+  el.innerHTML = html;
+  paintMarks(el);
+  return el;
+}
+
+function paintMarks(root = document) {
+  root.querySelectorAll('.w.sel, .w.play').forEach(e => e.classList.remove('sel', 'play'));
+  if (S.sel != null) root.querySelectorAll(`.w[data-a="${S.sel}"]`).forEach(e => e.classList.add('sel'));
+  if (S.play != null) root.querySelectorAll(`.w[data-a="${S.play}"]`).forEach(e => e.classList.add('play'));
+}
+
+// ---------------------------------------------------------------- paging
+
+const slots = [...document.querySelectorAll('.slot')]; // [prev, current, next]
+
+function placeSlots(dx = 0, animate = false) {
+  const W = window.innerWidth;
+  // RTL book: the next page sits to the left, the previous to the right
+  const pos = [W, 0, -W];
+  slots.forEach((s, i) => {
+    s.style.transition = animate ? 'transform .28s cubic-bezier(.2,.8,.2,1)' : 'none';
+    s.style.transform = `translate3d(${pos[i] + dx}px,0,0)`;
+  });
+}
+
+function renderAll() {
+  measure();
+  [S.page - 1, S.page, S.page + 1].forEach((p, i) => slots[i].replaceChildren(renderPage(p)));
+  placeSlots();
+}
+
+function goTo(p, { animate = false, from = 0 } = {}) {
+  p = Math.max(1, Math.min(R.pages.length, p));
+  if (p === S.page) return;
+  const step = p - S.page;
+  S.page = p;
+  store.set('page.' + R.id, p);
+  if (animate && Math.abs(step) === 1) {
+    // rotate slots so the page we're moving to stays in place, then slide
+    if (step === 1) slots.push(slots.shift()); else slots.unshift(slots.pop());
+    // start the slide where the finger left it
+    const W = window.innerWidth;
+    placeSlots((step === 1 ? -W : W) + from, false);
+    void slots[1].offsetWidth;
+    placeSlots(0, true);
+    const fresh = step === 1 ? 2 : 0;
+    slots[fresh].replaceChildren(renderPage(p + (step === 1 ? 1 : -1)));
+  } else {
+    renderAll();
+  }
+  const cur = slots[1].firstElementChild;
+  if (cur) cur.scrollTop = 0;
+}
+
+// swipe handling
+(() => {
+  const vp = $('#viewport');
+  let x0, y0, t0, axis = null, dx = 0, id = null;
+  vp.addEventListener('pointerdown', e => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    id = e.pointerId; x0 = e.clientX; y0 = e.clientY; t0 = performance.now(); axis = null; dx = 0;
+  });
+  vp.addEventListener('pointermove', e => {
+    if (e.pointerId !== id) return;
+    const mx = e.clientX - x0, my = e.clientY - y0;
+    if (!axis && Math.hypot(mx, my) > 8) axis = Math.abs(mx) > Math.abs(my) ? 'x' : 'y';
+    if (axis !== 'x') return;
+    dx = mx;
+    if ((dx > 0 && S.page >= R.pages.length) || (dx < 0 && S.page <= 1)) dx /= 3;
+    placeSlots(dx);
+  });
+  const end = e => {
+    if (e.pointerId !== id) return;
+    id = null;
+    if (axis !== 'x') return;
+    const v = dx / (performance.now() - t0);
+    const W = window.innerWidth;
+    if ((dx > W * 0.18 || v > 0.45) && S.page < R.pages.length) goTo(S.page + 1, { animate: true, from: dx });
+    else if ((dx < -W * 0.18 || v < -0.45) && S.page > 1) goTo(S.page - 1, { animate: true, from: dx });
+    else placeSlots(0, true);
+    vp.dataset.swiped = '1';
+    setTimeout(() => delete vp.dataset.swiped, 60);
+  };
+  vp.addEventListener('pointerup', end);
+  vp.addEventListener('pointercancel', end);
+
+  vp.addEventListener('click', e => {
+    if (vp.dataset.swiped) return;
+    const act = e.target.closest('[data-act]');
+    if (act) {
+      const a = act.dataset.act;
+      if (a === 'index') openSheet('suras');
+      else if (a === 'suras') openSheet('suras');
+      else if (a === 'bm') toggleBookmark(S.page);
+      return;
+    }
+    const w = e.target.closest('.w');
+    if (w) selectAya(+w.dataset.a);
+    else selectAya(null);
+  });
+})();
+
+document.addEventListener('keydown', e => {
+  if (!$('#sheet').hidden) return;
+  if (e.key === 'ArrowLeft') goTo(S.page + 1, { animate: true });
+  if (e.key === 'ArrowRight') goTo(S.page - 1, { animate: true });
+});
+
+let resizeT;
+window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(renderAll, 80); });
+
+// ---------------------------------------------------------------- selection
+
+function ayaLabel(i) {
+  const a = R.ayas[i];
+  return `${suraName(a[0])} ${ar(a[1])}`;
+}
+
+function selectAya(i) {
+  S.sel = S.sel === i ? null : i;
+  paintMarks();
+  const bar = $('#ayaBar');
+  if (S.sel == null) { bar.hidden = true; return; }
+  $('#ayaBarTitle').textContent = ayaLabel(S.sel);
+  bar.hidden = false;
+  $('#player').hidden = true;
+}
+
+$('#ayaBar').addEventListener('click', async e => {
+  const b = e.target.closest('[data-act]');
+  if (!b || S.sel == null) return;
+  const i = S.sel;
+  if (b.dataset.act === 'play') { selectAya(null); playFrom(i); }
+  if (b.dataset.act === 'copy') {
+    const a = R.ayas[i];
+    const txt = R.text[i].replace(/\s*[٠-٩]+$/, '');
+    try { await navigator.clipboard.writeText(`${txt} ﴿${suraName(a[0])}: ${ar(a[1])}﴾`); toast('تم النسخ'); }
+    catch { toast('تعذر النسخ'); }
+  }
+  if (b.dataset.act === 'bookmark') { addBookmark(R.ayas[i][2], i); }
+  if (b.dataset.act === 'close') selectAya(null);
+});
+
+let toastT;
+function toast(msg) {
+  const t = $('#toast');
+  t.textContent = msg; t.hidden = false;
+  clearTimeout(toastT); toastT = setTimeout(() => (t.hidden = true), 1600);
+}
+
+// ---------------------------------------------------------------- bookmarks
+
+const bookmarks = () => store.get('bm', []);
+const isBookmarked = p => bookmarks().some(b => b.r === R.id && b.page === p);
+
+function addBookmark(page, aya) {
+  const list = bookmarks().filter(b => !(b.r === R.id && b.page === page));
+  list.unshift({ r: R.id, page, aya, t: Date.now() });
+  store.set('bm', list);
+  toast('أضيفت العلامة');
+  refreshHeader();
+}
+
+function toggleBookmark(page) {
+  if (isBookmarked(page)) {
+    store.set('bm', bookmarks().filter(b => !(b.r === R.id && b.page === page)));
+    toast('أزيلت العلامة');
+    refreshHeader();
+  } else addBookmark(page, pageInfo(page).first);
+}
+
+function refreshHeader() {
+  slots.forEach(s => {
+    const pg = s.firstElementChild;
+    const btn = pg && $('.bm-btn', pg);
+    if (!btn) return;
+    const on = isBookmarked(+pg.dataset.page);
+    btn.classList.toggle('on', on);
+    btn.innerHTML = icon(on ? 'bmOn' : 'bm');
+  });
+}
+
+// ---------------------------------------------------------------- audio
+
+const audio = $('#audio');
+const P = { queue: [], ai: null, playedHafs: -1 };
+const pad3 = n => String(n).padStart(3, '0');
+const hafsUrl = h => { const [s, a] = META.hafs[h]; return `${AUDIO_BASE}${pad3(s)}${pad3(a)}.mp3`; };
+const BASMALA_URL = `${AUDIO_BASE}001001.mp3`;
+
+function queueFor(ai) {
+  // a riwaya aya may cover part of a hafs aya or several of them; never replay a hafs aya
+  const a = R.ayas[ai], q = [];
+  for (let h = Math.max(a[5], P.playedHafs + 1); h <= a[6]; h++) {
+    const [s, n] = META.hafs[h];
+    if (n === 1 && s !== 1 && s !== 9) q.push({ url: BASMALA_URL, h: null });
+    q.push({ url: hafsUrl(h), h });
+  }
+  return q;
+}
+
+function playFrom(ai) {
+  P.playedHafs = R.ayas[ai][5] - 1;
+  startAya(ai);
+}
+
+function startAya(ai) {
+  if (ai == null || ai >= R.ayas.length) return stopAudio();
+  P.ai = ai;
+  S.play = ai;
+  P.queue = queueFor(ai);
+  const page = R.ayas[ai][2];
+  if (page !== S.page) goTo(page, { animate: Math.abs(page - S.page) === 1 });
+  paintMarks();
+  showPlayer();
+  if (!P.queue.length) { setTimeout(() => P.ai === ai && startAya(ai + 1), 400); return; }
+  nextInQueue();
+}
+
+function nextInQueue() {
+  const item = P.queue.shift();
+  if (!item) return startAya(P.ai + 1);
+  if (item.h != null) P.playedHafs = item.h;
+  audio.src = item.url;
+  audio.play().catch(() => $('#player').classList.add('paused'));
+  preloadNext();
+}
+
+function preloadNext() {
+  const nxt = P.queue[0]?.url || (P.ai + 1 < R.ayas.length ? hafsUrl(R.ayas[P.ai + 1][5]) : null);
+  if (nxt) { const a = new Audio(); a.preload = 'auto'; a.src = nxt; }
+}
+
+audio.addEventListener('ended', nextInQueue);
+audio.addEventListener('play', () => $('#player').classList.remove('paused'));
+audio.addEventListener('pause', () => $('#player').classList.add('paused'));
+audio.addEventListener('error', () => { if (P.ai != null) toast('تعذر تحميل الصوت'); });
+
+function showPlayer() {
+  $('#plTitle').textContent = ayaLabel(P.ai);
+  $('#player').hidden = false;
+  $('#ayaBar').hidden = true;
+  if ('mediaSession' in navigator) {
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: `سورة ${ayaLabel(P.ai)}`, artist: 'ياسر الدوسري', album: 'القرآن الكريم',
+      artwork: [{ src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' }],
+    });
+  }
+}
+
+function stopAudio() {
+  audio.pause();
+  audio.removeAttribute('src');
+  P.ai = null; S.play = null; P.queue = [];
+  $('#player').hidden = true;
+  paintMarks();
+}
+
+$('#plToggle').onclick = () => (audio.paused ? audio.play() : audio.pause());
+$('#plStop').onclick = stopAudio;
+$('#plNext').onclick = () => P.ai != null && playFrom(Math.min(P.ai + 1, R.ayas.length - 1));
+$('#plPrev').onclick = () => P.ai != null && playFrom(Math.max(P.ai - 1, 0));
+if ('mediaSession' in navigator) {
+  navigator.mediaSession.setActionHandler('play', () => audio.play());
+  navigator.mediaSession.setActionHandler('pause', () => audio.pause());
+  navigator.mediaSession.setActionHandler('nexttrack', () => $('#plNext').onclick());
+  navigator.mediaSession.setActionHandler('previoustrack', () => $('#plPrev').onclick());
+}
+
+// ---------------------------------------------------------------- search
+
+function norm(s) {
+  return s
+    .replace(/[ٱأإآ]/g, 'ا')
+    .replace(/ى/g, 'ي').replace(/ة/g, 'ه')
+    .replace(/ؤ/g, 'و').replace(/ئ/g, 'ي')
+    .replace(/[^ا-ي\sa-z0-9]/g, '')
+    .replace(/ـ/g, '');
+}
+const normLatin = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9 ]/g, '');
+const toLatinDigits = s => s.replace(/[٠-٩]/g, d => d.charCodeAt(0) - 0x660).replace(/[۰-۹]/g, d => d.charCodeAt(0) - 0x6f0);
+
+function lev(a, b, max) {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    let best = i;
+    for (let j = 1; j <= b.length; j++) {
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      best = Math.min(best, cur[j]);
+    }
+    if (best > max) return max + 1;
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+function wordSim(q, w) {
+  if (q === w) return 1;
+  if (w.length > q.length && w.startsWith(q)) return q.length >= 3 ? 0.92 : 0.7;
+  // attached particles: و ف ب ل ك + ال
+  const strip = x => x.replace(/^(و|ف)?(ب|ل|ك)?(ال)?/, '');
+  const sq = strip(q), sw = strip(w);
+  if (sq.length >= 2 && sq === sw) return 0.9;
+  if (sq.length >= 3 && sw.startsWith(sq)) return 0.85;
+  const L = Math.max(sq.length, sw.length);
+  if (L < 3) return 0;
+  const max = L <= 4 ? 1 : 2;
+  const d = lev(sq, sw, max);
+  return d <= max ? 0.8 * (1 - d / L) + 0.1 : 0;
+}
+
+let IDX;
+function buildIndex() {
+  if (IDX) return IDX;
+  const ayas = META.emlaey.map(t => {
+    const n = norm(t);
+    return { str: n, words: n.split(/\s+/).filter(Boolean) };
+  });
+  const suras = META.suras.map(([nameAr, en, tr], i) => {
+    const a = norm(nameAr).replace(/\s+/g, '');
+    return {
+      s: i + 1,
+      keys: [a, a.replace(/^ال/, ''), normLatin(en).replace(/ /g, ''), normLatin(en).replace(/^(a[lnrstdzh]{1,2})[ -]?/, '').replace(/ /g, ''), normLatin(tr).replace(/ /g, '')],
+    };
+  });
+  return (IDX = { ayas, suras });
+}
+
+function suraScore(q) {
+  const qa = norm(q).replace(/^سوره\s*/, '').replace(/\s+/g, '');
+  const ql = normLatin(q).replace(/^(surah?|sura)\s*/, '').replace(/ /g, '');
+  const out = [];
+  for (const s of IDX.suras) {
+    let best = 0;
+    for (const k of s.keys) {
+      if (!k) continue;
+      for (const x of [qa, qa.replace(/^ال/, ''), ql, ql.replace(/^(a[lnrstdzh]{1,2})[ -]?/, '')]) {
+        if (!x || x.length < 2) continue;
+        let sc = 0;
+        if (x === k) sc = 1;
+        else if (k.startsWith(x)) sc = 0.75 + 0.2 * (x.length / k.length);
+        else if (k.includes(x) && x.length >= 3) sc = 0.6;
+        else {
+          const max = k.length <= 4 ? 1 : 2;
+          const d = lev(x, k, max);
+          if (d <= max) sc = 0.85 * (1 - d / Math.max(x.length, k.length)) + 0.1;
+        }
+        best = Math.max(best, sc);
+      }
+    }
+    if (best >= 0.55) out.push({ type: 'sura', s: s.s, score: best });
+  }
+  return out.sort((a, b) => b.score - a.score);
+}
+
+function ayaScore(q) {
+  const qn = norm(q).trim();
+  const qw = qn.split(/\s+/).filter(Boolean);
+  if (!qw.length || (qw.length === 1 && qw[0].length < 2)) return [];
+  const scoreWords = (words, str) => {
+    let sum = 0, lastPos = -1, ordered = 0;
+    for (const w of qw) {
+      let best = 0, pos = -1;
+      for (let k = 0; k < words.length; k++) {
+        const sc = wordSim(w, words[k]);
+        if (sc > best) { best = sc; pos = k; if (sc === 1) break; }
+      }
+      sum += best;
+      if (pos > lastPos) ordered++;
+      lastPos = pos;
+    }
+    let score = sum / qw.length;
+    if (qw.length > 1) score += 0.06 * (ordered / qw.length);
+    if (str.includes(qn)) score += 0.25;
+    return score;
+  };
+  const out = [];
+  IDX.ayas.forEach((a, h) => {
+    let score = scoreWords(a.words, a.str);
+    // a phrase can run across into the next aya (e.g. الرحمن علم القرآن)
+    const nx = IDX.ayas[h + 1];
+    if (qw.length > 1 && nx && META.hafs[h + 1][0] === META.hafs[h][0] && score < 1.2) {
+      score = Math.max(score, scoreWords(a.words.concat(nx.words), a.str + ' ' + nx.str) - 0.05);
+    }
+    if (score >= 0.5) out.push({ type: 'aya', h, score });
+  });
+  return out.sort((a, b) => b.score - a.score || a.h - b.h).slice(0, 60);
+}
+
+function search(raw) {
+  buildIndex();
+  const q = toLatinDigits(raw.trim());
+  if (!q) return [];
+  const nums = (q.match(/\d+/g) || []).map(Number);
+  const text = q.replace(/[\d:：.,،\-]+/g, ' ').trim();
+  const results = [];
+  const hafsIndex = (s, a) => META.hafs.findIndex(([x, y]) => x === s && y === a);
+
+  if (!text) {
+    if (nums.length >= 2 && nums[0] >= 1 && nums[0] <= 114) {
+      const h = hafsIndex(nums[0], nums[1]);
+      if (h >= 0) results.push({ type: 'aya', h, score: 2 });
+    }
+    if (nums[0] >= 1 && nums[0] <= 114) results.push({ type: 'sura', s: nums[0], score: 1.5 });
+    if (nums.length === 1 && nums[0] >= 1 && nums[0] <= R.pages.length) results.push({ type: 'page', p: nums[0], score: 1.4 });
+    return results;
+  }
+
+  const suras = suraScore(text);
+  if (nums.length && suras.length) {
+    // "البقرة 255" / "baqara 255": jump straight to that aya
+    for (const s of suras.slice(0, 3)) {
+      const h = hafsIndex(s.s, nums[0]);
+      if (h >= 0) results.push({ type: 'aya', h, score: 1.5 + s.score });
+    }
+  }
+  const ayas = /[؀-ۿ]/.test(text) ? ayaScore(text) : [];
+  // surah names outrank aya text for short queries, which is how names get typed
+  const short = text.split(/\s+/).length <= 2;
+  results.push(...suras.slice(0, 6).map(s => ({ ...s, score: s.score + (s.score >= 0.95 ? 0.4 : short ? 0.3 : 0.05) })));
+  results.push(...ayas);
+  return results.sort((a, b) => b.score - a.score);
+}
+
+// ---------------------------------------------------------------- sheet
+
+let tab = 'suras';
+function openSheet(t = tab) {
+  tab = t;
+  selectAya(null);
+  $('#sheet').hidden = false;
+  $('#q').value = '';
+  renderSheet();
+}
+function closeSheet() { $('#sheet').hidden = true; $('#q').blur(); }
+$('#sheetClose').onclick = closeSheet;
+$('#tabs').addEventListener('click', e => {
+  const b = e.target.closest('[data-tab]');
+  if (!b) return;
+  tab = b.dataset.tab;
+  $('#q').value = '';
+  renderSheet();
+});
+
+let searchT;
+$('#q').addEventListener('input', () => { clearTimeout(searchT); searchT = setTimeout(renderSheet, 120); });
+$('#q').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); $('#sheetBody .row')?.click(); }
+});
+
+const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const pageOfSura = s => R.ayas[R.suraStart[s]][2];
+
+function suraRow(s, extra = '') {
+  const [nameAr, en, tr, count, place] = META.suras[s - 1];
+  return `<button class="row${extra}" data-go-sura="${s}">
+    <span class="num">${ar(s)}</span>
+    <span class="main"><span class="t">سورة ${nameAr}</span><span class="s">${en} · ${place === 'makkah' ? 'مكية' : 'مدنية'} · ${ar(count)} آية</span></span>
+    <span class="meta">${ar(pageOfSura(s))}</span>
+  </button>`;
+}
+
+function renderSheet() {
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  const body = $('#sheetBody');
+  const q = $('#q').value;
+  $('#tabs').hidden = !!q.trim();
+  let html = '';
+
+  if (q.trim()) {
+    const res = search(q);
+    if (!res.length) html = '<div class="empty">لا توجد نتائج</div>';
+    else {
+      html = '<div class="group">';
+      res.slice(0, 50).forEach((r, k) => {
+        const best = k === 0 ? ' best' : '';
+        if (r.type === 'sura') html += suraRow(r.s, best).replace('<span class="meta">', '<span class="tag">سورة</span><span class="meta">');
+        else if (r.type === 'page') html += `<button class="row${best}" data-go-page="${r.p}"><span class="num">${ar(r.p)}</span><span class="main"><span class="t">الصفحة ${ar(r.p)}</span></span><span class="tag">صفحة</span></button>`;
+        else {
+          const ai = R.fromHafs[r.h];
+          const [s, a] = META.hafs[r.h];
+          html += `<button class="row${best}" data-go-aya="${ai}">
+            <span class="main"><span class="s">${suraName(s)} ${ar(a)} · ص ${ar(R.ayas[ai][2])}</span>
+            <span class="verse" style="font-family:${R.font}">${esc(R.text[ai])}</span></span>
+            <span class="tag">آية</span></button>`;
+        }
+      });
+      html += '</div>';
+    }
+  } else if (tab === 'suras') {
+    html = '<div class="group">' + META.suras.map((_, i) => suraRow(i + 1)).join('') + '</div>';
+  } else if (tab === 'juz') {
+    html = '<div class="group">';
+    for (let j = 1; j <= 30; j++) {
+      const ai = R.juzStart[j];
+      if (ai == null) continue;
+      const a = R.ayas[ai];
+      html += `<button class="row" data-go-aya="${ai}"><span class="num">${ar(j)}</span>
+        <span class="main"><span class="t">الجزء ${ar(j)}</span><span class="s">${suraName(a[0])} ${ar(a[1])}</span></span>
+        <span class="meta">${ar(a[2])}</span></button>`;
+    }
+    html += '</div>';
+  } else if (tab === 'marks') {
+    const list = bookmarks();
+    if (!list.length) html = '<div class="empty">لا توجد علامات بعد.<br>اضغط على أيقونة العلامة أعلى الصفحة لحفظها.</div>';
+    else {
+      html = '<div class="group">' + list.map((b, k) => {
+        const name = META.riwayat.find(r => r.id === b.r)?.name || b.r;
+        const d = cache[b.r];
+        const label = d && b.aya != null ? `${suraName(d.ayas[b.aya][0])} ${ar(d.ayas[b.aya][1])}` : '';
+        return `<button class="row" data-go-mark="${k}"><span class="num">${ar(b.page)}</span>
+          <span class="main"><span class="t">الصفحة ${ar(b.page)}${label ? ' · ' + label : ''}</span><span class="s">${name} · ${new Date(b.t).toLocaleDateString('ar')}</span></span>
+          <span class="meta" data-del-mark="${k}">حذف</span></button>`;
+      }).join('') + '</div>';
+    }
+  } else if (tab === 'riwaya') {
+    html = '<div class="group-label">رواية المصحف</div><div class="group">' + META.riwayat.map(r =>
+      `<button class="row" data-riwaya="${r.id}"><span class="main"><span class="t">رواية ${r.name}</span><span class="s">${ar(r.ayas)} آية · بخط مجمع الملك فهد</span></span>${r.id === R.id ? '<span class="check">✓</span>' : ''}</button>`).join('') + '</div>';
+    html += '<p class="note">لكل رواية رسمها وعلامات ضبطها ووقفها الخاصة. التلاوة الصوتية بصوت الشيخ ياسر الدوسري برواية حفص، وتُطابَق آيات الروايات الأخرى مع ما يقابلها في رواية حفص.</p>';
+  }
+  body.innerHTML = html;
+  if (!q.trim()) body.scrollTop = 0;
+}
+
+$('#sheetBody').addEventListener('click', async e => {
+  const del = e.target.closest('[data-del-mark]');
+  if (del) {
+    e.stopPropagation();
+    const list = bookmarks(); list.splice(+del.dataset.delMark, 1); store.set('bm', list);
+    refreshHeader(); renderSheet(); return;
+  }
+  const row = e.target.closest('.row');
+  if (!row) return;
+  const d = row.dataset;
+  if (d.goSura) { closeSheet(); goTo(pageOfSura(+d.goSura)); }
+  else if (d.goPage) { closeSheet(); goTo(+d.goPage); }
+  else if (d.goAya) {
+    closeSheet();
+    const ai = +d.goAya;
+    goTo(R.ayas[ai][2]);
+    S.sel = null; selectAya(ai);
+  } else if (d.goMark) {
+    const b = bookmarks()[+d.goMark];
+    closeSheet();
+    if (b.r !== R.id) await switchRiwaya(b.r, false);
+    goTo(b.page);
+    if (b.aya != null) { S.sel = null; selectAya(b.aya); }
+  } else if (d.riwaya && d.riwaya !== R.id) {
+    await switchRiwaya(d.riwaya, true);
+    renderSheet();
+  }
+});
+
+async function switchRiwaya(id, keepPlace) {
+  // keep the reader on the same passage: go through the hafs aya numbering
+  const h = keepPlace ? R.ayas[pageInfo(S.page).first][5] : null;
+  stopAudio();
+  $('#loading').hidden = false;
+  try {
+    const d = await loadRiwaya(id);
+    R = d;
+    store.set('riwaya', id);
+    S.sel = null;
+    S.page = h != null ? R.ayas[R.fromHafs[h]][2] : store.get('page.' + id, 1);
+    store.set('page.' + id, S.page);
+    renderAll();
+  } catch (err) {
+    toast('تعذر تحميل الرواية');
+  } finally {
+    $('#loading').hidden = true;
+  }
+}
+
+// ---------------------------------------------------------------- boot
+
+(async () => {
+  try {
+    META = await loadJSON('data/meta.json');
+    const id = store.get('riwaya', 'hafs');
+    R = await loadRiwaya(META.riwayat.some(r => r.id === id) ? id : 'hafs');
+    S.page = store.get('page.' + R.id, 1);
+    renderAll();
+    $('#loading').hidden = true;
+  } catch (err) {
+    $('#loading').textContent = 'تعذر التحميل — تحقق من الاتصال';
+    console.error(err);
+  }
+  if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
+})();
