@@ -1,7 +1,7 @@
 'use strict';
 
 // bump when data/ or fonts/ change so phones fetch the new files
-const DATA_VERSION = 4;
+const DATA_VERSION = 5;
 const AUDIO_BASE = 'https://everyayah.com/data/Yasser_Ad-Dussary_128kbps/';
 const RUB_LABEL = ['الحزب', 'ربع الحزب', 'نصف الحزب', 'ثلاثة أرباع الحزب'];
 const $ = (s, el = document) => el.querySelector(s);
@@ -15,6 +15,10 @@ const ar = n => String(n).replace(/\d/g, d => '٠١٢٣٤٥٦٧٨٩'[d]);
 const isEnd = t => /^[٠-٩]+$/.test(t) || t.endsWith('*');
 // KFGQPC QCF V2 per-page fonts (1441 Madani print): every word is a glyph
 const QCF_BASE = 'https://verses.quran.foundation/fonts/quran/hafs/v2/woff2/';
+const LINE_RATIO = 1.8; // line pitch / font size on regular pages
+// QCF4 QBSML: printed-mushaf surah titles (U+F100 + surah - 1) and basmala
+const SURA_GLYPH = s => String.fromCharCode(0xF100 + s - 1);
+const BASMALA_GLYPHS = '\uFAD0\uFAD1\uFAD2\uFAD3';
 
 let META;            // suras, hafs aya keys, emlaey text
 let R;               // current riwaya data
@@ -28,6 +32,46 @@ const S = {          // ui state
   fs: 24,
   lh: 48,
 };
+
+// ---------------------------------------------------------------- khatmas
+// Each khatma is its own mushaf: riwaya, reading position, marked aya and
+// bookmarks, saved separately so the Quran can be finished many times.
+
+const COVERS = [
+  { bg: ['#1f5040', '#11301f'], gold: '#d9b86c', name: 'زمردي' },
+  { bg: ['#1e3160', '#101b38'], gold: '#d9b86c', name: 'كحلي' },
+  { bg: ['#6e1f30', '#43101b'], gold: '#e0c07a', name: 'عنابي' },
+  { bg: ['#262422', '#0c0b0a'], gold: '#cfae62', name: 'أسود' },
+  { bg: ['#0f5559', '#073236'], gold: '#dcbf7c', name: 'فيروزي' },
+  { bg: ['#5e3e24', '#3a2513'], gold: '#e2c27e', name: 'بني' },
+  { bg: ['#f3ead7', '#dccfb2'], gold: '#9a7533', name: 'عاجي' },
+];
+
+let KH = [];   // all khatmas
+let K;         // the open one
+
+function saveKh() {
+  store.set('khatmas', KH);
+  store.set('kh.current', K?.id);
+}
+
+function newKhatma(name, riwaya = 'hafs', cover = 0) {
+  return { id: Date.now().toString(36), name, riwaya, cover, page: 1, mark: null, bookmarks: [], done: 0, created: Date.now(), read: Date.now() };
+}
+
+function loadKhatmas() {
+  KH = store.get('khatmas', []);
+  if (!KH.length) {
+    // first run (or an older version): carry over the saved place and bookmarks
+    const r = store.get('riwaya', 'hafs');
+    const k = newKhatma('ختمتي', r, 0);
+    k.page = store.get('page.' + r, 1);
+    k.bookmarks = store.get('bm', []);
+    KH = [k];
+  }
+  K = KH.find(k => k.id === store.get('kh.current')) || KH[0];
+  saveKh();
+}
 
 // ---------------------------------------------------------------- data
 
@@ -103,14 +147,14 @@ function measure() {
   document.body.classList.toggle('landscape', S.landscape);
   const em = R?.em || 17;
   if (S.landscape) {
-    S.availW = Math.min(W - padL - padR - 8, 980);
+    S.availW = Math.min(W - padL - padR, 980);
     S.fs = S.availW / em;
     S.lh = S.fs * 1.95;
   } else {
-    S.availW = W - padL - padR - 8;
-    const linesH = H - insetT - insetB - 46 - 40 - 4;
-    S.lh = linesH / 15;
-    S.fs = Math.min(S.availW / em, S.lh * 0.74);
+    S.availW = W - padL - padR;
+    S.linesH = H - insetT - insetB - 46 - 40 - 4;
+    S.fs = Math.min(S.availW / em, S.linesH / 15 * 0.74);
+    S.lh = Math.min(S.linesH / 15, S.fs * LINE_RATIO);
   }
   document.documentElement.style.setProperty('--fs', S.fs.toFixed(2) + 'px');
   document.documentElement.style.setProperty('--lh', S.lh.toFixed(2) + 'px');
@@ -149,15 +193,16 @@ function renderPage(p) {
   if (R.glyph && pf?.ready) {
     widths = pf.widths.map(w => w / 100);
     em = Math.max(...widths);
-    fs = S.landscape ? S.availW / em : Math.min(S.availW / em, S.lh * 0.82);
+    fs = S.landscape ? S.availW / em : Math.min(S.availW / em, S.linesH / 15 * 0.82);
   }
+  const lh = S.landscape ? fs * 1.75 : Math.min(S.linesH / 15, fs * LINE_RATIO);
   const { first, last } = pageInfo(p);
   const fa = R.ayas[first], la = R.ayas[last];
   el.className = `page ${p % 2 ? 'odd' : 'even'}${opening ? ' opening' : ''}${pending ? ' pending' : ''}${R.glyph ? ' glyph' : ''}`;
   el.dataset.page = p;
   if (R.glyph && !pending) {
     el.style.setProperty('--fs', fs.toFixed(2) + 'px');
-    if (S.landscape) el.style.setProperty('--lh', (fs * 1.75).toFixed(2) + 'px');
+    el.style.setProperty('--lh', lh.toFixed(2) + 'px');
   }
 
   const rub = la[4];
@@ -175,10 +220,15 @@ function renderPage(p) {
     const ln = lines[i];
     if (!ln || pending) { html += '<div class="ln"></div>'; continue; }
     if (ln[0] === 'H') {
-      html += `<div class="ln sura"><div class="frame" style="font-family:${R.font}"><span>سُورَةُ ${suraName(ln[1])}</span></div></div>`;
+      html += `<div class="ln sura"><div class="band"><i class="orn"></i><span class="sname">${SURA_GLYPH(ln[1])}</span><i class="orn"></i></div></div>`;
       continue;
     }
-    if (ln[0] === 'B') { html += `<div class="ln bsm" style="font-family:${R.font};font-size:${Math.min(S.fs, fs * 0.9).toFixed(2)}px">${R.basmala}</div>`; continue; }
+    if (ln[0] === 'B') {
+      html += R.glyph
+        ? `<div class="ln bsm qb">${BASMALA_GLYPHS}</div>`
+        : `<div class="ln bsm" style="font-family:${R.font}">${R.basmala}</div>`;
+      continue;
+    }
     const w = widths[i];
     let style = '';
     if (w * fs > S.availW * 0.985) style = ` style="font-size:${(S.availW * 0.985 / w).toFixed(2)}px"`;
@@ -234,7 +284,8 @@ function goTo(p, { animate = false, from = 0 } = {}) {
   if (p === S.page) return;
   const step = p - S.page;
   S.page = p;
-  store.set('page.' + R.id, p);
+  K.page = p; K.read = Date.now(); saveKh();
+  if (p === R.pages.length && !K.endShown) setTimeout(showDone, 700);
   if (animate && Math.abs(step) === 1) {
     // rotate slots so the page we're moving to stays in place, then slide
     if (step === 1) slots.push(slots.shift()); else slots.unshift(slots.pop());
@@ -317,21 +368,26 @@ function ayaLabel(i) {
   return `${suraName(a[0])} ${ar(a[1])}`;
 }
 
-function selectAya(i) {
-  S.sel = S.sel === i ? null : i;
+// Tapping an aya marks its number (saved in the khatma as the reading place)
+// and opens the actions; tapping elsewhere just closes the actions.
+function selectAya(i, { bar = true } = {}) {
+  const ayaBar = $('#ayaBar');
+  if (i == null) { ayaBar.hidden = true; return; }
+  if (i === S.sel && !ayaBar.hidden) { ayaBar.hidden = true; return; }
+  S.sel = i;
+  K.mark = i; K.read = Date.now(); saveKh();
   paintMarks();
-  const bar = $('#ayaBar');
-  if (S.sel == null) { bar.hidden = true; return; }
-  $('#ayaBarTitle').textContent = ayaLabel(S.sel);
-  bar.hidden = false;
-  $('#player').hidden = true;
+  if (!bar) return;
+  $('#ayaBarTitle').textContent = ayaLabel(i);
+  ayaBar.hidden = false;
+  if (P.ai == null) $('#player').hidden = true;
 }
 
 $('#ayaBar').addEventListener('click', async e => {
   const b = e.target.closest('[data-act]');
   if (!b || S.sel == null) return;
   const i = S.sel;
-  if (b.dataset.act === 'play') { selectAya(null); playFrom(i); }
+  if (b.dataset.act === 'play') { selectAya(null); $('#player').hidden = false; playFrom(i); }
   if (b.dataset.act === 'copy') {
     const a = R.ayas[i];
     const txt = R.text[i].replace(/\s*[٠-٩]+$/, '');
@@ -351,20 +407,21 @@ function toast(msg) {
 
 // ---------------------------------------------------------------- bookmarks
 
-const bookmarks = () => store.get('bm', []);
+const bookmarks = () => K.bookmarks;
+const setBookmarks = list => { K.bookmarks = list; saveKh(); };
 const isBookmarked = p => bookmarks().some(b => b.r === R.id && b.page === p);
 
 function addBookmark(page, aya) {
   const list = bookmarks().filter(b => !(b.r === R.id && b.page === page));
   list.unshift({ r: R.id, page, aya, t: Date.now() });
-  store.set('bm', list);
+  setBookmarks(list);
   toast('أضيفت العلامة');
   refreshHeader();
 }
 
 function toggleBookmark(page) {
   if (isBookmarked(page)) {
-    store.set('bm', bookmarks().filter(b => !(b.r === R.id && b.page === page)));
+    setBookmarks(bookmarks().filter(b => !(b.r === R.id && b.page === page)));
     toast('أزيلت العلامة');
     refreshHeader();
   } else addBookmark(page, pageInfo(page).first);
@@ -630,6 +687,7 @@ function search(raw) {
 let tab = 'suras';
 function openSheet(t = tab) {
   tab = t;
+  $('#sheetTitle').textContent = K.name;
   selectAya(null);
   $('#sheet').hidden = false;
   $('#q').value = '';
@@ -729,7 +787,7 @@ $('#sheetBody').addEventListener('click', async e => {
   const del = e.target.closest('[data-del-mark]');
   if (del) {
     e.stopPropagation();
-    const list = bookmarks(); list.splice(+del.dataset.delMark, 1); store.set('bm', list);
+    const list = bookmarks(); list.splice(+del.dataset.delMark, 1); setBookmarks(list);
     refreshHeader(); renderSheet(); return;
   }
   const row = e.target.closest('.row');
@@ -741,13 +799,13 @@ $('#sheetBody').addEventListener('click', async e => {
     closeSheet();
     const ai = +d.goAya;
     goTo(R.ayas[ai][2]);
-    S.sel = null; selectAya(ai);
+    selectAya(ai);
   } else if (d.goMark) {
     const b = bookmarks()[+d.goMark];
     closeSheet();
     if (b.r !== R.id) await switchRiwaya(b.r, false);
     goTo(b.page);
-    if (b.aya != null) { S.sel = null; selectAya(b.aya); }
+    if (b.aya != null) selectAya(b.aya);
   } else if (d.riwaya && d.riwaya !== R.id) {
     await switchRiwaya(d.riwaya, true);
     renderSheet();
@@ -757,15 +815,17 @@ $('#sheetBody').addEventListener('click', async e => {
 async function switchRiwaya(id, keepPlace) {
   // keep the reader on the same passage: go through the hafs aya numbering
   const h = keepPlace ? R.ayas[pageInfo(S.page).first][5] : null;
+  const hm = keepPlace && K.mark != null ? R.ayas[K.mark]?.[5] : null;
   stopAudio();
   $('#loading').hidden = false;
   try {
     const d = await loadRiwaya(id);
     R = d;
-    store.set('riwaya', id);
-    S.sel = null;
-    S.page = h != null ? R.ayas[R.fromHafs[h]][2] : store.get('page.' + id, 1);
-    store.set('page.' + id, S.page);
+    S.page = h != null ? R.ayas[R.fromHafs[h]][2] : K.page;
+    K.riwaya = id; K.page = S.page;
+    K.mark = hm != null ? R.fromHafs[hm] : keepPlace ? null : K.mark;
+    S.sel = K.mark;
+    saveKh();
     renderAll();
   } catch (err) {
     toast('تعذر تحميل الرواية');
@@ -774,14 +834,193 @@ async function switchRiwaya(id, keepPlace) {
   }
 }
 
+// ---------------------------------------------------------------- library
+
+function coverSVG(c) {
+  // gold frame, corner fleurons and an eight-pointed star medallion
+  const star = (cx, cy, r) => {
+    let d = '';
+    for (let i = 0; i < 16; i++) {
+      const a = Math.PI / 8 * i - Math.PI / 2, rr = i % 2 ? r * 0.62 : r;
+      d += (i ? 'L' : 'M') + (cx + rr * Math.cos(a)).toFixed(2) + ' ' + (cy + rr * Math.sin(a)).toFixed(2);
+    }
+    return d + 'Z';
+  };
+  const corner = (x, y, sx, sy) => `<path transform="translate(${x} ${y}) scale(${sx} ${sy})" d="M0 0h14M0 0v14M3 3h7M3 3v7M3 3l6 6" />`;
+  return `<svg viewBox="0 0 120 168" class="cv-art" aria-hidden="true">
+    <defs><pattern id="pt${c}" width="12" height="12" patternUnits="userSpaceOnUse">
+      <path d="${star(6, 6, 3.2)}" fill="none" stroke="currentColor" stroke-width=".35" opacity=".35"/></pattern></defs>
+    <rect x="13" y="13" width="94" height="142" fill="url(#pt${c})" />
+    <g fill="none" stroke="currentColor">
+      <rect x="7" y="7" width="106" height="154" rx="2" stroke-width="1.3"/>
+      <rect x="11" y="11" width="98" height="146" rx="1.5" stroke-width=".5"/>
+      <g stroke-width=".8">${corner(14, 14, 1, 1)}${corner(106, 14, -1, 1)}${corner(14, 154, 1, -1)}${corner(106, 154, -1, -1)}</g>
+      <circle cx="60" cy="92" r="24" stroke-width=".5"/>
+      <circle cx="60" cy="92" r="21" stroke-width=".3" stroke-dasharray="1 1.6"/>
+      <path d="${star(60, 92, 18)}" stroke-width=".9"/>
+      <path d="${star(60, 92, 11.5)}" stroke-width=".5"/>
+      <path d="M40 126h40M48 130h24" stroke-width=".5"/>
+      <path d="M60 122l3 4-3 4-3-4z" stroke-width=".6"/>
+    </g>
+  </svg>`;
+}
+
+function coverHTML(k, small = false) {
+  const c = COVERS[k.cover] || COVERS[0];
+  return `<div class="cover${small ? ' small' : ''}" style="--c1:${c.bg[0]};--c2:${c.bg[1]};--gold:${c.gold}">
+    ${coverSVG(k.cover)}
+    <div class="cv-title">ٱلۡقُرۡءَانُ<br>ٱلۡكَرِيمُ</div>
+    <div class="cv-name">${esc(k.name)}</div>
+  </div>`;
+}
+
+function renderShelf() {
+  const riwayaName = id => META.riwayat.find(r => r.id === id)?.name || id;
+  const sorted = [...KH].sort((a, b) => b.read - a.read);
+  $('#shelf').innerHTML = sorted.map(k => {
+    const total = 604;
+    const pct = Math.round((k.page - 1) / (total - 1) * 100);
+    return `<div class="book${k.id === K.id ? ' current' : ''}" data-kh="${k.id}">
+      <button class="book-open" data-open="${k.id}" aria-label="${esc(k.name)}">${coverHTML(k)}</button>
+      <div class="book-info">
+        <div class="book-row"><b>${esc(k.name)}</b><button class="dots" data-edit="${k.id}" aria-label="تعديل">•••</button></div>
+        <div class="book-sub">${riwayaName(k.riwaya)}</div>
+        <div class="prog"><i style="width:${pct}%"></i></div>
+        <div class="book-sub">صفحة ${ar(k.page)} · ${ar(pct)}٪${k.done ? ` · ${ar(k.done)} ${k.done === 1 ? 'ختمة' : 'ختمات'} ✓` : ''}</div>
+      </div>
+    </div>`;
+  }).join('') + `<div class="book"><button class="book-open" data-new="1"><div class="cover new"><span>+</span><small>ختمة جديدة</small></div></button></div>`;
+}
+
+function openLibrary() {
+  closeSheet();
+  selectAya(null);
+  renderShelf();
+  $('#library').hidden = false;
+}
+
+$('#libClose').onclick = () => ($('#library').hidden = true);
+$('#libBtn').onclick = openLibrary;
+
+$('#shelf').addEventListener('click', async e => {
+  const t = e.target.closest('[data-open],[data-edit],[data-new]');
+  if (!t) return;
+  if (t.dataset.edit) return openEditor(KH.find(k => k.id === t.dataset.edit));
+  if (t.dataset.new) return openEditor(null);
+  await openKhatma(t.dataset.open);
+});
+
+async function openKhatma(id) {
+  const k = KH.find(x => x.id === id);
+  if (!k) return;
+  stopAudio();
+  K = k; K.read = Date.now(); saveKh();
+  $('#loading').hidden = false;
+  try {
+    R = await loadRiwaya(K.riwaya);
+    S.page = K.page;
+    S.sel = K.mark;
+    renderAll();
+    $('#library').hidden = true;
+  } catch { toast('تعذر التحميل'); }
+  finally { $('#loading').hidden = true; }
+}
+
+let editing = null;
+function openEditor(k) {
+  editing = k;
+  const f = $('#khForm');
+  f.name.value = k ? k.name : `ختمة ${ar(KH.length + 1)}`;
+  f.riwaya.innerHTML = META.riwayat.map(r => `<option value="${r.id}">رواية ${r.name}</option>`).join('');
+  f.riwaya.value = k ? k.riwaya : 'hafs';
+  const cover = k ? k.cover : KH.length % COVERS.length;
+  $('#swatches').innerHTML = COVERS.map((c, i) =>
+    `<label class="sw" style="--c1:${c.bg[0]};--c2:${c.bg[1]};--gold:${c.gold}"><input type="radio" name="cover" value="${i}"${i === cover ? ' checked' : ''}><span></span></label>`).join('');
+  $('#khTitle').textContent = k ? 'تعديل الختمة' : 'ختمة جديدة';
+  $('#khSave').textContent = k ? 'حفظ' : 'ابدأ الختمة';
+  $('#khRestart').hidden = $('#khDelete').hidden = !k;
+  $('#khDelete').disabled = KH.length < 2;
+  updatePreview();
+  $('#khEdit').hidden = false;
+}
+function updatePreview() {
+  const f = $('#khForm');
+  $('#khPreview').innerHTML = coverHTML({ name: f.name.value || '—', cover: +f.cover.value }, true);
+}
+$('#khForm').addEventListener('input', updatePreview);
+$('#khCancel').onclick = () => ($('#khEdit').hidden = true);
+$('#khForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  const f = e.target;
+  const name = f.name.value.trim() || 'ختمة';
+  if (editing) {
+    const riwayaChanged = editing.riwaya !== f.riwaya.value;
+    Object.assign(editing, { name, cover: +f.cover.value });
+    if (riwayaChanged) {
+      editing.riwaya = f.riwaya.value;
+      editing.mark = null; editing.page = 1;
+    }
+    saveKh();
+    $('#khEdit').hidden = true;
+    if (editing === K && riwayaChanged) await openKhatma(K.id);
+    renderShelf();
+  } else {
+    const k = newKhatma(name, f.riwaya.value, +f.cover.value);
+    KH.push(k); saveKh();
+    $('#khEdit').hidden = true;
+    await openKhatma(k.id);
+    toast('بدأت ختمة جديدة');
+  }
+});
+$('#khRestart').onclick = () => {
+  Object.assign(editing, { page: 1, mark: null, endShown: false });
+  saveKh();
+  $('#khEdit').hidden = true;
+  if (editing === K) { S.page = 1; S.sel = null; renderAll(); }
+  renderShelf();
+};
+$('#khDelete').onclick = async () => {
+  if (KH.length < 2) return;
+  if (!$('#khDelete').dataset.armed) {
+    $('#khDelete').dataset.armed = '1';
+    $('#khDelete').textContent = 'اضغط مرة أخرى للحذف';
+    setTimeout(() => { delete $('#khDelete').dataset.armed; $('#khDelete').textContent = 'حذف الختمة'; }, 2500);
+    return;
+  }
+  KH = KH.filter(k => k !== editing);
+  $('#khEdit').hidden = true;
+  if (editing === K) await openKhatma(KH[0].id);
+  saveKh();
+  renderShelf();
+};
+
+function showDone() {
+  if (S.page !== R.pages.length) return;
+  K.endShown = true; saveKh();
+  $('#doneCover').innerHTML = coverHTML(K, true);
+  $('#doneText').textContent = `أتممت «${K.name}»${K.done ? ` — الختمة رقم ${ar(K.done + 1)}` : ''}`;
+  $('#done').hidden = false;
+}
+$('#doneAgain').onclick = () => {
+  K.done = (K.done || 0) + 1;
+  Object.assign(K, { page: 1, mark: null, endShown: false });
+  saveKh();
+  $('#done').hidden = true;
+  S.page = 1; S.sel = null; renderAll();
+  toast('بارك الله لك — بدأت الختمة من جديد');
+};
+$('#doneLater').onclick = () => ($('#done').hidden = true);
+
 // ---------------------------------------------------------------- boot
 
 (async () => {
   try {
     META = await loadJSON(`data/meta.json?v=${DATA_VERSION}`);
-    const id = store.get('riwaya', 'hafs');
-    R = await loadRiwaya(META.riwayat.some(r => r.id === id) ? id : 'hafs');
-    S.page = store.get('page.' + R.id, 1);
+    loadKhatmas();
+    if (!META.riwayat.some(r => r.id === K.riwaya)) K.riwaya = 'hafs';
+    R = await loadRiwaya(K.riwaya);
+    S.page = K.page;
+    S.sel = K.mark;
     renderAll();
     $('#loading').hidden = true;
   } catch (err) {
