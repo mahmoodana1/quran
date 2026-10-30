@@ -507,7 +507,8 @@ function openActions(i) {
   S.focus = i;
   paintMarks();
   $('#ayaBarTitle').textContent = ayaLabel(i);
-  $('#ayaBar [data-act=bookmark] span').textContent = isSaved(i) ? 'إزالة' : 'علامة';
+  $('#ayaBar [data-act=bookmark] span').textContent = isSaved(i) ? 'محفوظة' : 'علامة';
+  $('#ayaBar [data-act=bookmark]').classList.toggle('on', isSaved(i));
   if (P.ai == null) hide($('#player'));
   const bar = $('#ayaBar');
   if (!bar.hidden && !bar.classList.contains('leaving')) { bar.classList.remove('swap'); void bar.offsetWidth; bar.classList.add('swap'); }
@@ -1091,6 +1092,7 @@ let tab = 'suras';
 function openSheet(t = tab) {
   tab = t;
   $('#sheetTitle').textContent = K.name;
+  $('#sheetSub').textContent = `رواية ${META.riwayat.find(r => r.id === R.id)?.name || ''} · صفحة ${ar(S.page)}`;
   closeActions();
   show($('#sheet'));
   $('#q').value = '';
@@ -1117,9 +1119,10 @@ const pageOfSura = s => R.ayas[R.suraStart[s]][2];
 
 function suraRow(s, extra = '') {
   const [nameAr, en, tr, count, place] = META.suras[s - 1];
-  return `<button class="row${extra}" data-go-sura="${s}">
+  const here = s === R.ayas[pageInfo(S.page).first][0] ? ' here' : '';
+  return `<button class="row${extra}${here}" data-go-sura="${s}">
     <span class="num">${ar(s)}</span>
-    <span class="main"><span class="t">سورة ${nameAr}</span><span class="s">${en} · ${place === 'makkah' ? 'مكية' : 'مدنية'} · ${ar(count)} آية</span></span>
+    <span class="main"><span class="t">${nameAr}</span><span class="s">${place === 'makkah' ? 'مكية' : 'مدنية'} · ${ar(count)} آية · <span class="en">${en}</span></span></span>
     <span class="meta">${ar(pageOfSura(s))}</span>
   </button>`;
 }
@@ -1133,7 +1136,7 @@ function renderSheet() {
 
   if (q.trim()) {
     const res = search(q);
-    if (!res.length) html = '<div class="empty">لا توجد نتائج</div>';
+    if (!res.length) html = '<div class="empty"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M15.5 15.5L21 21" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg><b>لا توجد نتائج</b>جرّب كلمات أخرى أو اسم السورة.</div>';
     else {
       html = '<div class="group">';
       res.slice(0, 50).forEach((r, k) => {
@@ -1159,24 +1162,26 @@ function renderSheet() {
       const ai = R.juzStart[j];
       if (ai == null) continue;
       const a = R.ayas[ai];
-      html += `<button class="row" data-go-aya="${ai}"><span class="num">${ar(j)}</span>
+      const here = j === R.ayas[pageInfo(S.page).first][3] ? ' here' : '';
+      html += `<button class="row${here}" data-go-aya="${ai}"><span class="num">${ar(j)}</span>
         <span class="main"><span class="t">الجزء ${ar(j)}</span><span class="s">${suraName(a[0])} ${ar(a[1])}</span></span>
         <span class="meta">${ar(a[2])}</span></button>`;
     }
     html += '</div>';
   } else if (tab === 'marks') {
     const list = bookmarks();
-    if (!list.length) html = '<div class="empty">لا توجد علامات بعد.<br>اضغط على أيقونة العلامة أعلى الصفحة لحفظها.</div>';
+    if (!list.length) html = '<div class="empty"><svg viewBox="0 0 24 24"><path d="M6.5 4.5h11v15.5l-5.5-3.8-5.5 3.8z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg><b>لا توجد علامات بعد</b>اضغط رقم آية ثم «علامة» لحفظها هنا.</div>';
     else {
       html = '<div class="group">' + list.map((b, k) => {
         const name = META.riwayat.find(r => r.id === b.r)?.name || b.r;
         const d = cache[b.r];
         const a = d && b.aya != null ? d.ayas[b.aya] : null;
         const page = a ? a[2] : b.page;
-        const label = a ? `${suraName(a[0])} ${ar(a[1])}` : '';
-        return `<button class="row" data-go-mark="${k}"><span class="num">${ar(page ?? '')}</span>
-          <span class="main"><span class="t">${label || 'الصفحة ' + ar(page ?? '')}${label && page ? ' · ص ' + ar(page) : ''}</span><span class="s">${name} · ${new Date(b.t).toLocaleDateString('ar')}</span></span>
-          <span class="meta" data-del-mark="${k}">حذف</span></button>`;
+        const dt = new Date(b.t);
+        const date = ar(`${dt.getDate()}/${dt.getMonth() + 1}/${dt.getFullYear()}`);
+        return `<button class="row" data-go-mark="${k}"><span class="num">${a ? ar(a[1]) : '•'}</span>
+          <span class="main"><span class="t">${a ? `${suraName(a[0])} · الآية ${ar(a[1])}` : 'الصفحة ' + ar(page ?? '')}</span><span class="s">صفحة ${ar(page ?? '')} · ${name} · ${date}</span></span>
+          <span class="del" data-del-mark="${k}" aria-label="حذف"><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>`;
       }).join('') + '</div>';
     }
   } else if (tab === 'riwaya') {
@@ -1186,7 +1191,11 @@ function renderSheet() {
     html += '<p class="note">لكل رواية رسمها وعلامات ضبطها ووقفها الخاصة. التلاوة الصوتية بصوت الشيخ ياسر الدوسري برواية حفص، وتُطابَق آيات الروايات الأخرى مع ما يقابلها في رواية حفص.</p>';
   }
   body.innerHTML = html;
-  if (!q.trim()) body.scrollTop = 0;
+  if (!q.trim()) {
+    // open the lists at the surah / juz being read
+    const here = body.querySelector('.row.here');
+    if (here) here.scrollIntoView({ block: 'center' }); else body.scrollTop = 0;
+  }
   if (tab === 'riwaya' && !q.trim()) refreshAudioPanel();
 }
 
@@ -1301,7 +1310,8 @@ function renderShelf() {
         <div class="book-row"><b>${esc(k.name)}</b><button class="dots" data-edit="${k.id}" aria-label="تعديل">•••</button></div>
         <div class="book-sub">${riwayaName(k.riwaya)}</div>
         <div class="prog"><i style="width:${pct}%"></i></div>
-        <div class="book-sub">صفحة ${ar(k.page)} · ${ar(pct)}٪${k.done ? ` · ${ar(k.done)} ${k.done === 1 ? 'ختمة' : 'ختمات'} ✓` : ''}</div>
+        <div class="book-meta"><span>صفحة ${ar(k.page)}</span><span>${ar(pct)}٪</span></div>
+        ${k.done ? `<div class="book-done">✓ ${k.done === 1 ? 'ختمة مكتملة' : `${ar(k.done)} ختمات مكتملة`}</div>` : ''}
       </div>
     </div>`;
   }).join('') + `<div class="book" style="--i:${sorted.length}"><button class="book-open" data-new="1"><div class="cover new"><span>+</span><small>ختمة جديدة</small></div></button></div>`;
