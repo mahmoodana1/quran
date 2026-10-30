@@ -3,7 +3,7 @@
 // requests data with ?v=N, so bumping DATA_VERSION there fetches new copies.
 // Hafs page fonts (verses.quran.foundation) are cached as pages are opened.
 // Recitation audio streams from everyayah.com.
-const VERSION = 'quran-v9';
+const VERSION = 'quran-v10';
 // page fonts never change, so they live in their own cache across versions
 const FONTS = 'qcf-v2-fonts';
 const SHELL = ['./', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest', 'icons/icon-180.png'];

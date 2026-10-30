@@ -95,7 +95,7 @@ svg { fill: currentColor; }
 .phead .bm-btn.on { color: var(--accent); }
 
 .lines {
-  flex: 1 1 auto;
+  flex: none;
   display: grid; grid-template-rows: repeat(15, var(--lh)); align-content: center;
   font-size: var(--fs);
   line-height: 1;
@@ -130,24 +130,11 @@ svg { fill: currentColor; }
 .page.arrive .lines { animation: inkIn .5s ease both; }
 @keyframes inkIn { from { opacity: 0; } }
 
-/* the marked / playing aya: only its number turns into a blue disc */
-.w.end { padding: .18em .03em; transition: color .22s ease; }
-.w.end::before {
-  content: ""; position: absolute; z-index: -1;
-  left: 50%; top: 50%; width: .84em; height: .84em; border-radius: 50%;
-  background: var(--accent);
-  transform: translate(-50%, -50%) scale(.2); opacity: 0;
-  transition: transform .26s cubic-bezier(.3, 1.5, .5, 1), opacity .18s ease;
-}
-/* positioned per page from the font's measured marker ink (app.js) */
-.glyph .w.end::before {
-  top: var(--disc-top, 61.4%); left: var(--disc-left, 50%);
-  width: var(--disc-size, .96em); height: var(--disc-size, .96em);
-}
-.w.end.sel, .w.end.play { color: #fff; }
-.w.end.sel::before, .w.end.play::before { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-.w.end.play::before { background: #2f8a6a; }
-.w.end.sel.play::before { background: var(--accent); }
+/* the marked / playing aya: its number glyph takes the accent colour */
+.w.end { padding: .18em .03em; transition: color .4s ease, -webkit-text-stroke-color .4s ease; }
+.w.end.sel { color: var(--accent); -webkit-text-stroke-width: .02em; }
+.w.end.play { color: #2f8a6a; -webkit-text-stroke-width: .02em; }
+.w.end.sel.play { color: var(--accent); }
 
 .ln.bsm { justify-content: center; }
 .ln.bsm.qb {
@@ -182,6 +169,15 @@ svg { fill: currentColor; }
   transform: translateY(-8.5%);
 }
 
+/* a quiet ornament in the space above and below the text block */
+.page-orn {
+  flex: 1 1 0; min-height: 0; overflow: hidden;
+  display: grid; place-items: center;
+  color: var(--frame); opacity: .55;
+}
+.page-orn svg { width: min(70%, 320px); height: 18px; display: block; }
+.page.opening .page-orn { opacity: .45; }
+
 .pfoot {
   flex: none;
   height: calc(40px + env(safe-area-inset-bottom));
@@ -199,6 +195,7 @@ svg { fill: currentColor; }
 /* landscape: type follows the width, the page scrolls */
 .landscape .page { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
 .landscape .lines { flex: none; padding: 6px 0 14px; }
+.landscape .page-orn { display: none; }
 .landscape .phead { height: calc(44px + env(safe-area-inset-top)); }
 
 /* ---------- bars ---------- */

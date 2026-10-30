@@ -15,7 +15,23 @@ const ar = n => String(n).replace(/\d/g, d => '٠١٢٣٤٥٦٧٨٩'[d]);
 const isEnd = t => /^[٠-٩]+$/.test(t) || t.endsWith('*');
 // KFGQPC QCF V2 per-page fonts (1441 Madani print): every word is a glyph
 const QCF_BASE = 'https://verses.quran.foundation/fonts/quran/hafs/v2/woff2/';
-const LINE_RATIO = 1.8; // line pitch / font size on regular pages
+const LINE_RATIO = 1.8;
+// thin rules fading out to either side of a small rub' el-hizb star
+const ORNAMENT = (() => {
+  let star = '';
+  for (let i = 0; i < 16; i++) {
+    const a = Math.PI / 8 * i - Math.PI / 2, r = i % 2 ? 3.3 : 5.6;
+    star += (i ? 'L' : 'M') + (140 + r * Math.cos(a)).toFixed(2) + ' ' + (7 + r * Math.sin(a)).toFixed(2);
+  }
+  return `<div class="page-orn" aria-hidden="true"><svg viewBox="0 0 280 14" preserveAspectRatio="xMidYMid meet">
+    <defs><linearGradient id="ornL" x1="0" x2="1"><stop offset="0" stop-color="currentColor" stop-opacity="0"/><stop offset="1" stop-color="currentColor"/></linearGradient>
+    <linearGradient id="ornR" x1="1" x2="0"><stop offset="0" stop-color="currentColor" stop-opacity="0"/><stop offset="1" stop-color="currentColor"/></linearGradient></defs>
+    <rect x="20" y="6.6" width="104" height=".8" fill="url(#ornL)"/><rect x="156" y="6.6" width="104" height=".8" fill="url(#ornR)"/>
+    <path d="M114 7l3-2.2 3 2.2-3 2.2zM160 7l3-2.2 3 2.2-3 2.2z" fill="currentColor" opacity=".7"/>
+    <path d="${star}Z" fill="none" stroke="currentColor" stroke-width=".9"/>
+    <circle cx="140" cy="7" r="1.4" fill="currentColor"/>
+  </svg></div>`;
+})(); // line pitch / font size on regular pages
 // QCF4 QBSML: printed-mushaf surah titles (U+F100 + surah - 1) and basmala
 const SURA_GLYPH = s => String.fromCharCode(0xF100 + s - 1);
 const BASMALA_GLYPHS = '\uFAD0\uFAD1\uFAD2\uFAD3';
@@ -261,7 +277,7 @@ function renderPage(p) {
     <button class="sura-btn" data-act="suras"><span>${suraName(fa[0])}</span><i class="chev">${icon('chev')}</i></button>
     <button class="grid-btn" data-act="index" aria-label="الفهرس">${icon('grid')}</button>
     <div class="side"><span class="juz">الجزء ${ar(fa[3])}</span><button class="bm-btn${marked ? ' on' : ''}" data-act="bm" aria-label="علامة">${icon(marked ? 'bmOn' : 'bm')}</button></div>
-  </header><div class="lines" style="font-family:${R.glyph ? `qcf-p${p}` : R.font}">`;
+  </header>${ORNAMENT}<div class="lines" style="font-family:${R.glyph ? `qcf-p${p}` : R.font}">`;
 
   const n = opening ? lines.reduce((m, l, i) => (l ? i + 1 : m), 0) : 15;
   for (let i = 0; i < n; i++) {
@@ -290,7 +306,7 @@ function renderPage(p) {
     }
     html += '</div>';
   }
-  html += `</div><footer class="pfoot"><span class="pill"><span>${ar(p)}</span><span>${rubText}</span></span></footer>`;
+  html += `</div>${ORNAMENT}<footer class="pfoot"><span class="pill"><span>${ar(p)}</span><span>${rubText}</span></span></footer>`;
   el.innerHTML = html;
   paintMarks(el);
   return el;
