@@ -108,6 +108,7 @@ svg { fill: currentColor; }
   white-space: nowrap; min-width: 0; column-gap: .06em;
 }
 .ln.c { justify-content: center; gap: .28em; }
+.glyph .ln.c { gap: .06em; } /* glyph lines are sized with this gap */
 .w { position: relative; padding: .18em 0; border-radius: .18em; }
 .w.end { padding: .18em .03em; }
 .w.sel, .w.play { color: var(--accent); }

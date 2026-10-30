@@ -3,6 +3,8 @@
 Static PWA: open it in Safari → Share → **Add to Home Screen**. It must be served over HTTPS
 (GitHub Pages, Netlify, Cloudflare Pages…) for offline support; any static host works.
 
+- **Hafs** is drawn exactly like the 1441 Madani print with the KFGQPC QCF V2 per-page fonts
+  (loaded from verses.quran.foundation as pages open, then cached offline).
 - **Mushaf pages**: 604 pages × 15 lines, KFGQPC Uthmanic fonts and text for 8 riwayat
   (Hafs, Shu'bah, Warsh, Qalun, al-Duri, al-Susi, al-Bazzi, Qunbul), each with its own
   orthography, pause and rub' marks.

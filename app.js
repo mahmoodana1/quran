@@ -1,7 +1,7 @@
 'use strict';
 
 // bump when data/ or fonts/ change so phones fetch the new files
-const DATA_VERSION = 3;
+const DATA_VERSION = 4;
 const AUDIO_BASE = 'https://everyayah.com/data/Yasser_Ad-Dussary_128kbps/';
 const RUB_LABEL = ['الحزب', 'ربع الحزب', 'نصف الحزب', 'ثلاثة أرباع الحزب'];
 const $ = (s, el = document) => el.querySelector(s);
@@ -12,7 +12,9 @@ const store = {
 };
 
 const ar = n => String(n).replace(/\d/g, d => '٠١٢٣٤٥٦٧٨٩'[d]);
-const isEnd = t => /^[٠-٩]+$/.test(t);
+const isEnd = t => /^[٠-٩]+$/.test(t) || t.endsWith('*');
+// KFGQPC QCF V2 per-page fonts (1441 Madani print): every word is a glyph
+const QCF_BASE = 'https://verses.quran.foundation/fonts/quran/hafs/v2/woff2/';
 
 let META;            // suras, hafs aya keys, emlaey text
 let R;               // current riwaya data
@@ -41,8 +43,8 @@ async function loadRiwaya(id) {
     d.id = id;
     d.font = 'rw-' + id;
     // per-aya text and the hafs -> riwaya index used by search and audio
-    d.text = new Array(d.ayas.length).fill('');
-    for (const pg of d.pages) for (const ln of pg) {
+    d.text = d.utext || new Array(d.ayas.length).fill('');
+    if (!d.utext) for (const pg of d.pages) for (const ln of pg) {
       if (!Array.isArray(ln) || typeof ln[0] === 'string') continue;
       for (const [ai, t] of ln) d.text[ai] = d.text[ai] ? d.text[ai] + ' ' + t : t;
     }
@@ -63,6 +65,32 @@ async function loadRiwaya(id) {
 
 const suraName = s => META.suras[s - 1][0];
 
+// per-page glyph fonts, loaded on demand and measured once
+const pageFonts = {}; // page -> { ready, promise, widths: [line natural width at 100px] }
+const measureCtx = document.createElement('canvas').getContext('2d');
+
+function ensurePageFont(p) {
+  if (!R.glyph || p < 1 || p > R.pages.length) return Promise.resolve();
+  if (pageFonts[p]) return pageFonts[p].promise;
+  const pf = pageFonts[p] = { ready: false };
+  const face = new FontFace(`qcf-p${p}`, `url(${QCF_BASE}p${p}.woff2)`);
+  pf.promise = face.load().then(f => {
+    document.fonts.add(f);
+    measureCtx.font = `100px qcf-p${p}`;
+    pf.widths = R.pages[p - 1].map(ln => {
+      if (!Array.isArray(ln) || typeof ln[0] === 'string') return 0;
+      const words = ln.flatMap(([, t]) => t.split(' '));
+      return words.reduce((sum, w) => sum + measureCtx.measureText(w.replace('*', '')).width, 0) + 6 * (words.length - 1);
+    });
+    pf.ready = true;
+    // swap the placeholder for the real page if it's on screen
+    slots.forEach(sl => {
+      if (sl.firstElementChild?.dataset.page == p && sl.firstElementChild.classList.contains('pending')) sl.replaceChildren(renderPage(p));
+    });
+  }).catch(() => { delete pageFonts[p]; });
+  return pf.promise;
+}
+
 // ---------------------------------------------------------------- layout
 
 function measure() {
@@ -73,7 +101,7 @@ function measure() {
   const insetT = parseFloat(cs.paddingTop), insetB = parseFloat(cs.paddingBottom);
   S.landscape = W > H;
   document.body.classList.toggle('landscape', S.landscape);
-  const em = R ? R.em : 19.5;
+  const em = R?.em || 17;
   if (S.landscape) {
     S.availW = Math.min(W - padL - padR - 8, 980);
     S.fs = S.availW / em;
@@ -112,12 +140,25 @@ function renderPage(p) {
   const el = document.createElement('div');
   if (p < 1 || p > R.pages.length) return el;
   const lines = R.pages[p - 1];
-  const widths = R.lw[p - 1];
   const opening = p <= 2;
+  const pf = R.glyph && pageFonts[p];
+  if (R.glyph && !pf?.ready) ensurePageFont(p);
+  const pending = R.glyph && !pf?.ready;
+  // glyph pages: size so the widest printed line spans the measure
+  let fs = S.fs, widths = R.lw?.[p - 1], em = R.em;
+  if (R.glyph && pf?.ready) {
+    widths = pf.widths.map(w => w / 100);
+    em = Math.max(...widths);
+    fs = S.landscape ? S.availW / em : Math.min(S.availW / em, S.lh * 0.82);
+  }
   const { first, last } = pageInfo(p);
   const fa = R.ayas[first], la = R.ayas[last];
-  el.className = `page ${p % 2 ? 'odd' : 'even'}${opening ? ' opening' : ''}`;
+  el.className = `page ${p % 2 ? 'odd' : 'even'}${opening ? ' opening' : ''}${pending ? ' pending' : ''}${R.glyph ? ' glyph' : ''}`;
   el.dataset.page = p;
+  if (R.glyph && !pending) {
+    el.style.setProperty('--fs', fs.toFixed(2) + 'px');
+    if (S.landscape) el.style.setProperty('--lh', (fs * 1.75).toFixed(2) + 'px');
+  }
 
   const rub = la[4];
   const rubText = rub ? `${RUB_LABEL[(rub - 1) % 4]} ${ar(Math.floor((rub - 1) / 4) + 1)}` : '';
@@ -127,26 +168,26 @@ function renderPage(p) {
     <button class="sura-btn" data-act="suras"><span>${suraName(fa[0])}</span><i class="chev">${icon('chev')}</i></button>
     <button class="grid-btn" data-act="index" aria-label="الفهرس">${icon('grid')}</button>
     <div class="side"><span class="juz">الجزء ${ar(fa[3])}</span><button class="bm-btn${marked ? ' on' : ''}" data-act="bm" aria-label="علامة">${icon(marked ? 'bmOn' : 'bm')}</button></div>
-  </header><div class="lines" style="font-family:${R.font}">`;
+  </header><div class="lines" style="font-family:${R.glyph ? `qcf-p${p}` : R.font}">`;
 
   const n = opening ? lines.reduce((m, l, i) => (l ? i + 1 : m), 0) : 15;
   for (let i = 0; i < n; i++) {
     const ln = lines[i];
-    if (!ln) { html += '<div class="ln"></div>'; continue; }
+    if (!ln || pending) { html += '<div class="ln"></div>'; continue; }
     if (ln[0] === 'H') {
-      html += `<div class="ln sura"><div class="frame"><span>سُورَةُ ${suraName(ln[1])}</span></div></div>`;
+      html += `<div class="ln sura"><div class="frame" style="font-family:${R.font}"><span>سُورَةُ ${suraName(ln[1])}</span></div></div>`;
       continue;
     }
-    if (ln[0] === 'B') { html += `<div class="ln bsm">${R.basmala}</div>`; continue; }
+    if (ln[0] === 'B') { html += `<div class="ln bsm" style="font-family:${R.font};font-size:${Math.min(S.fs, fs * 0.9).toFixed(2)}px">${R.basmala}</div>`; continue; }
     const w = widths[i];
     let style = '';
-    if (w * S.fs > S.availW * 0.985) style = ` style="font-size:${(S.availW * 0.985 / w).toFixed(2)}px"`;
-    const centred = opening || w < R.em * 0.62;
+    if (w * fs > S.availW * 0.985) style = ` style="font-size:${(S.availW * 0.985 / w).toFixed(2)}px"`;
+    const centred = opening || w < em * 0.62;
     html += `<div class="ln${centred ? ' c' : ''}"${style}>`;
     for (const [ai, text] of ln) {
       for (const t of text.split(' ')) {
-        const cls = isEnd(t) ? 'w end' : 'w';
-        html += `<span class="${cls}" data-a="${ai}">${t}</span>`;
+        const end = isEnd(t);
+        html += `<span class="${end ? 'w end' : 'w'}" data-a="${ai}">${end ? t.replace('*', '') : t}</span>`;
       }
     }
     html += '</div>';
@@ -177,8 +218,13 @@ function placeSlots(dx = 0, animate = false) {
   });
 }
 
+function prefetchFonts() {
+  for (const d of [0, 1, -1, 2, -2]) ensurePageFont(S.page + d);
+}
+
 function renderAll() {
   measure();
+  prefetchFonts();
   [S.page - 1, S.page, S.page + 1].forEach((p, i) => slots[i].replaceChildren(renderPage(p)));
   placeSlots();
 }
@@ -204,6 +250,7 @@ function goTo(p, { animate = false, from = 0 } = {}) {
   }
   const cur = slots[1].firstElementChild;
   if (cur) cur.scrollTop = 0;
+  prefetchFonts();
 }
 
 // swipe handling

@@ -200,6 +200,31 @@ def build_riwaya(r):
         a[4] = hafs_meta[a[5]][3]
         prev_h = a[6]
 
+    glyph = r == 'hafs' and os.path.isdir(f'{HERE}/qv2')
+    if glyph:
+        # Hafs is drawn with the KFGQPC QCF V2 per-page fonts (the 1441 Madani
+        # print): each word is a glyph in that page's font, lines as printed.
+        # End-of-aya glyphs get a trailing '*' so the client can style them.
+        toks = []
+        i = 0
+        for p in range(1, 605):
+            for v in json.load(open(f'{HERE}/qv2/{p}.json'))['verses']:
+                assert tuple(map(int, v['verse_key'].split(':'))) == tuple(ayas[i][:2])
+                # by_page groups verses by the old (V1) pages; v2_page is the real one
+                ayas[i][2] = v['words'][0]['v2_page']
+                for w in v['words']:
+                    code = w['code_v2'].replace(' ', '') + ('*' if w['char_type_name'] == 'end' else '')
+                    toks.append((i, code, gline(w['v2_page'], w['line_v2'])))
+                i += 1
+        # an aya marker sits on the line of its last word (quran.com has a
+        # few markers off by one line, e.g. 84:21-22)
+        for k in range(1, len(toks)):
+            if toks[k][1].endswith('*') and toks[k][2] != toks[k - 1][2]:
+                toks[k] = (toks[k][0], toks[k][1], toks[k - 1][2])
+        for k in range(len(toks) - 1):
+            if toks[k][2] > toks[k + 1][2]:
+                print('hafs v2: line order broken at', ayas[toks[k][0]][:2], file=sys.stderr)
+
     # ---------- assemble pages ----------
     nP = max(t[2] for t in toks) // LINES + 1
     grid = [[None] * LINES for _ in range(nP)]
@@ -249,8 +274,14 @@ def build_riwaya(r):
     i30 = next(i for i, a in enumerate(ayas) if a[0] == 27 and a[1] == 30)
     words = [t for ai, t, _ in toks if ai == i30 and not DIGITS.match(t)]
     basmala = ' '.join(words[-4:])
-    return {'pages': pages, 'ayas': ayas, 'basmala': basmala, 'lw': lw,
-            'em': allw[int(len(allw) * 0.8)]}
+    out = {'pages': pages, 'ayas': ayas, 'basmala': basmala, 'lw': lw,
+           'em': allw[int(len(allw) * 0.8)]}
+    if glyph:
+        out['glyph'] = True
+        out['utext'] = [a['aya_text'] for a in data]
+        out['basmala'] = ' '.join(t for t in data[0]['aya_text'].split() if not DIGITS.match(t))
+        del out['lw'], out['em']
+    return out
 
 
 os.makedirs(OUT, exist_ok=True)
@@ -260,7 +291,7 @@ for r, name in RIWAYAT:
     d['id'] = r
     json.dump(d, open(f'{OUT}/{r}.json', 'w'), ensure_ascii=False, separators=(',', ':'))
     index.append({'id': r, 'name': name, 'ayas': len(d['ayas']), 'pages': len(d['pages'])})
-    print(r, 'em', d['em'], 'min', min(w for row in d['lw'][2:] for w in row if w), 'max', max(max(row) for row in d['lw']))
+    if 'em' in d: print(r, 'em', d['em'], 'min', min(w for row in d['lw'][2:] for w in row if w), 'max', max(max(row) for row in d['lw']))
     print(r, len(d['ayas']), 'ayas', len(d['pages']), 'pages', os.path.getsize(f'{OUT}/{r}.json') // 1024, 'KB')
 
 meta = {
