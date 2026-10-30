@@ -122,7 +122,8 @@ svg { fill: currentColor; }
   transform: translate(-50%, -50%) scale(.2); opacity: 0;
   transition: transform .26s cubic-bezier(.3, 1.5, .5, 1), opacity .18s ease;
 }
-.glyph .w.end::before { top: 47%; width: .9em; height: .9em; }
+/* QCF marker ink is centred ~0.155em below the flex box centre */
+.glyph .w.end::before { top: 61.4%; width: .96em; height: .96em; }
 .w.end.sel, .w.end.play { color: #fff; }
 .w.end.sel::before, .w.end.play::before { transform: translate(-50%, -50%) scale(1); opacity: 1; }
 .w.end.play::before { background: #2f8a6a; }
