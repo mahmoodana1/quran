@@ -188,6 +188,7 @@ function ensurePageFont(p) {
         const pg = renderPage(p);
         pg.classList.add('arrive');
         sl.replaceChildren(pg);
+        drawBands(sl);
       }
     });
   }).catch(() => { delete pageFonts[p]; });
@@ -313,10 +314,40 @@ function renderPage(p) {
 }
 
 function paintMarks(root = document) {
-  root.querySelectorAll('.w.sel, .w.play, .w.focus').forEach(e => e.classList.remove('sel', 'play', 'focus'));
-  if (S.focus != null) root.querySelectorAll(`.w[data-a="${S.focus}"]:not(.end)`).forEach(e => e.classList.add('focus'));
-  if (S.sel != null) root.querySelectorAll(`.w[data-a="${S.sel}"]`).forEach(e => e.classList.add('sel'));
-  if (S.play != null) root.querySelectorAll(`.w[data-a="${S.play}"]`).forEach(e => e.classList.add('play'));
+  root.querySelectorAll('.w.sel, .w.play').forEach(e => e.classList.remove('sel', 'play'));
+  const saved = new Set(bookmarks().filter(b => b.r === R.id).map(b => b.aya));
+  root.querySelectorAll('.w.end').forEach(e => { if (saved.has(+e.dataset.a)) e.classList.add('sel'); });
+  if (S.play != null) root.querySelectorAll(`.w.end[data-a="${S.play}"]`).forEach(e => e.classList.add('play'));
+  // bands need layout: pages not yet in the document get them on insertion
+  if (root === document || root.isConnected) drawBands(root);
+}
+
+// one rounded band per line behind the words of the highlighted aya
+function drawBands(root) {
+  if (root !== document && !root.isConnected) return;
+  const want = new Map();
+  if (S.focus != null) want.set(S.focus, 'hl');
+  if (S.play != null && S.play !== S.focus) want.set(S.play, 'hl play');
+  root.querySelectorAll('.hl').forEach(h => {
+    if (!want.has(+h.dataset.a) || want.get(+h.dataset.a) !== h.className.replace(' in', '')) h.remove();
+  });
+  for (const [ai, cls] of want) {
+    root.querySelectorAll('.ln').forEach(ln => {
+      if (ln.querySelector(`.hl[data-a="${ai}"]`)) return;
+      const ws = ln.querySelectorAll(`.w[data-a="${ai}"]`);
+      if (!ws.length) return;
+      let l = Infinity, r = -Infinity;
+      ws.forEach(w => { l = Math.min(l, w.offsetLeft); r = Math.max(r, w.offsetLeft + w.offsetWidth); });
+      const fs = parseFloat(getComputedStyle(ln).fontSize) || 20;
+      const pad = fs * 0.12;
+      const h = document.createElement('div');
+      h.className = cls;
+      h.dataset.a = ai;
+      h.style.left = (l - pad) + 'px';
+      h.style.width = (r - l + pad * 2) + 'px';
+      ln.prepend(h);
+    });
+  }
 }
 
 // ---------------------------------------------------------------- paging
@@ -342,6 +373,7 @@ function renderAll() {
   prefetchFonts();
   [S.page - 1, S.page, S.page + 1].forEach((p, i) => slots[i].replaceChildren(renderPage(p)));
   placeSlots();
+  paintMarks();
 }
 
 function goTo(p, { animate = false, from = 0 } = {}) {
@@ -361,6 +393,7 @@ function goTo(p, { animate = false, from = 0 } = {}) {
     placeSlots(0, true);
     const fresh = step === 1 ? 2 : 0;
     slots[fresh].replaceChildren(renderPage(p + (step === 1 ? 1 : -1)));
+    drawBands(slots[fresh]);
   } else {
     renderAll();
   }
@@ -422,7 +455,7 @@ function goTo(p, { animate = false, from = 0 } = {}) {
     }
     // only the aya number marks; tapping anywhere else just closes the actions
     const w = e.target.closest('.w.end');
-    if (w) toggleMark(+w.dataset.a, w);
+    if (w) toggleSave(+w.dataset.a, w);
     else closeActions();
   });
   vp.addEventListener('contextmenu', e => e.preventDefault());
@@ -444,29 +477,33 @@ function ayaLabel(i) {
   return `${suraName(a[0])} ${ar(a[1])}`;
 }
 
-// The marked aya (blue number) is the khatma's saved reading place: tap its
-// number to mark it, tap again to clear. Actions open for the marked aya, or
-// for any aya after a long press on its text (S.act), without moving the mark.
-function toggleMark(i, el) {
-  if (S.sel === i) {
-    S.sel = null; K.mark = null; saveKh();
-    paintMarks();
-    closeActions();
-    return;
+// Saving works on aya numbers: every saved aya shows a highlighted number.
+// Tap a number to save / unsave it. A long press on an aya's text opens its
+// actions (S.act) and highlights the whole aya; «علامة» there saves it too.
+function toggleSave(i, el) {
+  if (isSaved(i)) {
+    setBookmarks(bookmarks().filter(b => !(b.r === R.id && b.aya === i)));
+    toast('أُزيلت العلامة');
+    if (S.act === i) closeActions();
+  } else {
+    const list = bookmarks();
+    list.unshift({ r: R.id, aya: i, page: R.ayas[i][2], t: Date.now() });
+    setBookmarks(list);
+    K.read = Date.now(); saveKh();
+    if (el) ripple(el);
+    toast('حُفظت الآية');
+    openActions(i);
   }
-  S.sel = i;
-  K.mark = i; K.read = Date.now(); saveKh();
   paintMarks();
-  if (el) ripple(el);
-  openActions(i, { focus: false });
+  refreshHeader();
 }
 
-function openActions(i, { focus = true } = {}) {
+function openActions(i) {
   S.act = i;
-  S.focus = focus ? i : null;
+  S.focus = i;
   paintMarks();
   $('#ayaBarTitle').textContent = ayaLabel(i);
-  $('#ayaBar [data-act=bookmark] span').textContent = isBookmarked(R.ayas[i][2]) ? 'محفوظة' : 'علامة';
+  $('#ayaBar [data-act=bookmark] span').textContent = isSaved(i) ? 'إزالة' : 'علامة';
   if (P.ai == null) hide($('#player'));
   const bar = $('#ayaBar');
   if (!bar.hidden && !bar.classList.contains('leaving')) { bar.classList.remove('swap'); void bar.offsetWidth; bar.classList.add('swap'); }
@@ -474,16 +511,20 @@ function openActions(i, { focus = true } = {}) {
 }
 
 function closeActions() {
+  const had = S.act != null || S.focus != null;
   S.act = null;
-  if (S.focus != null) { S.focus = null; paintMarks(); }
+  S.focus = null;
+  if (had) paintMarks();
   hide($('#ayaBar'));
   if (P.ai != null) show($('#player'));
 }
 
-// briefly glow an aya's text, e.g. after jumping to it from search
+// briefly highlight an aya, e.g. after jumping to it from search
+let flashT;
 function flashAya(i) {
   S.focus = i; paintMarks();
-  setTimeout(() => { if (S.focus === i && S.act !== i) { S.focus = null; paintMarks(); } }, 2200);
+  clearTimeout(flashT);
+  flashT = setTimeout(() => { if (S.focus === i && S.act !== i) { S.focus = null; paintMarks(); } }, 2400);
 }
 
 function ripple(el) {
@@ -504,7 +545,7 @@ $('#ayaBar').addEventListener('click', async e => {
     try { await navigator.clipboard.writeText(`${txt} ﴿${suraName(a[0])}: ${ar(a[1])}﴾`); toast('تم النسخ'); }
     catch { toast('تعذر النسخ'); }
   }
-  if (b.dataset.act === 'bookmark') { addBookmark(R.ayas[i][2], i); closeActions(); }
+  if (b.dataset.act === 'bookmark') { toggleSave(i); if (isSaved(i)) closeActions(); }
   if (b.dataset.act === 'close') closeActions();
 });
 
@@ -519,22 +560,38 @@ function toast(msg) {
 
 const bookmarks = () => K.bookmarks;
 const setBookmarks = list => { K.bookmarks = list; saveKh(); };
+const isSaved = i => bookmarks().some(b => b.r === R.id && b.aya === i);
 const isBookmarked = p => bookmarks().some(b => b.r === R.id && b.page === p);
 
-function addBookmark(page, aya) {
-  const list = bookmarks().filter(b => !(b.r === R.id && b.page === page));
-  list.unshift({ r: R.id, page, aya, t: Date.now() });
-  setBookmarks(list);
-  toast('أضيفت العلامة');
-  refreshHeader();
-}
-
+// header ribbon: saves the page's first aya, or clears the page's saved ayas
 function toggleBookmark(page) {
   if (isBookmarked(page)) {
     setBookmarks(bookmarks().filter(b => !(b.r === R.id && b.page === page)));
-    toast('أزيلت العلامة');
-    refreshHeader();
-  } else addBookmark(page, pageInfo(page).first);
+    toast('أُزيلت العلامة');
+  } else {
+    const i = pageInfo(page).first;
+    const list = bookmarks();
+    list.unshift({ r: R.id, aya: i, page, t: Date.now() });
+    setBookmarks(list);
+    toast('حُفظت الآية');
+  }
+  paintMarks();
+  refreshHeader();
+}
+
+// older saves were by page or a single mark: turn them into aya saves
+function normalizeBookmarks() {
+  let changed = false;
+  if (K.mark != null) {
+    if (!K.bookmarks.some(b => b.r === K.riwaya && b.aya === K.mark)) K.bookmarks.unshift({ r: K.riwaya, aya: K.mark, t: Date.now() });
+    K.mark = null; changed = true;
+  }
+  for (const b of K.bookmarks) {
+    if (b.r !== R.id) continue;
+    if (b.aya == null && b.page) { b.aya = pageInfo(b.page).first; changed = true; }
+    if (b.aya != null && R.ayas[b.aya] && b.page !== R.ayas[b.aya][2]) { b.page = R.ayas[b.aya][2]; changed = true; }
+  }
+  if (changed) saveKh();
 }
 
 function refreshHeader() {
@@ -882,9 +939,11 @@ function renderSheet() {
       html = '<div class="group">' + list.map((b, k) => {
         const name = META.riwayat.find(r => r.id === b.r)?.name || b.r;
         const d = cache[b.r];
-        const label = d && b.aya != null ? `${suraName(d.ayas[b.aya][0])} ${ar(d.ayas[b.aya][1])}` : '';
-        return `<button class="row" data-go-mark="${k}"><span class="num">${ar(b.page)}</span>
-          <span class="main"><span class="t">الصفحة ${ar(b.page)}${label ? ' · ' + label : ''}</span><span class="s">${name} · ${new Date(b.t).toLocaleDateString('ar')}</span></span>
+        const a = d && b.aya != null ? d.ayas[b.aya] : null;
+        const page = a ? a[2] : b.page;
+        const label = a ? `${suraName(a[0])} ${ar(a[1])}` : '';
+        return `<button class="row" data-go-mark="${k}"><span class="num">${ar(page ?? '')}</span>
+          <span class="main"><span class="t">${label || 'الصفحة ' + ar(page ?? '')}${label && page ? ' · ص ' + ar(page) : ''}</span><span class="s">${name} · ${new Date(b.t).toLocaleDateString('ar')}</span></span>
           <span class="meta" data-del-mark="${k}">حذف</span></button>`;
       }).join('') + '</div>';
     }
@@ -918,7 +977,7 @@ $('#sheetBody').addEventListener('click', async e => {
     const b = bookmarks()[+d.goMark];
     closeSheet();
     if (b.r !== R.id) await switchRiwaya(b.r, false);
-    goTo(b.page);
+    goTo(b.aya != null && R.ayas[b.aya] ? R.ayas[b.aya][2] : b.page);
     if (b.aya != null) setTimeout(() => flashAya(b.aya), 250);
   } else if (d.riwaya && d.riwaya !== R.id) {
     await switchRiwaya(d.riwaya, true);
@@ -929,7 +988,6 @@ $('#sheetBody').addEventListener('click', async e => {
 async function switchRiwaya(id, keepPlace) {
   // keep the reader on the same passage: go through the hafs aya numbering
   const h = keepPlace ? R.ayas[pageInfo(S.page).first][5] : null;
-  const hm = keepPlace && K.mark != null ? R.ayas[K.mark]?.[5] : null;
   stopAudio();
   $('#loading').hidden = false;
   try {
@@ -937,8 +995,8 @@ async function switchRiwaya(id, keepPlace) {
     R = d;
     S.page = h != null ? R.ayas[R.fromHafs[h]][2] : K.page;
     K.riwaya = id; K.page = S.page;
-    K.mark = hm != null ? R.fromHafs[hm] : keepPlace ? null : K.mark;
-    S.sel = K.mark;
+    S.act = S.focus = null;
+    normalizeBookmarks();
     saveKh();
     renderAll();
   } catch (err) {
@@ -1034,7 +1092,8 @@ async function openKhatma(id) {
   try {
     R = await loadRiwaya(K.riwaya);
     S.page = K.page;
-    S.sel = K.mark;
+    S.act = S.focus = null;
+    normalizeBookmarks();
     renderAll();
     hide($('#library'));
   } catch { toast('تعذر التحميل'); }
@@ -1091,7 +1150,7 @@ $('#khRestart').onclick = () => {
   Object.assign(editing, { page: 1, mark: null, endShown: false });
   saveKh();
   hide($('#khEdit'));
-  if (editing === K) { S.page = 1; S.sel = null; renderAll(); }
+  if (editing === K) { S.page = 1; renderAll(); }
   renderShelf();
 };
 $('#khDelete').onclick = async () => {
@@ -1121,7 +1180,7 @@ $('#doneAgain').onclick = () => {
   Object.assign(K, { page: 1, mark: null, endShown: false });
   saveKh();
   hide($('#done'));
-  S.page = 1; S.sel = null; renderAll();
+  S.page = 1; renderAll();
   toast('بارك الله لك — بدأت الختمة من جديد');
 };
 $('#doneLater').onclick = () => hide($('#done'));
@@ -1135,7 +1194,7 @@ $('#doneLater').onclick = () => hide($('#done'));
     if (!META.riwayat.some(r => r.id === K.riwaya)) K.riwaya = 'hafs';
     R = await loadRiwaya(K.riwaya);
     S.page = K.page;
-    S.sel = K.mark;
+    normalizeBookmarks();
     renderAll();
     hide($('#loading'));
   } catch (err) {

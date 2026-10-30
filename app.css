@@ -109,14 +109,21 @@ svg { fill: currentColor; }
 .page.opening .ln { height: var(--lh); }
 
 .ln {
+  position: relative;
   display: flex; justify-content: space-between; align-items: center;
   white-space: nowrap; min-width: 0; column-gap: .06em;
 }
 .ln.c { justify-content: center; gap: .28em; }
 .glyph .ln.c { gap: .06em; } /* glyph lines are sized with this gap */
 .w { position: relative; padding: .18em 0; transition: color .35s ease; }
-/* long-pressed / jumped-to aya: a soft tint on its words */
-.w.focus { color: color-mix(in srgb, var(--accent) 70%, var(--ink)); }
+/* long-pressed / jumped-to / playing aya: a soft band behind each of its lines */
+.hl {
+  position: absolute; z-index: -1; top: 7%; bottom: 7%;
+  border-radius: .32em; background: rgba(44, 106, 150, .14);
+  animation: hlIn .35s ease;
+}
+.hl.play { background: rgba(47, 138, 106, .14); }
+@keyframes hlIn { from { opacity: 0; } }
 .ripple {
   position: absolute; left: 50%; top: 50%; width: .96em; height: .96em; border-radius: 50%;
   border: .05em solid var(--accent); pointer-events: none;
