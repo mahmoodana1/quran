@@ -156,8 +156,9 @@ svg { fill: currentColor; }
 .sname {
   font-family: qbsml; font-size: calc(var(--lh) * .6); line-height: 1;
   direction: rtl; unicode-bidi: bidi-override; color: var(--ink);
-  padding: 0 .6em; background: var(--paper); border-radius: 40%;
-  transform: translateY(8%);
+  padding: 0 .6em;
+  /* the glyphs' ink sits ~8.5% of the em below the line box centre */
+  transform: translateY(-8.5%);
 }
 
 .pfoot {
