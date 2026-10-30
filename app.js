@@ -455,7 +455,12 @@ function goTo(p, { animate = false, from = 0 } = {}) {
     }
     // only the aya number marks; tapping anywhere else just closes the actions
     const w = e.target.closest('.w.end');
-    if (w) toggleSave(+w.dataset.a, w);
+    if (w) {
+      const i = +w.dataset.a;
+      if (!$('#tafsir').hidden) { ripple(w); openTafsir(i); }
+      else if (S.act === i && !$('#ayaBar').hidden) closeActions();
+      else { ripple(w); openActions(i); }
+    }
     else closeActions();
   });
   vp.addEventListener('contextmenu', e => e.preventDefault());
@@ -478,8 +483,8 @@ function ayaLabel(i) {
 }
 
 // Saving works on aya numbers: every saved aya shows a highlighted number.
-// Tap a number to save / unsave it. A long press on an aya's text opens its
-// actions (S.act) and highlights the whole aya; «علامة» there saves it too.
+// Tapping a number (or long-pressing the text) opens the aya's actions and
+// highlights it; «علامة» in the actions saves or unsaves it.
 function toggleSave(i, el) {
   if (isSaved(i)) {
     setBookmarks(bookmarks().filter(b => !(b.r === R.id && b.aya === i)));
@@ -492,7 +497,6 @@ function toggleSave(i, el) {
     K.read = Date.now(); saveKh();
     if (el) ripple(el);
     toast('حُفظت الآية');
-    openActions(i);
   }
   paintMarks();
   refreshHeader();
@@ -511,6 +515,7 @@ function openActions(i) {
 }
 
 function closeActions() {
+  if (!$('#tafsir').hidden) return closeTafsir();
   const had = S.act != null || S.focus != null;
   S.act = null;
   S.focus = null;
@@ -545,7 +550,8 @@ $('#ayaBar').addEventListener('click', async e => {
     try { await navigator.clipboard.writeText(`${txt} ﴿${suraName(a[0])}: ${ar(a[1])}﴾`); toast('تم النسخ'); }
     catch { toast('تعذر النسخ'); }
   }
-  if (b.dataset.act === 'bookmark') { toggleSave(i); if (isSaved(i)) closeActions(); }
+  if (b.dataset.act === 'bookmark') { toggleSave(i); closeActions(); }
+  if (b.dataset.act === 'tafsir') openTafsir(i);
   if (b.dataset.act === 'close') closeActions();
 });
 
@@ -696,6 +702,117 @@ if ('mediaSession' in navigator) {
   navigator.mediaSession.setActionHandler('previoustrack', () => $('#plPrev').onclick());
 }
 
+// ---------------------------------------------------------------- tafsir
+// Tafsir As-Sa'di, one file per surah (keyed by Hafs numbering). Where
+// as-Sa'di comments on several ayat together, the later ones point back to
+// the aya holding the shared text.
+
+const TAFSIR_CACHE = 'tafsir-saadi';
+const tafsirFiles = {};
+const loadTafsir = s => (tafsirFiles[s] ||= loadJSON(`data/tafsir/${s}.json`).catch(e => { delete tafsirFiles[s]; throw e; }));
+
+function tafsirHTML(t) {
+  return t.split(/\n+/).filter(x => x.trim()).map(par =>
+    '<p>' + esc(par).replace(/\{\s*([^{}]+?)\s*\}/g, '<span class="q">﴿$1﴾</span>') + '</p>').join('');
+}
+
+let tfAya = null;
+async function openTafsir(ai) {
+  tfAya = ai;
+  S.act = ai; S.focus = ai; paintMarks();
+  const a = R.ayas[ai];
+  const [s, n] = META.hafs[a[5]];
+  $('#tfTitle').textContent = ayaLabel(ai);
+  const body = $('#tfBody');
+  body.innerHTML = '<div class="tf-wait">…</div>';
+  hide($('#ayaBar'));
+  if (P.ai != null) hide($('#player'));
+  show($('#tafsir'));
+  if (R.ayas[ai][2] !== S.page) goTo(R.ayas[ai][2], { animate: Math.abs(R.ayas[ai][2] - S.page) === 1 });
+  try {
+    const list = await loadTafsir(s);
+    if (tfAya !== ai) return;
+    // all the Hafs ayat this aya covers (usually one)
+    let html = '', lastText = null;
+    for (let h = a[5]; h <= a[6]; h++) {
+      const [hs, hn] = META.hafs[h];
+      const file = hs === s ? list : await loadTafsir(hs);
+      let e = file[hn - 1], from = hn;
+      if (typeof e === 'number') { from = e; e = file[e - 1]; }
+      if (!e || e === lastText) continue;
+      lastText = e;
+      let to = from;
+      while (typeof file[to] === 'number' && file[to] === from) to++;
+      const label = to > from ? `تفسير الآيات ${ar(from)}–${ar(to)}` : '';
+      html += (label ? `<div class="tf-group">${label}</div>` : '') + tafsirHTML(e);
+    }
+    body.innerHTML = html || '<div class="tf-wait">لا يوجد تفسير لهذه الآية</div>';
+    body.scrollTop = 0;
+  } catch {
+    if (tfAya === ai) body.innerHTML = '<div class="tf-wait">تعذّر تحميل التفسير — تحقق من الاتصال أو حمّله من الإعدادات</div>';
+  }
+}
+
+function closeTafsir() {
+  tfAya = null;
+  hide($('#tafsir'));
+  S.act = null; S.focus = null; paintMarks();
+  if (P.ai != null) show($('#player'));
+}
+
+$('#tfClose').onclick = closeTafsir;
+$('#tfNext').onclick = () => tfAya != null && tfAya + 1 < R.ayas.length && openTafsir(tfAya + 1);
+$('#tfPrev').onclick = () => tfAya != null && tfAya > 0 && openTafsir(tfAya - 1);
+
+async function tafsirStatus() {
+  if (!('caches' in window)) return 0;
+  const c = await caches.open(TAFSIR_CACHE);
+  return new Set((await c.keys()).map(r => new URL(r.url).pathname.match(/tafsir\/(\d+)\.json/)?.[1]).filter(Boolean)).size;
+}
+
+const TF = { running: false, done: 0 };
+async function downloadTafsir() {
+  if (TF.running) return;
+  TF.running = true; paintTafsirCard();
+  let next = 1, failed = 0;
+  const c = await caches.open(TAFSIR_CACHE);
+  const worker = async () => {
+    while (next <= 114) {
+      const s = next++;
+      const url = new URL(`data/tafsir/${s}.json`, location.href).href;
+      if (await c.match(url)) continue;
+      try { const r = await fetch(url); if (r.ok) await c.put(url, r); else failed++; } catch { failed++; }
+      TF.done = await tafsirStatus(); paintTafsirCard();
+    }
+  };
+  await Promise.all(Array.from({ length: 6 }, worker));
+  TF.running = false;
+  TF.done = await tafsirStatus(); paintTafsirCard();
+  toast(failed ? 'تعذّر تحميل بعض السور — حاول مجددًا' : 'اكتمل تحميل التفسير');
+}
+
+function tafsirCardHTML() {
+  return `<div class="group dl-card" id="tfCard">
+    <div class="dl-top">
+      <div><div class="t">تفسير السعدي</div><div class="s" id="tfText"></div></div>
+      <div class="dl-pct" id="tfPct"></div>
+    </div>
+    <div class="prog dl-prog"><i id="tfBar" style="width:0"></i></div>
+    <div class="dl-actions" id="tfActions"></div>
+  </div>`;
+}
+
+function paintTafsirCard() {
+  if (!$('#tfCard')) return;
+  const pct = TF.done / 114;
+  $('#tfBar').style.width = (pct * 100).toFixed(1) + '%';
+  $('#tfPct').textContent = ar(Math.floor(pct * 100)) + '٪';
+  const complete = TF.done >= 114;
+  $('#tfText').textContent = complete ? 'التفسير كاملًا محفوظ على جهازك ✓'
+    : `${ar(TF.done)} من ١١٤ سورة · قرابة ٦ م.ب${TF.running ? ' · جارٍ التحميل…' : ''}`;
+  $('#tfActions').innerHTML = complete || TF.running ? '' : `<button data-dl="tafsir" class="primary">${TF.done ? 'متابعة التحميل' : 'تحميل التفسير كاملًا'}</button>`;
+}
+
 // ---------------------------------------------------------------- offline audio
 // Every recitation file can be saved on the device (≈1.5 GB for all 6236
 // ayat). The service worker answers playback from this cache, ranges included.
@@ -712,7 +829,7 @@ async function audioCachedSet() {
 }
 
 function audioPanelHTML() {
-  return `<div class="group-label">التلاوة دون اتصال</div>
+  return `<div class="group-label">التحميل دون اتصال</div>
   <div class="group dl-card" id="dlCard">
     <div class="dl-top">
       <div><div class="t">الشيخ ياسر الدوسري</div><div class="s" id="dlText">جارٍ الفحص…</div></div>
@@ -721,11 +838,14 @@ function audioPanelHTML() {
     <div class="prog dl-prog"><i id="dlBar" style="width:0"></i></div>
     <div class="dl-actions" id="dlActions"></div>
   </div>
-  <p class="note">يُحفظ صوت كل آية على جهازك (قرابة ١٫٥ غيغابايت للمصحف كاملًا) لتستمع دون إنترنت. أبقِ التطبيق مفتوحًا أثناء التحميل؛ ويمكنك الإيقاف والمتابعة لاحقًا من حيث توقفت. الآيات التي تستمع إليها تُحفظ تلقائيًا أيضًا.</p>`;
+  ${tafsirCardHTML()}
+  <p class="note">يُحفظ صوت كل آية (قرابة ١٫٥ غيغابايت) والتفسير على جهازك لتستعملهما دون إنترنت. أبقِ التطبيق مفتوحًا أثناء التحميل؛ ويمكنك الإيقاف والمتابعة لاحقًا من حيث توقفت. الآيات التي تستمع إليها تُحفظ تلقائيًا أيضًا.</p>`;
 }
 
 async function refreshAudioPanel() {
   if (!$('#dlCard')) return;
+  if (!TF.running) TF.done = await tafsirStatus();
+  paintTafsirCard();
   if (!DL.running) {
     const set = await audioCachedSet();
     DL.total = META.hafs.length;
@@ -1083,6 +1203,7 @@ $('#sheetBody').addEventListener('click', async e => {
     if (a === 'start') startAudioDownload();
     else if (a === 'pause') DL.running = false;
     else if (a === 'clear') clearAudioDownload(dl);
+    else if (a === 'tafsir') downloadTafsir();
     return;
   }
   const row = e.target.closest('.row');

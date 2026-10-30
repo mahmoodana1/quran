@@ -469,3 +469,44 @@ svg { fill: currentColor; }
 }
 .dl-actions button.primary { background: var(--accent); color: #fff; }
 .dl-actions button.danger { background: none; color: #b3261e; font-weight: 500; }
+
+/* ---------- tafsir ---------- */
+#tafsir {
+  position: fixed; z-index: 25; left: 0; right: 0; bottom: 0;
+  height: min(58vh, 560px); max-width: 640px; margin: 0 auto;
+  display: flex; flex-direction: column;
+  background: color-mix(in srgb, var(--card) 94%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5);
+  border-radius: 22px 22px 0 0;
+  box-shadow: 0 -8px 40px rgba(40, 25, 10, .18), 0 0 0 .5px rgba(0,0,0,.08);
+  padding-bottom: env(safe-area-inset-bottom);
+  animation: tfIn .38s cubic-bezier(.2,.9,.3,1);
+}
+@keyframes tfIn { from { transform: translateY(100%); } }
+#tafsir.leaving { animation: tfOut .28s cubic-bezier(.4,0,.8,.4) forwards; }
+@keyframes tfOut { to { transform: translateY(100%); } }
+.tf-grip { width: 38px; height: 5px; border-radius: 3px; background: var(--rule); margin: 8px auto 2px; }
+.tf-head {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px;
+  padding: 4px 12px 10px; border-bottom: .5px solid var(--rule);
+}
+.tf-title { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+.tf-title b { font-size: 16px; }
+.tf-title small { font-size: 12px; color: var(--muted); }
+.tf-nav { display: flex; gap: 2px; }
+.tf-icon { width: 36px; height: 36px; display: grid; place-items: center; border-radius: 50%; color: var(--accent); }
+#tfClose { color: var(--muted); }
+.tf-icon:active { background: var(--sel); }
+.tf-icon svg { width: 22px; height: 22px; }
+.tf-body {
+  flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+  padding: 14px 20px 28px; font-size: 17px; line-height: 2; color: var(--ink);
+  -webkit-user-select: text; user-select: text;
+}
+.tf-body p { margin: 0 0 .9em; animation: fadeIn .35s ease both; }
+.tf-body .q { font-family: rw-hafs; color: #7a5a22; font-size: 1.08em; }
+.tf-group {
+  display: inline-block; font-size: 12.5px; color: var(--accent); background: var(--sel);
+  padding: 2px 10px; border-radius: 10px; margin-bottom: 10px;
+}
+.tf-wait { text-align: center; color: var(--muted); padding: 30px 0; font-size: 15px; }

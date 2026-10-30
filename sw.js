@@ -3,7 +3,8 @@
 // requests data with ?v=N, so bumping DATA_VERSION there fetches new copies.
 // Hafs page fonts (verses.quran.foundation) are cached as pages are opened.
 // Recitation audio: see audioResponse below.
-const VERSION = 'quran-v12';
+const VERSION = 'quran-v13';
+const TAFSIR = 'tafsir-saadi';
 // recitation files saved by the app (or while listening); kept across versions
 const AUDIO = 'audio-yasser-128';
 // page fonts never change, so they live in their own cache across versions
@@ -18,7 +19,7 @@ self.addEventListener('install', e => {
 
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys()
-    .then(keys => Promise.all(keys.filter(k => k !== VERSION && k !== FONTS && k !== AUDIO).map(k => caches.delete(k))))
+    .then(keys => Promise.all(keys.filter(k => k !== VERSION && k !== FONTS && k !== AUDIO && k !== TAFSIR).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 
@@ -40,6 +41,18 @@ self.addEventListener('fetch', e => {
     return;
   }
   if (url.origin !== location.origin) return;
+  if (/\/data\/tafsir\//.test(url.pathname)) {
+    // tafsir files live in their own cache, kept across app updates
+    e.respondWith(caches.open(TAFSIR).then(async c => {
+      const key = url.origin + url.pathname;
+      const hit = await c.match(key);
+      if (hit) return hit;
+      const res = await fetch(e.request);
+      if (res.ok) c.put(key, res.clone());
+      return res;
+    }));
+    return;
+  }
   const assets = /\/(data|fonts)\//.test(url.pathname);
   e.respondWith(caches.open(VERSION).then(async c => {
     if (assets) {

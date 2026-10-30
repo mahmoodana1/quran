@@ -11,6 +11,7 @@ Static PWA: open it in Safari → Share → **Add to Home Screen**. It must be s
 - **Landscape**: type fills the width and the page scrolls vertically.
 - **Search**: surah names (Arabic/English, fuzzy), aya text (fuzzy, diacritics-insensitive),
   `2:255`, `البقرة ٢٥٥`, `baqara 255`, page numbers. Best match first; Enter jumps to it.
+- **Tafsir As-Sa'di** per aya (data/tafsir/<surah>.json, from spa5k/tafsir_api), downloadable for offline.
 - **Audio**: Yasser Al-Dosari per aya (everyayah.com), continuous play with page follow.
   He recites Hafs; ayat of other riwayat are mapped to the matching Hafs ayat.
 
