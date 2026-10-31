@@ -877,6 +877,78 @@ function paintTafsirCard() {
   $('#tfActions').innerHTML = complete || TF.running ? '' : `<button data-dl="tafsir" class="primary">${TF.done ? 'متابعة التحميل' : 'تحميل التفسير كاملًا'}</button>`;
 }
 
+// ---------------------------------------------------------------- offline mushaf
+// All 604 page fonts (Hafs) plus the text of every riwaya, so the whole mushaf
+// opens with no connection. Fonts go in the SW's font cache, data in its own.
+const MUSHAF_CACHE = 'mushaf-data', FONT_CACHE = 'qcf-v2-fonts';
+const MQ = { running: false, done: 0, total: 0, failed: 0, stop: false };
+const mushafTasks = () => [
+  { cache: MUSHAF_CACHE, url: new URL(`data/meta.json?v=${DATA_VERSION}`, location.href).href },
+  ...META.riwayat.map(r => ({ cache: MUSHAF_CACHE, url: new URL(`data/${r.id}.json?v=${DATA_VERSION}`, location.href).href })),
+  ...Array.from({ length: 604 }, (_, i) => ({ cache: FONT_CACHE, url: `${QCF_BASE}p${i + 1}.woff2` })),
+];
+async function mushafStatus() {
+  if (!('caches' in window)) return { done: 0, total: 1 };
+  const tasks = mushafTasks();
+  const have = {};
+  for (const name of [MUSHAF_CACHE, FONT_CACHE]) have[name] = new Set((await (await caches.open(name)).keys()).map(r => r.url));
+  return { done: tasks.filter(t => have[t.cache].has(t.url)).length, total: tasks.length };
+}
+
+function mushafCardHTML() {
+  return `<div class="group dl-card" id="mqCard">
+    <div class="dl-top">
+      ${ico('tafsir', 'marks')}
+      <div class="dl-txt"><div class="t">المصحف كاملًا دون اتصال</div><div class="s" id="mqText"></div></div>
+      <div class="dl-pct" id="mqPct"></div>
+    </div>
+    <div class="prog dl-prog"><i id="mqBar" style="width:0"></i></div>
+    <div class="dl-actions" id="mqActions"></div>
+  </div>`;
+}
+
+function paintMushafCard() {
+  if (!$('#mqCard')) return;
+  const pct = MQ.total ? MQ.done / MQ.total : 0;
+  $('#mqBar').style.width = (pct * 100).toFixed(1) + '%';
+  $('#mqPct').textContent = ar(Math.floor(pct * 100)) + '٪';
+  const complete = MQ.total > 0 && MQ.done >= MQ.total;
+  $('#mqText').textContent = complete ? 'خطوط الصفحات ونصوص الروايات محفوظة على جهازك ✓'
+    : `خطوط الصفحات ونصوص الروايات · قرابة ١١٠ م.ب${MQ.running ? ' · جارٍ التحميل…' : ''}${MQ.failed ? ` · تعذّر ${ar(MQ.failed)}` : ''}`;
+  $('#mqActions').innerHTML = complete ? '' : MQ.running
+    ? '<button data-dl="mushaf-pause">إيقاف مؤقت</button>'
+    : `<button data-dl="mushaf" class="primary">${MQ.done ? 'متابعة التحميل' : 'تحميل المصحف دون اتصال'}</button>`;
+}
+
+async function refreshMushafCard() {
+  if (!$('#mqCard')) return;
+  if (!MQ.running) Object.assign(MQ, await mushafStatus());
+  paintMushafCard();
+}
+
+async function downloadMushaf() {
+  if (MQ.running) return;
+  MQ.running = true; MQ.stop = false; MQ.failed = 0;
+  const tasks = mushafTasks();
+  const caches_ = { [MUSHAF_CACHE]: await caches.open(MUSHAF_CACHE), [FONT_CACHE]: await caches.open(FONT_CACHE) };
+  Object.assign(MQ, await mushafStatus());
+  paintMushafCard();
+  let next = 0;
+  const worker = async () => {
+    while (!MQ.stop && next < tasks.length) {
+      const t = tasks[next++], c = caches_[t.cache];
+      if (await c.match(t.url)) continue;
+      try { const r = await fetch(t.url); if (r.ok) { await c.put(t.url, r); MQ.done++; } else MQ.failed++; } catch { MQ.failed++; }
+      paintMushafCard();
+    }
+  };
+  await Promise.all(Array.from({ length: 5 }, worker));
+  MQ.running = false;
+  Object.assign(MQ, await mushafStatus());
+  paintMushafCard();
+  if (!MQ.stop) toast(MQ.failed ? 'تعذّر تحميل بعض الملفات — حاول مجددًا' : 'اكتمل تحميل المصحف');
+}
+
 // ---------------------------------------------------------------- offline audio
 // Every recitation file can be saved on the device (≈1.5 GB for all 6236
 // ayat). The service worker answers playback from this cache, ranges included.
@@ -925,6 +997,7 @@ function settingsHTML() {
     <p class="note">لكل رواية رسمها وعلامات ضبطها ووقفها. التلاوة بصوت الشيخ ياسر الدوسري برواية حفص، وتُطابَق آيات الروايات الأخرى مع ما يقابلها فيها.</p>
 
     <div class="group-label">دون اتصال</div>
+    ${mushafCardHTML()}
     ${audioPanelHTML()}`;
 }
 
@@ -962,11 +1035,11 @@ function paintAudioPanel() {
   const mb = Math.round(pct * AUDIO_TOTAL_MB);
   const complete = DL.done >= DL.total && DL.total > 0;
   $('#dlText').textContent = complete
-    ? `المصحف كاملًا محفوظ على جهازك ✓`
+    ? `التلاوة كاملة محفوظة على جهازك ✓`
     : `${ar(DL.done)} من ${ar(DL.total)} آية · ${ar(mb)} من ${ar(AUDIO_TOTAL_MB)} م.ب${DL.running ? ' · جارٍ التحميل…' : ''}${DL.failed ? ` · تعذّر ${ar(DL.failed)}` : ''}`;
   $('#dlActions').innerHTML = (complete ? '' : DL.running
     ? '<button data-dl="pause">إيقاف مؤقت</button>'
-    : `<button data-dl="start" class="primary">${DL.done ? 'متابعة التحميل' : 'تحميل المصحف كاملًا'}</button>`)
+    : `<button data-dl="start" class="primary">${DL.done ? 'متابعة التحميل' : 'تحميل التلاوة كاملة'}</button>`)
     + (DL.done && !DL.running ? '<button data-dl="clear" class="danger">حذف التحميلات</button>' : '');
 }
 
@@ -1309,7 +1382,7 @@ function renderSheet() {
     const here = body.querySelector('.row.here');
     if (here) here.scrollIntoView({ block: 'center' }); else body.scrollTop = 0;
   }
-  if (tab === 'settings' && !q.trim()) refreshAudioPanel();
+  if (tab === 'settings' && !q.trim()) { refreshAudioPanel(); refreshMushafCard(); }
   if (tab === 'prayer' && !q.trim()) Prayer.mount();
 }
 
@@ -1336,6 +1409,8 @@ $('#sheetBody').addEventListener('click', async e => {
     else if (a === 'pause') DL.running = false;
     else if (a === 'clear') clearAudioDownload(dl);
     else if (a === 'tafsir') downloadTafsir();
+    else if (a === 'mushaf') downloadMushaf();
+    else if (a === 'mushaf-pause') MQ.stop = true;
     return;
   }
   const row = e.target.closest('.row');

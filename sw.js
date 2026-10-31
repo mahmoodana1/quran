@@ -3,12 +3,15 @@
 // requests data with ?v=N, so bumping DATA_VERSION there fetches new copies.
 // Hafs page fonts (verses.quran.foundation) are cached as pages are opened.
 // Recitation audio: see audioResponse below.
-const VERSION = 'quran-v31';
+const VERSION = 'quran-v32';
 const TAFSIR = 'tafsir-saadi';
 // recitation files saved by the app (or while listening); kept across versions
 const AUDIO = 'audio-yasser-128';
 // page fonts never change, so they live in their own cache across versions
 const FONTS = 'qcf-v2-fonts';
+// the Quran text files and local fonts also outlive app updates, so a phone that
+// saved the mushaf for offline use keeps it
+const MUSHAF = 'mushaf-data';
 const SHELL = ['./', 'index.html', 'app.css', 'app.js', 'prayer.js', 'manifest.webmanifest', 'icons/icon-180.png'];
 
 self.addEventListener('install', e => {
@@ -19,7 +22,7 @@ self.addEventListener('install', e => {
 
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys()
-    .then(keys => Promise.all(keys.filter(k => k !== VERSION && k !== FONTS && k !== AUDIO && k !== TAFSIR).map(k => caches.delete(k))))
+    .then(keys => Promise.all(keys.filter(k => k !== VERSION && k !== FONTS && k !== AUDIO && k !== TAFSIR && k !== MUSHAF).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 
@@ -54,7 +57,7 @@ self.addEventListener('fetch', e => {
     return;
   }
   const assets = /\/(data|fonts)\//.test(url.pathname);
-  e.respondWith(caches.open(VERSION).then(async c => {
+  e.respondWith(caches.open(assets ? MUSHAF : VERSION).then(async c => {
     if (assets) {
       const hit = await c.match(e.request);
       if (hit) return hit;
