@@ -902,7 +902,7 @@ const ICO = {
 const ico = (name, c) => `<span class="ico" style="--c:var(--c-${c})"><svg viewBox="0 0 24 24">${ICO[name]}</svg></span>`;
 
 function settingsHTML() {
-  const cur = store.get('theme', 'auto');
+  const cur = store.get('theme', 'light');
   const riwayaName = id => META.riwayat.find(r => r.id === id)?.name || id;
   const themes = THEMES.map(([id, label]) =>
     `<button class="theme${cur === id ? ' on' : ''}" data-theme-set="${id}"><i class="th th-${id}"><b>أ</b></i><span>${label}</span></button>`).join('');
@@ -1191,11 +1191,12 @@ function search(raw) {
 const THEMES = [['auto', 'تلقائي'], ['light', 'فاتح'], ['sepia', 'ورقي'], ['dark', 'داكن']];
 const THEME_BAR = { light: '#faf6f3', sepia: '#f1e7d0', dark: '#15130f' };
 function applyTheme() {
-  const t = store.get('theme', 'auto');
+  const t = store.get('theme', 'light');
   const d = t === 'auto' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : t;
   document.documentElement.dataset.theme = d;
   const m = document.querySelector('meta[name=theme-color]');
   if (m) m.content = THEME_BAR[d] || THEME_BAR.light;
+  document.querySelector('meta[name=color-scheme]')?.setAttribute('content', d === 'dark' ? 'dark' : 'light');
 }
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
 
