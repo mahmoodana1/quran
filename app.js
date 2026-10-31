@@ -3,7 +3,6 @@
 // bump when data/ or fonts/ change so phones fetch the new files
 const DATA_VERSION = 6;
 const AUDIO_BASE = 'https://everyayah.com/data/Yasser_Ad-Dussary_128kbps/';
-const RUB_LABEL = ['الحزب', 'ربع الحزب', 'نصف الحزب', 'ثلاثة أرباع الحزب'];
 const $ = (s, el = document) => el.querySelector(s);
 
 const store = {
@@ -253,7 +252,6 @@ function pageInfo(p) {
 
 function icon(name) {
   const icons = {
-    grid: '<svg viewBox="0 0 28 28"><g fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4" y="4" width="8.5" height="8.5" rx="2.6"/><rect x="15.5" y="4" width="8.5" height="8.5" rx="2.6"/><rect x="4" y="15.5" width="8.5" height="8.5" rx="2.6"/><rect x="15.5" y="15.5" width="8.5" height="8.5" rx="2.6"/></g></svg>',
     bm: '<svg viewBox="0 0 22 26"><path d="M3 2.5h16v21l-8-5.6-8 5.6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
     bmOn: '<svg viewBox="0 0 22 26"><path d="M3 2.5h16v21l-8-5.6-8 5.6z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
     chev: '<svg viewBox="0 0 12 12"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
@@ -281,7 +279,7 @@ function renderPage(p) {
   }
   const lh = S.landscape ? fs * 1.75 : Math.min(S.linesH / 15, fs * LINE_RATIO);
   const { first, last } = pageInfo(p);
-  const fa = R.ayas[first], la = R.ayas[last];
+  const fa = R.ayas[first];
   el.className = `page ${p % 2 ? 'odd' : 'even'}${opening ? ' opening' : ''}${pending ? ' pending' : ''}${R.glyph ? ' glyph' : ''}`;
   el.dataset.page = p;
   if (R.glyph && !pending) {
@@ -294,13 +292,11 @@ function renderPage(p) {
     }
   }
 
-  const rub = la[4];
-  const rubText = rub ? `${RUB_LABEL[(rub - 1) % 4]} ${ar(Math.floor((rub - 1) / 4) + 1)}` : '';
   const marked = isBookmarked(p);
 
   let html = `<header class="phead">
     <button class="sura-btn" data-act="suras"><span>${suraName(fa[0])}</span><i class="chev">${icon('chev')}</i></button>
-    <button class="grid-btn" data-act="index" aria-label="الفهرس">${icon('grid')}</button>
+    <span class="pnum">${ar(p)}</span>
     <div class="side"><span class="juz">الجزء ${ar(fa[3])}</span><button class="bm-btn${marked ? ' on' : ''}" data-act="bm" aria-label="علامة">${icon(marked ? 'bmOn' : 'bm')}</button></div>
   </header>${ORNAMENT}<div class="lines" style="font-family:${R.glyph ? `qcf-p${p}` : R.font}">`;
 
@@ -336,7 +332,7 @@ function renderPage(p) {
     }
     html += items.join('') + '</div>';
   }
-  html += `</div>${ORNAMENT}<footer class="pfoot"><span class="pill"><span>${ar(p)}</span><span>${rubText}</span></span></footer>`;
+  html += `</div>${ORNAMENT}<footer class="pfoot"></footer>`;
   el.innerHTML = html;
   paintMarks(el);
   return el;

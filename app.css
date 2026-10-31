@@ -89,10 +89,12 @@ svg { fill: currentColor; }
   background: var(--chip); color: var(--muted);
 }
 .phead .chev svg { width: 11px; height: 11px; }
-.phead .grid-btn { padding: 6px; color: var(--muted); }
-.phead .grid-btn svg { width: 26px; height: 26px; display: block; }
+.phead .pnum {
+  font-size: 15px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums;
+  min-width: 2.4em; text-align: center; padding: 0 6px;
+}
 .phead .side { justify-self: end; display: flex; align-items: center; gap: 18px; }
-.phead .juz { color: var(--muted); font-size: 15px; }
+.phead .juz { color: var(--muted); font-size: 14px; }
 .phead .bm-btn { padding: 4px; color: var(--muted); }
 .phead .bm-btn svg { width: 22px; height: 26px; display: block; }
 .phead .bm-btn.on { color: var(--accent); }
@@ -190,19 +192,7 @@ svg { fill: currentColor; }
 .page-orn svg { width: min(70%, 320px); height: 18px; display: block; }
 .page.opening .page-orn { opacity: .45; }
 
-.pfoot {
-  flex: none;
-  height: calc(40px + env(safe-area-inset-bottom));
-  padding-bottom: env(safe-area-inset-bottom);
-  display: flex; align-items: center; justify-content: flex-end;
-}
-.page.odd .pfoot { justify-content: flex-start; }
-.pill {
-  font-size: 13px; color: var(--muted);
-  border: 3px double var(--rule); border-radius: 10px;
-  padding: 1px 12px 2px; word-spacing: 2px;
-  display: flex; gap: 12px;
-}
+.pfoot { flex: none; height: calc(40px + env(safe-area-inset-bottom)); } /* room for the bottom switcher */
 
 /* landscape: type follows the width, the page scrolls */
 .landscape .page { overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
