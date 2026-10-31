@@ -639,21 +639,21 @@ svg { fill: currentColor; }
 .pr-note { margin-top: 10px; }
 
 /* ---------- bottom switcher ---------- */
+/* the strip under the page art: two full-width halves, icon only */
 #dock {
-  position: fixed; z-index: 35; left: 50%; transform: translateX(-50%);
-  bottom: calc(4px + env(safe-area-inset-bottom));
-  display: flex; gap: 3px; padding: 3px;
-  background: var(--surface);
-  border-radius: 22px; border: 1px solid rgba(80, 60, 30, .22);
-  box-shadow: 0 4px 16px rgba(60, 40, 10, .18), 0 1px 3px rgba(60, 40, 10, .1);
+  position: fixed; z-index: 35; left: 0; right: 0; bottom: 0;
+  height: calc(40px + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
+  display: grid; grid-template-columns: 1fr 1fr;
+  background: color-mix(in srgb, var(--paper) 90%, transparent);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  border-top: .5px solid var(--line);
 }
 #dock button {
-  display: flex; align-items: center; gap: 7px; height: 34px; padding: 0 18px; border-radius: 19px;
-  font-size: 14px; color: var(--ink); font-weight: 600;
-  transition: background-color .25s ease, color .25s ease, transform .15s ease;
+  display: grid; place-items: center; color: var(--muted); opacity: .6;
+  transition: color .25s ease, opacity .25s ease, background-color .2s ease;
 }
-#dock svg { width: 20px; height: 20px; }
-#dock button.on { background: var(--accent); color: #fff; }
-#dock button:not(.on):active { background: var(--sel); }
-#dock button:active { transform: scale(.96); }
+#dock button + button { border-inline-start: .5px solid var(--line); }
+#dock svg { width: 21px; height: 21px; }
+#dock button.on { color: var(--accent); opacity: 1; }
+#dock button:active { background: var(--sel); }
 .landscape #dock { display: none; }
