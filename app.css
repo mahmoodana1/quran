@@ -18,7 +18,7 @@
   --accent: #2c6a96;
   --on-accent: #fff;
   --sel: rgba(44, 106, 150, .13);
-  --sheet: #f5f1eb;
+  --sheet: var(--paper);
   --card: #ffffff;
   --frame: #8c7a58;
   --surface: #fffdf9;
@@ -29,7 +29,7 @@
   --ok: #2e8b57;
   --danger: #b3261e;
   --lib-1: #f4eee4; --lib-2: #efe8dd; --lib-3: #e7dfd3;
-  --p-bg: #f3ecdf; --p-gold: #b99a5e; --p-rule: rgba(140, 122, 88, .34); --p-green: #1f5040; --p-green-2: #11301f; --p-ink: #1f5040; --p-on: #f3e6c4;
+  --p-bg: var(--paper); --p-gold: #b99a5e; --p-rule: rgba(140, 122, 88, .34); --p-green: #1f5040; --p-green-2: #11301f; --p-ink: #1f5040; --p-on: #f3e6c4;
   --c-suras: #2c6a96; --c-juz: #0f8585; --c-marks: #d17a1f; --c-prayer: #2e8b57; --c-settings: #7a56b8;
   --c-r0: #2c6a96; --c-r1: #0f8585; --c-r2: #d17a1f; --c-r3: #2e8b57; --c-r4: #7a56b8; --c-r5: #b8446a;
   --shadow-float: 0 10px 36px rgba(60, 40, 10, .16), 0 2px 6px rgba(60, 40, 10, .06);
@@ -44,21 +44,21 @@
 :root[data-theme="sepia"] {
   --paper: #f1e7d0; --paper-hi: #f6edd8; --paper-lo: #e8dcc0;
   --ink: #3a2c1a; --muted: #7a6a52; --faint: #a39378; --rule: #c9b996; --chip: #e0d2b3;
-  --accent: #8a5a1f; --sel: rgba(138, 90, 31, .15); --sheet: #ebe0c6; --card: #f6edd8; --frame: #8a6f3e;
+  --accent: #8a5a1f; --sel: rgba(138, 90, 31, .15); --sheet: var(--paper); --card: #f6edd8; --frame: #8a6f3e;
   --surface: #f6eedb; --line: rgba(90, 60, 20, .16); --tint: rgba(90, 60, 20, .08); --tint-2: rgba(90, 60, 20, .16);
   --gold-ink: #6f5424; --ok: #4a7c3a; --danger: #a8321f;
   --c-suras: #8a5a1f; --c-juz: #3f7a6a; --c-marks: #b5651d; --c-prayer: #4a7c3a; --c-settings: #6e4f8a;
   --lib-1: #efe3c8; --lib-2: #e6d9bb; --lib-3: #dccdab;
-  --p-bg: #eadfc4; --p-gold: #a98a4c; --p-rule: rgba(110, 85, 40, .36); --p-green: #3a5a2e; --p-green-2: #243a1c; --p-ink: #3a5a2e;
+  --p-gold: #a98a4c; --p-rule: rgba(110, 85, 40, .36); --p-green: #3a5a2e; --p-green-2: #243a1c; --p-ink: #3a5a2e;
 }
 :root[data-theme="dark"] {
   --paper: #15130f; --paper-hi: #1a1814; --paper-lo: #110f0c;
   --ink: #e9e3d6; --muted: #a59d8e; --faint: #7d766a; --rule: #4a443a; --chip: #2e2a24;
-  --accent: #6db0e0; --on-accent: #0b2233; --sel: rgba(109, 176, 224, .17); --sheet: #0e0d0b; --card: #1d1a16; --frame: #a58f5e;
+  --accent: #6db0e0; --on-accent: #0b2233; --sel: rgba(109, 176, 224, .17); --sheet: var(--paper); --card: #1d1a16; --frame: #a58f5e;
   --surface: #1c1915; --line: rgba(255, 240, 210, .11); --tint: rgba(255, 240, 210, .07); --tint-2: rgba(255, 240, 210, .14);
   --gold-ink: #d3b878; --ok: #5cc08a; --danger: #ef7d72;
   --lib-1: #1a1712; --lib-2: #12100d; --lib-3: #0b0a08;
-  --p-bg: #100e0b; --p-gold: #b79b62; --p-rule: rgba(190, 160, 100, .28); --p-green: #24624e; --p-green-2: #123a2c; --p-ink: #86c9ac; --p-on: #f0e2bd;
+  --p-gold: #b79b62; --p-rule: rgba(190, 160, 100, .28); --p-green: #24624e; --p-green-2: #123a2c; --p-ink: #86c9ac; --p-on: #f0e2bd;
   --c-suras: #6db0e0; --c-juz: #4fc0c0; --c-marks: #f0a45a; --c-prayer: #5cc08a; --c-settings: #b196ec;
   --c-r0: #6db0e0; --c-r1: #4fc0c0; --c-r2: #f0a45a; --c-r3: #5cc08a; --c-r4: #b196ec; --c-r5: #ec8aaa;
   --shadow-float: 0 10px 36px rgba(0, 0, 0, .55), 0 2px 6px rgba(0, 0, 0, .35);
@@ -697,10 +697,7 @@ svg { fill: currentColor; }
 :root {
   --p-pattern: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='30' height='30' viewBox='0 0 30 30'%3E%3Cpath d='M15 8.5l1.8 4.7 4.7 1.8-4.7 1.8L15 21.5l-1.8-4.7-4.7-1.8 4.7-1.8z' fill='none' stroke='%23b99a5e' stroke-width='.7' opacity='.17'/%3E%3C/svg%3E");
 }
-#sheet, #library {
-  background: var(--p-pattern) 0 0 / 30px 30px, var(--p-bg);
-}
-#library { background: var(--p-pattern) 0 0 / 30px 30px, var(--p-bg); }
+#sheet, #library { background: radial-gradient(130% 90% at 50% 42%, var(--paper-hi) 0%, var(--paper) 60%, var(--paper-lo) 100%); }
 
 /* header: the title sits in a ruled band like a surah heading */
 .sheet-head { min-height: 56px; padding-top: 6px; }
@@ -840,7 +837,7 @@ svg { fill: currentColor; }
 .cover.new { border: 1.5px dashed var(--p-gold); background: color-mix(in srgb, var(--p-gold) 8%, transparent); }
 .cover.new span { background: linear-gradient(160deg, var(--p-green), var(--p-green-2)); color: var(--p-on); box-shadow: 0 0 0 1.5px var(--p-gold); }
 .book-done { background: none; border: 1px solid var(--p-rule); border-radius: 3px; }
-.card { background: var(--p-pattern) 0 0 / 30px 30px, var(--p-bg); border-top: 1px solid var(--p-gold); border-radius: 22px 22px 0 0; }
+.card { background: radial-gradient(130% 90% at 50% 42%, var(--paper-hi) 0%, var(--paper) 60%, var(--paper-lo) 100%); border-top: 1px solid var(--p-gold); border-radius: 22px 22px 0 0; }
 .card::before { background: var(--p-gold); opacity: .6; }
 .card h2 { font-weight: 800; }
 .actions button { border-radius: 3px; background: none; border: 1px solid var(--p-rule); }
