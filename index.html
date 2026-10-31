@@ -8,12 +8,23 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="القرآن">
 <meta name="theme-color" content="#faf6f3">
-<meta name="color-scheme" content="light only">
+<meta name="color-scheme" content="light dark">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="stylesheet" href="app.css">
 <title>القرآن الكريم</title>
+<script>
+// set the theme before first paint so there is no flash
+(function () {
+  try {
+    var t = JSON.parse(localStorage.getItem('q.theme')) || 'auto';
+    var d = t === 'auto' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : t;
+    document.documentElement.dataset.theme = d;
+    document.querySelector('meta[name=theme-color]').content = { light: '#faf6f3', sepia: '#f1e7d0', dark: '#15130f' }[d] || '#faf6f3';
+  } catch (e) {}
+})();
+</script>
 </head>
 <body>
 <div id="probe"></div>
@@ -80,11 +91,11 @@
     <input id="q" type="search" placeholder="ابحث عن سورة أو آية… (مثال: البقرة ٢٥٥)" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search">
   </div>
   <nav class="tabs" id="tabs">
-    <button data-tab="suras" class="on">السور</button>
-    <button data-tab="juz">الأجزاء</button>
-    <button data-tab="marks">العلامات</button>
-    <button data-tab="prayer">الصلاة</button>
-    <button data-tab="riwaya">الإعدادات</button>
+    <button data-tab="suras" class="on" style="--tc:var(--c-suras)"><svg viewBox="0 0 24 24"><path d="M12 6.5C10 5 7 4.5 3.5 5v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5zM12 6.5v13"/></svg><span>السور</span></button>
+    <button data-tab="juz" style="--tc:var(--c-juz)"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4v8l5.7 5.7"/></svg><span>الأجزاء</span></button>
+    <button data-tab="marks" style="--tc:var(--c-marks)"><svg viewBox="0 0 24 24"><path d="M6.5 4.5h11v15.5l-5.5-3.8-5.5 3.8z"/></svg><span>العلامات</span></button>
+    <button data-tab="prayer" style="--tc:var(--c-prayer)"><svg viewBox="0 0 24 24"><path d="M19 14.5A7.5 7.5 0 019.5 5a7.5 7.5 0 109.5 9.5z"/></svg><span>الصلاة</span></button>
+    <button data-tab="settings" style="--tc:var(--c-settings)"><svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg><span>الإعدادات</span></button>
   </nav>
   <div id="sheetBody"></div>
 </section>
@@ -92,7 +103,7 @@
 <!-- khatma library -->
 <section id="library" hidden>
   <div class="sheet-head">
-    <button id="libClose" class="txt-btn">‹ رجوع</button>
+    <button id="libClose" class="txt-btn">‹ الإعدادات</button>
   </div>
   <h1 class="lib-title">ختماتي</h1>
   <p class="lib-note">لكل ختمة مصحفها وموضع قراءتها وعلاماتها الخاصة.</p>
@@ -108,6 +119,7 @@
       <label class="field"><span>الاسم</span><input name="name" maxlength="40"></label>
       <label class="field"><span>الرواية</span><select name="riwaya"></select></label>
     </div>
+    <p id="khWarn" class="kh-warn" hidden>تغيير الرواية يعيد الختمة إلى الصفحة الأولى.</p>
     <div class="fields"><div class="field"><span>الغلاف</span><div id="swatches" class="swatches"></div></div></div>
     <div class="actions">
       <button type="submit" id="khSave" class="primary">ابدأ الختمة</button>

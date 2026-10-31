@@ -857,7 +857,8 @@ async function downloadTafsir() {
 function tafsirCardHTML() {
   return `<div class="group dl-card" id="tfCard">
     <div class="dl-top">
-      <div><div class="t">تفسير السعدي</div><div class="s" id="tfText"></div></div>
+      ${ico('tafsir', 'marks')}
+      <div class="dl-txt"><div class="t">تفسير السعدي</div><div class="s" id="tfText"></div></div>
       <div class="dl-pct" id="tfPct"></div>
     </div>
     <div class="prog dl-prog"><i id="tfBar" style="width:0"></i></div>
@@ -891,18 +892,54 @@ async function audioCachedSet() {
   return new Set((await c.keys()).map(r => r.url));
 }
 
+const ICO = {
+  theme: '<path d="M12 3.5a8.5 8.5 0 100 17 8.5 8.5 0 000-17zM12 3.5v17"/><path d="M12 3.5a8.5 8.5 0 010 17z" fill="currentColor" stroke="none"/>',
+  book: '<path d="M5 4.5h3.5v15H5zM10.5 4.5H14v15h-3.5zM15.6 5.6l3.3-.9 3.4 14.2-3.3.9z"/>',
+  audio: '<path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 10.5v3"/>',
+  tafsir: '<path d="M12 6.5C10 5 7 4.5 3.5 5v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5zM12 6.5v13"/>',
+  next: '<path d="M14.5 6l-6 6 6 6"/>',
+};
+const ico = (name, c) => `<span class="ico" style="--c:var(--c-${c})"><svg viewBox="0 0 24 24">${ICO[name]}</svg></span>`;
+
+function settingsHTML() {
+  const cur = store.get('theme', 'auto');
+  const riwayaName = id => META.riwayat.find(r => r.id === id)?.name || id;
+  const themes = THEMES.map(([id, label]) =>
+    `<button class="theme${cur === id ? ' on' : ''}" data-theme-set="${id}"><i class="th th-${id}"><b>أ</b></i><span>${label}</span></button>`).join('');
+  const riwayat = META.riwayat.map((r, k) => {
+    const letter = r.name.replace(/^ال/, '')[0];
+    return `<button class="row" data-riwaya="${r.id}"><span class="ico letter" style="--c:var(--c-r${k % 6})">${letter}</span>
+      <span class="main"><span class="t">${r.name}</span><span class="s">${ar(r.ayas)} آية</span></span>${r.id === R.id ? '<span class="check">✓</span>' : ''}</button>`;
+  }).join('');
+  return `
+    <div class="group-label">المظهر</div>
+    <div class="themes">${themes}</div>
+
+    <div class="group-label">الختمة</div>
+    <div class="group"><button class="row" data-open-lib>${ico('book', 'prayer')}
+      <span class="main"><span class="t">ختماتي</span><span class="s">${esc(K.name)} · صفحة ${ar(K.page)}${KH.length > 1 ? ` · ${ar(KH.length)} ختمات` : ''}</span></span>
+      <svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button></div>
+
+    <div class="group-label">الرواية</div>
+    <div class="group">${riwayat}</div>
+    <p class="note">لكل رواية رسمها وعلامات ضبطها ووقفها. التلاوة بصوت الشيخ ياسر الدوسري برواية حفص، وتُطابَق آيات الروايات الأخرى مع ما يقابلها فيها.</p>
+
+    <div class="group-label">دون اتصال</div>
+    ${audioPanelHTML()}`;
+}
+
 function audioPanelHTML() {
-  return `<div class="group-label">التحميل دون اتصال</div>
-  <div class="group dl-card" id="dlCard">
+  return `<div class="group dl-card" id="dlCard">
     <div class="dl-top">
-      <div><div class="t">الشيخ ياسر الدوسري</div><div class="s" id="dlText">جارٍ الفحص…</div></div>
+      ${ico('audio', 'settings')}
+      <div class="dl-txt"><div class="t">التلاوة · الشيخ ياسر الدوسري</div><div class="s" id="dlText">جارٍ الفحص…</div></div>
       <div class="dl-pct" id="dlPct"></div>
     </div>
     <div class="prog dl-prog"><i id="dlBar" style="width:0"></i></div>
     <div class="dl-actions" id="dlActions"></div>
   </div>
   ${tafsirCardHTML()}
-  <p class="note">يُحفظ صوت كل آية (قرابة ١٫٥ غيغابايت) والتفسير على جهازك لتستعملهما دون إنترنت. أبقِ التطبيق مفتوحًا أثناء التحميل؛ ويمكنك الإيقاف والمتابعة لاحقًا من حيث توقفت. الآيات التي تستمع إليها تُحفظ تلقائيًا أيضًا.</p>`;
+  <p class="note">يُحفظ صوت كل آية (قرابة ١٫٥ غيغابايت) والتفسير على جهازك لتستعملهما دون إنترنت. أبقِ التطبيق مفتوحًا أثناء التحميل، ويمكنك الإيقاف والمتابعة لاحقًا. الآيات التي تستمع إليها تُحفظ تلقائيًا.</p>`;
 }
 
 async function refreshAudioPanel() {
@@ -1150,11 +1187,23 @@ function search(raw) {
 
 // ---------------------------------------------------------------- sheet
 
+// ---- theme: auto follows the phone, or pick light / sepia / dark
+const THEMES = [['auto', 'تلقائي'], ['light', 'فاتح'], ['sepia', 'ورقي'], ['dark', 'داكن']];
+const THEME_BAR = { light: '#faf6f3', sepia: '#f1e7d0', dark: '#15130f' };
+function applyTheme() {
+  const t = store.get('theme', 'auto');
+  const d = t === 'auto' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : t;
+  document.documentElement.dataset.theme = d;
+  const m = document.querySelector('meta[name=theme-color]');
+  if (m) m.content = THEME_BAR[d] || THEME_BAR.light;
+}
+matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
+
 let tab = 'suras';
 function openSheet(t = tab) {
   tab = t;
-  $('#sheetTitle').textContent = K.name;
-  $('#sheetSub').textContent = `رواية ${META.riwayat.find(r => r.id === R.id)?.name || ''} · صفحة ${ar(S.page)}`;
+  $('#sheetTitle').textContent = 'اللوحات';
+  $('#sheetSub').textContent = `${K.name} · ${META.riwayat.find(r => r.id === R.id)?.name || ''} · صفحة ${ar(S.page)}`;
   closeActions();
   show($('#sheet'));
   $('#q').value = '';
@@ -1184,7 +1233,7 @@ function suraRow(s, extra = '') {
   const here = s === R.ayas[pageInfo(S.page).first][0] ? ' here' : '';
   return `<button class="row${extra}${here}" data-go-sura="${s}">
     <span class="num">${ar(s)}</span>
-    <span class="main"><span class="t">${nameAr}</span><span class="s">${place === 'makkah' ? 'مكية' : 'مدنية'} · ${ar(count)} آية · <span class="en">${en}</span></span></span>
+    <span class="main"><span class="t">${nameAr}</span><span class="s"><em class="pl ${place === 'makkah' ? 'mk' : 'md'}">${place === 'makkah' ? 'مكية' : 'مدنية'}</em>${ar(count)} آية · <span class="en">${en}</span></span></span>
     <span class="meta">${ar(pageOfSura(s))}</span>
   </button>`;
 }
@@ -1194,6 +1243,7 @@ function renderSheet() {
   const body = $('#sheetBody');
   const q = $('#q').value;
   $('#tabs').hidden = !!q.trim();
+  $('.search').hidden = tab === 'prayer' || tab === 'settings';
   let html = '';
 
   if (q.trim()) {
@@ -1248,11 +1298,8 @@ function renderSheet() {
     }
   } else if (tab === 'prayer') {
     html = '<div id="prayer"></div>';
-  } else if (tab === 'riwaya') {
-    html = audioPanelHTML();
-    html += '<div class="group-label">رواية المصحف</div><div class="group">' + META.riwayat.map(r =>
-      `<button class="row" data-riwaya="${r.id}"><span class="main"><span class="t">رواية ${r.name}</span><span class="s">${ar(r.ayas)} آية · بخط مجمع الملك فهد</span></span>${r.id === R.id ? '<span class="check">✓</span>' : ''}</button>`).join('') + '</div>';
-    html += '<p class="note">لكل رواية رسمها وعلامات ضبطها ووقفها الخاصة. التلاوة الصوتية بصوت الشيخ ياسر الدوسري برواية حفص، وتُطابَق آيات الروايات الأخرى مع ما يقابلها في رواية حفص.</p>';
+  } else if (tab === 'settings') {
+    html = settingsHTML();
   }
   body.innerHTML = html;
   if (!q.trim()) {
@@ -1260,7 +1307,7 @@ function renderSheet() {
     const here = body.querySelector('.row.here');
     if (here) here.scrollIntoView({ block: 'center' }); else body.scrollTop = 0;
   }
-  if (tab === 'riwaya' && !q.trim()) refreshAudioPanel();
+  if (tab === 'settings' && !q.trim()) refreshAudioPanel();
   if (tab === 'prayer' && !q.trim()) Prayer.mount();
 }
 
@@ -1269,6 +1316,9 @@ $('#sheetBody').addEventListener('change', e => {
   if (sel) Prayer.onChange(sel);
 });
 $('#sheetBody').addEventListener('click', async e => {
+  const th = e.target.closest('[data-theme-set]');
+  if (th) { store.set('theme', th.dataset.themeSet); applyTheme(); renderSheet(); return; }
+  if (e.target.closest('[data-open-lib]')) { openLibrary(); return; }
   const compass = e.target.closest('[data-pr-compass]');
   if (compass) { Prayer.startCompass(compass); return; }
   const del = e.target.closest('[data-del-mark]');
@@ -1395,7 +1445,7 @@ function openLibrary() {
   show($('#library'));
 }
 
-$('#libClose').onclick = () => hide($('#library'));
+$('#libClose').onclick = () => { hide($('#library')); openSheet('settings'); };
 $('#libBtn').onclick = openLibrary;
 
 $('#shelf').addEventListener('click', async e => {
@@ -1437,6 +1487,7 @@ function openEditor(k) {
   $('#khTitle').textContent = k ? 'تعديل الختمة' : 'ختمة جديدة';
   $('#khSave').textContent = k ? 'حفظ' : 'ابدأ الختمة';
   $('#khRestart').hidden = $('#khDelete').hidden = !k;
+  $('#khWarn').hidden = true;
   $('#khDelete').disabled = KH.length < 2;
   updatePreview();
   show($('#khEdit'));
@@ -1445,7 +1496,10 @@ function updatePreview() {
   const f = $('#khForm');
   $('#khPreview').innerHTML = coverHTML({ name: f.name.value || '—', cover: +f.cover.value }, true);
 }
-$('#khForm').addEventListener('input', updatePreview);
+$('#khForm').addEventListener('input', () => {
+  updatePreview();
+  $('#khWarn').hidden = !(editing && $('#khForm').riwaya.value !== editing.riwaya);
+});
 $('#khCancel').onclick = () => hide($('#khEdit'));
 $('#khForm').addEventListener('submit', async e => {
   e.preventDefault();
