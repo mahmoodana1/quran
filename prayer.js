@@ -34,12 +34,15 @@ const Prayer = (() => {
 
   // fajr / isha sun angles; isha as minutes after maghrib where `ishaMin` is set
   const METHODS = {
+    // Ministry of Awqaf (Jordan), which administers Al-Aqsa: maghrib is sunset + 5 min
+    awqaf: { name: 'وزارة الأوقاف الأردنية (الأقصى)', fajr: 18, isha: 18, maghribMin: 5 },
     mwl: { name: 'رابطة العالم الإسلامي', fajr: 18, isha: 17 },
     egypt: { name: 'الهيئة المصرية العامة للمساحة', fajr: 19.5, isha: 17.5 },
     makkah: { name: 'أم القرى (مكة المكرمة)', fajr: 18.5, ishaMin: 90 },
     karachi: { name: 'جامعة العلوم الإسلامية بكراتشي', fajr: 18, isha: 18 },
     isna: { name: 'أمريكا الشمالية (ISNA)', fajr: 15, isha: 15 },
-    turkey: { name: 'رئاسة الشؤون الدينية التركية', fajr: 18, isha: 17 },
+    // Diyanet publishes its times with fixed safety offsets (minutes)
+    turkey: { name: 'رئاسة الشؤون الدينية التركية', fajr: 18, isha: 17, tune: { sunrise: -7, dhuhr: 5, asr: 4, maghrib: 7 } },
   };
 
   const NAMES = { fajr: 'الفجر', sunrise: 'الشروق', dhuhr: 'الظهر', asr: 'العصر', maghrib: 'المغرب', isha: 'العشاء' };
@@ -53,7 +56,7 @@ const Prayer = (() => {
     isha: '<path d="M19 14.5A7.5 7.5 0 019.5 5a7.5 7.5 0 109.5 9.5z" />',
   };
 
-  const cfg = () => ({ city: 'aqsa', method: 'mwl', asr: 1, ...store.get('pray', {}) });
+  const cfg = () => ({ city: 'aqsa', method: 'awqaf', asr: 1, ...store.get('pray', {}) });
   const save = patch => store.set('pray', { ...cfg(), ...patch });
   function place() {
     const c = cfg();
@@ -91,7 +94,7 @@ const Prayer = (() => {
       const noon = n.dhuhr;
       const decl = h => at(h).decl;
       n.sunrise = noon - hourAngle(0.833, decl(t.sunrise));
-      n.maghrib = noon + hourAngle(0.833, decl(t.maghrib));
+      n.maghrib = noon + hourAngle(0.833, decl(t.maghrib)) + (method.maghribMin || 0) / 60;
       n.fajr = noon - hourAngle(method.fajr, decl(t.fajr));
       const asrAngle = -Math.atan(1 / (asrFactor + tan(Math.abs(p.lat - decl(t.asr))))) / rad;
       n.asr = noon + hourAngle(asrAngle, decl(t.asr));
@@ -110,7 +113,7 @@ const Prayer = (() => {
     const out = {};
     for (const k of ORDER) {
       if (bad[k]) { out[k] = null; continue; }
-      const ms = Date.UTC(y, m - 1, d) + (t[k] - p.lng / 15) * 36e5;
+      const ms = Date.UTC(y, m - 1, d) + (t[k] - p.lng / 15) * 36e5 + (method.tune?.[k] || 0) * 6e4;
       out[k] = new Date(Math.round(ms / 6e4) * 6e4);
     }
     return out;
@@ -170,8 +173,8 @@ const Prayer = (() => {
     const c = cfg(), p = place(), tz = p.tz;
     const now = new Date();
     const today = ymd(now, tz);
-    const day = compute(...today, p, METHODS[c.method] || METHODS.mwl, c.asr);
-    const tomorrow = compute(...nextDay(today), p, METHODS[c.method] || METHODS.mwl, c.asr);
+    const day = compute(...today, p, METHODS[c.method] || METHODS.awqaf, c.asr);
+    const tomorrow = compute(...nextDay(today), p, METHODS[c.method] || METHODS.awqaf, c.asr);
     const friday = new Intl.DateTimeFormat('en-US', { timeZone: tz, weekday: 'short' }).format(now) === 'Fri';
 
     const obligatory = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
