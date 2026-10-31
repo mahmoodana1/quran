@@ -1196,6 +1196,8 @@ function renderSheet() {
           <span class="del" data-del-mark="${k}" aria-label="حذف"><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>`;
       }).join('') + '</div>';
     }
+  } else if (tab === 'prayer') {
+    html = '<div id="prayer"></div>';
   } else if (tab === 'riwaya') {
     html = audioPanelHTML();
     html += '<div class="group-label">رواية المصحف</div><div class="group">' + META.riwayat.map(r =>
@@ -1209,9 +1211,16 @@ function renderSheet() {
     if (here) here.scrollIntoView({ block: 'center' }); else body.scrollTop = 0;
   }
   if (tab === 'riwaya' && !q.trim()) refreshAudioPanel();
+  if (tab === 'prayer' && !q.trim()) Prayer.mount();
 }
 
+$('#sheetBody').addEventListener('change', e => {
+  const sel = e.target.closest('[data-pr]');
+  if (sel) Prayer.onChange(sel);
+});
 $('#sheetBody').addEventListener('click', async e => {
+  const compass = e.target.closest('[data-pr-compass]');
+  if (compass) { Prayer.startCompass(compass); return; }
   const del = e.target.closest('[data-del-mark]');
   if (del) {
     e.stopPropagation();

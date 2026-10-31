@@ -3,13 +3,13 @@
 // requests data with ?v=N, so bumping DATA_VERSION there fetches new copies.
 // Hafs page fonts (verses.quran.foundation) are cached as pages are opened.
 // Recitation audio: see audioResponse below.
-const VERSION = 'quran-v17';
+const VERSION = 'quran-v18';
 const TAFSIR = 'tafsir-saadi';
 // recitation files saved by the app (or while listening); kept across versions
 const AUDIO = 'audio-yasser-128';
 // page fonts never change, so they live in their own cache across versions
 const FONTS = 'qcf-v2-fonts';
-const SHELL = ['./', 'index.html', 'app.css', 'app.js', 'manifest.webmanifest', 'icons/icon-180.png'];
+const SHELL = ['./', 'index.html', 'app.css', 'app.js', 'prayer.js', 'manifest.webmanifest', 'icons/icon-180.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION)

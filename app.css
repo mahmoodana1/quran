@@ -329,10 +329,10 @@ svg { fill: currentColor; }
 }
 .search input::placeholder { color: #9a938b; }
 .tabs {
-  display: grid; grid-template-columns: repeat(4, 1fr);
+  display: grid; grid-template-columns: repeat(5, 1fr);
   margin: 0 16px 14px; padding: 3px; border-radius: 11px; background: rgba(80, 60, 30, .07);
 }
-.tabs button { font-size: 13.5px; padding: 7px 0; border-radius: 9px; color: var(--muted); font-weight: 500; transition: color .2s ease, background-color .2s ease; }
+.tabs button { font-size: 12.5px; padding: 7px 0; border-radius: 9px; color: var(--muted); font-weight: 500; transition: color .2s ease, background-color .2s ease; }
 .tabs button.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 3px rgba(60,40,10,.12), 0 0 0 .5px var(--line); font-weight: 600; }
 #sheetBody {
   flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
@@ -602,3 +602,47 @@ svg { fill: currentColor; }
 .tf-wait { text-align: center; color: var(--muted); padding: 30px 0; font-size: 15px; }
 .book-meta { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
 .book-done { align-self: flex-start; font-size: 11.5px; font-weight: 600; color: #8a6a2a; background: rgba(201, 162, 79, .16); padding: 2px 9px; border-radius: 9px; }
+
+/* ---------- prayer times and qibla ---------- */
+.pr-hero {
+  text-align: center; padding: 20px 16px 18px; margin-bottom: 14px; border-radius: 20px; color: #fff;
+  background: radial-gradient(120% 140% at 50% 0%, #3f82b0, #24597f 70%);
+  box-shadow: 0 8px 22px rgba(36, 89, 127, .25);
+}
+.pr-next-l { font-size: 13px; opacity: .8; }
+.pr-next-n { font-size: 30px; font-weight: 700; margin: 2px 0; }
+.pr-next-n small { font-size: 16px; font-weight: 500; opacity: .85; margin-inline-start: 6px; }
+.pr-count { font-size: 17px; font-variant-numeric: tabular-nums; min-height: 24px; }
+.pr-date { font-size: 12.5px; opacity: .75; margin-top: 8px; }
+.pr-where { margin-bottom: 14px; }
+.pr-where select, #prayer .fields select { font-size: 16px; }
+.row.pt { min-height: 54px; }
+.row.pt + .row.pt::before { right: 52px; }
+.pt-ic { flex: none; width: 24px; height: 24px; fill: none; stroke: #8c7a58; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.row.pt .when { font-size: 17px; font-variant-numeric: tabular-nums; font-weight: 600; }
+.row.pt.dim .t, .row.pt.dim .when { color: var(--muted); font-weight: 400; }
+.row.pt.next { background: linear-gradient(270deg, rgba(44, 106, 150, .12), transparent 80%); }
+.row.pt.next .t, .row.pt.next .when { color: var(--accent); font-weight: 700; }
+.row.pt.next .pt-ic { stroke: var(--accent); }
+.pr-qibla { padding: 16px 16px 14px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.compass { width: min(260px, 72vw); height: auto; overflow: visible; }
+.compass .ring { fill: #fffdf9; stroke: #b99a5e; stroke-width: 1.6; }
+.compass .ring.thin { fill: none; stroke-width: .6; stroke-dasharray: 1 3; }
+.compass .tick { stroke: #b9ad98; }
+.compass .cd { font: 600 13px var(--ui); fill: #7d6538; }
+.compass .cd.n { fill: #b3261e; }
+.compass .qline { stroke: var(--accent); stroke-width: 1.4; stroke-dasharray: 3 3; }
+.compass .kaaba rect { fill: #1c1a18; stroke: #b99a5e; stroke-width: 1.2; }
+.compass .kaaba path { stroke: #d9b865; stroke-width: 2; }
+.compass .kaaba circle { fill: #d9b865; }
+.compass .hub { fill: var(--accent); }
+.compass .pt-fix { fill: var(--accent); }
+#prDial { transition: transform .12s linear; }
+.compass.ok .ring { stroke: #2e8b57; stroke-width: 2.6; }
+.compass.ok .pt-fix, .compass.ok .hub { fill: #2e8b57; }
+.pr-qinfo { font-size: 14px; color: var(--muted); text-align: center; }
+.pr-qinfo b { color: var(--ink); font-size: 17px; }
+.pr-btn { background: var(--accent); color: #fff; font-weight: 600; font-size: 15px; padding: 9px 22px; border-radius: 12px; }
+.pr-btn:active { opacity: .8; }
+.pr-hint { margin: 0; font-size: 12.5px; color: var(--muted); text-align: center; line-height: 1.7; }
+.pr-note { margin-top: 10px; }
