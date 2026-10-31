@@ -142,7 +142,8 @@ svg { fill: currentColor; }
 @keyframes inkIn { from { opacity: 0; } }
 
 /* the marked / playing aya: its number glyph takes the accent colour */
-.w.end { padding: .18em .03em; transition: color .4s ease, -webkit-text-stroke-color .4s ease; }
+.wg { display: inline-flex; align-items: center; white-space: nowrap; }
+.w.end { padding: .18em .02em; transition: color .4s ease, -webkit-text-stroke-color .4s ease; }
 .w.end.sel { color: var(--accent); -webkit-text-stroke-width: .02em; }
 .w.end.play { color: #2f8a6a; -webkit-text-stroke-width: .02em; }
 .w.end.sel.play { color: var(--accent); }

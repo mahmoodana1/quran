@@ -160,9 +160,11 @@ function ensurePageFont(p) {
     pf.widths = R.pages[p - 1].map(ln => {
       if (!Array.isArray(ln) || typeof ln[0] === 'string') return 0;
       const words = ln.flatMap(([, t]) => t.split(' '));
-      // glyphs + .03em css gap between words + .06em padding around aya numbers
-      return words.reduce((sum, w) => sum + measureCtx.measureText(w.replace('*', '')).width + (w.endsWith('*') ? 6 : 0), 0)
-        + 3 * (words.length - 1);
+      // glyphs + .04em padding around aya numbers + .03em css gap between
+      // items (an aya number and the word before it form one item)
+      const items = words.length - words.filter((w, k) => k && w.endsWith('*')).length;
+      return words.reduce((sum, w) => sum + measureCtx.measureText(w.replace('*', '')).width + (w.endsWith('*') ? 4 : 0), 0)
+        + 3 * (items - 1);
     });
     // every page font has its own metrics: centre the highlight disc on this
     // page's aya-number ink (span box = 1em line + .18em padding top/bottom,
@@ -254,7 +256,10 @@ function renderPage(p) {
   let fs = S.fs, widths = R.lw?.[p - 1], em = R.em;
   if (R.glyph && pf?.ready) {
     widths = pf.widths.map(w => w / 100);
-    em = Math.max(...widths);
+    // size to a typical full line; the odd longest line is shrunk (≤3%) to fit
+    const full = widths.filter(Boolean).sort((x, y) => x - y);
+    const max = full[full.length - 1];
+    em = Math.max(full[Math.floor(full.length * 0.8)] || max, max * 0.97);
     fs = S.landscape ? S.availW / em : Math.min(S.availW / em, S.linesH / 15 * 0.82);
   }
   const lh = S.landscape ? fs * 1.75 : Math.min(S.linesH / 15, fs * LINE_RATIO);
@@ -302,13 +307,17 @@ function renderPage(p) {
     if (w * fs > S.availW * fit) style = ` style="font-size:${(S.availW * fit / w).toFixed(2)}px"`;
     const centred = opening || w < em * 0.62;
     html += `<div class="ln${centred ? ' c' : ''}"${style}>`;
+    // an aya number hugs the word before it, as in print
+    const items = [];
     for (const [ai, text] of ln) {
       for (const t of text.split(' ')) {
         const end = isEnd(t);
-        html += `<span class="${end ? 'w end' : 'w'}" data-a="${ai}">${end ? t.replace('*', '') : t}</span>`;
+        const span = `<span class="${end ? 'w end' : 'w'}" data-a="${ai}">${end ? t.replace('*', '') : t}</span>`;
+        if (end && items.length) items.push(`<span class="wg">${items.pop()}${span}</span>`);
+        else items.push(span);
       }
     }
-    html += '</div>';
+    html += items.join('') + '</div>';
   }
   html += `</div>${ORNAMENT}<footer class="pfoot"><span class="pill"><span>${ar(p)}</span><span>${rubText}</span></span></footer>`;
   el.innerHTML = html;
