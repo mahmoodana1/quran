@@ -295,9 +295,9 @@ function renderPage(p) {
   const marked = isBookmarked(p);
 
   let html = `<header class="phead">
-    <button class="sura-btn" data-act="suras"><span>${suraName(fa[0])}</span><i class="chev">${icon('chev')}</i></button>
-    <span class="pnum">${ar(p)}</span>
-    <div class="side"><span class="juz">الجزء ${ar(fa[3])}</span><button class="bm-btn${marked ? ' on' : ''}" data-act="bm" aria-label="علامة">${icon(marked ? 'bmOn' : 'bm')}</button></div>
+    <span class="juz">الجزء ${ar(fa[3])}</span>
+    <button class="mid" data-act="suras"><span class="sname-t">${suraName(fa[0])}</span><span class="pnum">${ar(p)}</span></button>
+    <div class="side"><button class="bm-btn${marked ? ' on' : ''}" data-act="bm" aria-label="علامة">${icon(marked ? 'bmOn' : 'bm')}</button></div>
   </header>${ORNAMENT}<div class="lines" style="font-family:${R.glyph ? `qcf-p${p}` : R.font}">`;
 
   const n = opening ? lines.reduce((m, l, i) => (l ? i + 1 : m), 0) : 15;
