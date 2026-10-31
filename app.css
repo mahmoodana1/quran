@@ -122,6 +122,7 @@ svg { fill: currentColor; }
 .glyph .ln { column-gap: .03em; } /* glyph lines are sized with this gap */
 .glyph .ln.c { gap: .03em; }
 .w { position: relative; padding: .18em 0; transition: color .35s ease; }
+.w.say { color: var(--accent); }
 /* long-pressed / jumped-to / playing aya: a soft band behind each of its lines */
 .hl {
   position: absolute; z-index: -1; top: 7%; bottom: 7%;

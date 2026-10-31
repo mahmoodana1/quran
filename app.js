@@ -427,6 +427,43 @@ function goTo(p, { animate = false, from = 0 } = {}) {
   prefetchFonts();
 }
 
+// ---------------------------------------------------------------- single word
+
+// Long-pressing a word recites just that word (quran.com word-by-word audio,
+// Hafs numbering). Position = words of the aya on earlier pages + words before it here.
+const WORD_AUDIO = 'https://audio.qurancdn.com/wbw/';
+const wordAudio = new Audio();
+let sayEl = null;
+
+function wordsOnPage(p, ai) {
+  let n = 0;
+  for (const ln of R.pages[p - 1]) {
+    if (!Array.isArray(ln) || typeof ln[0] === 'string') continue;
+    for (const [a, text] of ln) if (a === ai) n += text.split(' ').filter(t => !isEnd(t)).length;
+  }
+  return n;
+}
+
+function speakWord(el) {
+  if (R.id !== 'hafs') { toast('نطق الكلمة متاح في رواية حفص'); return; }
+  const ai = +el.dataset.a, page = +el.closest('.page').dataset.page;
+  let pos = 1;
+  for (let p = R.ayas[ai][2]; p < page; p++) pos += wordsOnPage(p, ai);
+  const words = [...el.closest('.page').querySelectorAll(`.w:not(.end)[data-a="${ai}"]`)];
+  pos += words.indexOf(el);
+  const [s, a] = META.hafs[R.ayas[ai][5]];
+  const id = n => String(n).padStart(3, '0');
+  if (!audio.paused) audio.pause();
+  sayEl?.classList.remove('say');
+  sayEl = el;
+  el.classList.add('say');
+  wordAudio.src = `${WORD_AUDIO}${id(s)}_${id(a)}_${id(pos)}.mp3`;
+  wordAudio.play().catch(() => { el.classList.remove('say'); toast('تعذر تشغيل الكلمة'); });
+  if (navigator.vibrate) navigator.vibrate(8);
+}
+wordAudio.addEventListener('ended', () => sayEl?.classList.remove('say'));
+wordAudio.addEventListener('error', () => { sayEl?.classList.remove('say'); if (wordAudio.src) toast('تعذر تشغيل الكلمة'); });
+
 // swipe handling
 (() => {
   const vp = $('#viewport');
@@ -438,7 +475,7 @@ function goTo(p, { animate = false, from = 0 } = {}) {
     const w = e.target.closest('.w');
     clearTimeout(pressT);
     if (w && !w.classList.contains('end')) {
-      pressT = setTimeout(() => { pressed = true; openActions(+w.dataset.a); }, 420);
+      pressT = setTimeout(() => { pressed = true; speakWord(w); }, 420);
     }
   });
   vp.addEventListener('pointermove', e => {
@@ -508,7 +545,7 @@ function ayaLabel(i) {
 }
 
 // Saving works on aya numbers: every saved aya shows a highlighted number.
-// Tapping a number (or long-pressing the text) opens the aya's actions and
+// Tapping a number opens the aya's actions and
 // highlights it; «علامة» in the actions saves or unsaves it.
 function toggleSave(i, el) {
   if (isSaved(i)) {
