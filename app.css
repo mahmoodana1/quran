@@ -117,7 +117,8 @@ svg { fill: currentColor; }
   white-space: nowrap; min-width: 0; column-gap: .06em;
 }
 .ln.c { justify-content: center; gap: .28em; }
-.glyph .ln.c { gap: .06em; } /* glyph lines are sized with this gap */
+.glyph .ln { column-gap: .03em; } /* glyph lines are sized with this gap */
+.glyph .ln.c { gap: .03em; }
 .w { position: relative; padding: .18em 0; transition: color .35s ease; }
 /* long-pressed / jumped-to / playing aya: a soft band behind each of its lines */
 .hl {

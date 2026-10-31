@@ -160,7 +160,9 @@ function ensurePageFont(p) {
     pf.widths = R.pages[p - 1].map(ln => {
       if (!Array.isArray(ln) || typeof ln[0] === 'string') return 0;
       const words = ln.flatMap(([, t]) => t.split(' '));
-      return words.reduce((sum, w) => sum + measureCtx.measureText(w.replace('*', '')).width, 0) + 6 * (words.length - 1);
+      // glyphs + .03em css gap between words + .06em padding around aya numbers
+      return words.reduce((sum, w) => sum + measureCtx.measureText(w.replace('*', '')).width + (w.endsWith('*') ? 6 : 0), 0)
+        + 3 * (words.length - 1);
     });
     // every page font has its own metrics: centre the highlight disc on this
     // page's aya-number ink (span box = 1em line + .18em padding top/bottom,
@@ -296,7 +298,8 @@ function renderPage(p) {
     }
     const w = widths[i];
     let style = '';
-    if (w * fs > S.availW * 0.985) style = ` style="font-size:${(S.availW * 0.985 / w).toFixed(2)}px"`;
+    const fit = R.glyph ? 0.998 : 0.985; // glyph sizes come from in-browser measurement
+    if (w * fs > S.availW * fit) style = ` style="font-size:${(S.availW * fit / w).toFixed(2)}px"`;
     const centred = opening || w < em * 0.62;
     html += `<div class="ln${centred ? ' c' : ''}"${style}>`;
     for (const [ai, text] of ln) {
