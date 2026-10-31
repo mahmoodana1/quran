@@ -23,6 +23,7 @@
     document.documentElement.dataset.theme = d;
     document.querySelector('meta[name=theme-color]').content = { light: '#faf6f3', sepia: '#f1e7d0', dark: '#15130f' }[d] || '#faf6f3';
     document.querySelector('meta[name=color-scheme]').content = d === 'dark' ? 'dark' : 'light';
+    document.querySelector('meta[name=apple-mobile-web-app-status-bar-style]').content = d === 'dark' ? 'black-translucent' : 'default';
   } catch (e) {}
 })();
 </script>

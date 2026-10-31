@@ -1197,6 +1197,7 @@ function applyTheme() {
   const m = document.querySelector('meta[name=theme-color]');
   if (m) m.content = THEME_BAR[d] || THEME_BAR.light;
   document.querySelector('meta[name=color-scheme]')?.setAttribute('content', d === 'dark' ? 'dark' : 'light');
+  document.querySelector('meta[name=apple-mobile-web-app-status-bar-style]')?.setAttribute('content', d === 'dark' ? 'black-translucent' : 'default');
 }
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
 
