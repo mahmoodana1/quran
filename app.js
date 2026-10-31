@@ -908,7 +908,7 @@ function settingsHTML() {
     `<button class="theme${cur === id ? ' on' : ''}" data-theme-set="${id}"><i class="th th-${id}"><b>أ</b></i><span>${label}</span></button>`).join('');
   const riwayat = META.riwayat.map((r, k) => {
     const letter = r.name.replace(/^ال/, '')[0];
-    return `<button class="row" data-riwaya="${r.id}"><span class="ico letter" style="--c:var(--c-r${k % 6})">${letter}</span>
+    return `<button class="row" data-riwaya="${r.id}"><span class="num">${letter}</span>
       <span class="main"><span class="t">${r.name}</span><span class="s">${ar(r.ayas)} آية</span></span>${r.id === R.id ? '<span class="check">✓</span>' : ''}</button>`;
   }).join('');
   return `
@@ -916,7 +916,7 @@ function settingsHTML() {
     <div class="themes">${themes}</div>
 
     <div class="group-label">الختمة</div>
-    <div class="group"><button class="row" data-open-lib>${ico('book', 'prayer')}
+    <div class="group"><button class="row" data-open-lib><span class="mini-cover">${coverHTML(K, true)}</span>
       <span class="main"><span class="t">ختماتي</span><span class="s">${esc(K.name)} · صفحة ${ar(K.page)}${KH.length > 1 ? ` · ${ar(KH.length)} ختمات` : ''}</span></span>
       <svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button></div>
 
