@@ -55,19 +55,36 @@ const S = {          // ui state
 function show(el) {
   el.classList.remove('leaving');
   el.hidden = false;
+  syncDock();
 }
 function hide(el) {
   if (el.hidden || el.classList.contains('leaving')) return;
   el.classList.add('leaving');
+  syncDock();
   const done = e => {
     if (e && e.target !== el) return;
     el.removeEventListener('animationend', done);
     clearTimeout(t);
     if (el.classList.contains('leaving')) { el.hidden = true; el.classList.remove('leaving'); }
+    syncDock();
   };
   el.addEventListener('animationend', done);
   const t = setTimeout(done, 400); // in case animations are off
 }
+
+// bottom switcher: "panels" is lit while the index sheet or the library is up
+function panelOpen(el) { return !el.hidden && !el.classList.contains('leaving'); }
+function syncDock() {
+  const panels = panelOpen($('#sheet')) || panelOpen($('#library'));
+  $('#dockPanels').classList.toggle('on', panels);
+  $('#dockQuran').classList.toggle('on', !panels);
+}
+$('#dockPanels').onclick = () => { if (!panelOpen($('#sheet')) && !panelOpen($('#library'))) openSheet(); };
+$('#dockQuran').onclick = () => {
+  closeSheet();
+  hide($('#library'));
+  if (!$('#tafsir').hidden) closeTafsir();
+};
 
 // ---------------------------------------------------------------- khatmas
 // Each khatma is its own mushaf: riwaya, reading position, marked aya and
