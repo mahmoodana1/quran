@@ -94,12 +94,33 @@
   </div>
   <nav class="tabs" id="tabs">
     <button data-tab="suras" class="on"><span>السور</span></button>
-    <button data-tab="juz"><span>الأجزاء</span></button>
+    <button data-tab="adhkar"><span>الأذكار</span></button>
     <button data-tab="marks"><span>العلامات</span></button>
     <button data-tab="prayer"><span>الصلاة</span></button>
     <button data-tab="settings"><span>الإعدادات</span></button>
   </nav>
   <div id="sheetBody"></div>
+</section>
+
+<!-- adhkar: one dhikr per card, counted down by tapping -->
+<section id="adhkar" hidden>
+  <div class="sheet-head">
+    <button id="dkBack" class="txt-btn">‹ الأذكار</button>
+    <div class="sheet-title"><h1 id="dkTitle"></h1><small id="dkSub"></small></div>
+    <button id="dkSize" class="lib-btn dk-size" aria-label="حجم الخط"><b>أ</b><small>أ</small></button>
+  </div>
+  <div id="dkSteps" class="dk-steps"></div>
+  <div id="dkStage" class="dk-stage"></div>
+  <div class="dk-foot">
+    <button id="dkPrev" class="dk-nav" aria-label="الذكر السابق"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <button id="dkCount" class="dk-count" aria-label="عدّ">
+      <svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" class="dk-track"/><circle id="dkRing" cx="50" cy="50" r="44" class="dk-ring" transform="rotate(-90 50 50)"/></svg>
+      <span class="dk-c"><b id="dkNum"></b><small id="dkOf"></small></span>
+      <svg viewBox="0 0 24 24" class="dk-tick"><path d="M6 12.5l4 4 8-9" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <button id="dkNext" class="dk-nav" aria-label="الذكر التالي"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </div>
+  <p class="dk-hint">انقر للعدّ · اسحب للتنقّل · اضغط مطوّلًا للإتمام</p>
 </section>
 
 <!-- khatma library -->
@@ -157,5 +178,6 @@
 <audio id="audio" preload="auto"></audio>
 <script src="prayer.js"></script>
 <script src="app.js"></script>
+<script src="adhkar.js"></script>
 </body>
 </html>

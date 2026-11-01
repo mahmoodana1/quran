@@ -71,17 +71,21 @@ function hide(el) {
   const t = setTimeout(done, 400); // in case animations are off
 }
 
-// bottom switcher: "panels" is lit while the index sheet or the library is up
+// bottom switcher: "panels" is lit while the index sheet, the library or adhkar are up
 function panelOpen(el) { return !el.hidden && !el.classList.contains('leaving'); }
 function syncDock() {
-  const panels = panelOpen($('#sheet')) || panelOpen($('#library'));
+  const panels = panelOpen($('#sheet')) || panelOpen($('#library')) || panelOpen($('#adhkar'));
   $('#dockPanels').classList.toggle('on', panels);
   $('#dockQuran').classList.toggle('on', !panels);
 }
-$('#dockPanels').onclick = () => { if (!panelOpen($('#sheet')) && !panelOpen($('#library'))) openSheet(); };
+$('#dockPanels').onclick = () => {
+  if (panelOpen($('#adhkar'))) Adhkar.close();
+  else if (!panelOpen($('#sheet')) && !panelOpen($('#library'))) openSheet();
+};
 $('#dockQuran').onclick = () => {
   closeSheet();
   hide($('#library'));
+  hide($('#adhkar'));
   if (!$('#tafsir').hidden) closeTafsir();
 };
 
@@ -151,8 +155,6 @@ async function loadRiwaya(id) {
     for (let h = 1; h < d.fromHafs.length; h++) if (d.fromHafs[h] < 0) d.fromHafs[h] = d.fromHafs[h - 1];
     d.suraStart = {};
     d.ayas.forEach((a, i) => { if (!(a[0] in d.suraStart)) d.suraStart[a[0]] = i; });
-    d.juzStart = {};
-    d.ayas.forEach((a, i) => { if (!(a[3] in d.juzStart)) d.juzStart[a[3]] = i; });
     await document.fonts.load(`20px ${d.font}`, 'بسم');
     cache[id] = d;
   }
@@ -221,6 +223,7 @@ function measure() {
   const probe = $('#probe');
   const cs = getComputedStyle(probe);
   const W = probe.clientWidth, H = probe.clientHeight;
+  S.W = W; S.H = H;
   const padL = parseFloat(cs.paddingLeft), padR = parseFloat(cs.paddingRight);
   const insetT = parseFloat(cs.paddingTop), insetB = parseFloat(cs.paddingBottom);
   S.landscape = W > H;
@@ -380,7 +383,7 @@ function drawBands(root) {
 const slots = [...document.querySelectorAll('.slot')]; // [prev, current, next]
 
 function placeSlots(dx = 0, animate = false) {
-  const W = window.innerWidth;
+  const W = S.W || window.innerWidth;
   // RTL book: the next page sits to the left, the previous to the right
   const pos = [W, 0, -W];
   slots.forEach((s, i) => {
@@ -412,7 +415,7 @@ function goTo(p, { animate = false, from = 0 } = {}) {
     // rotate slots so the page we're moving to stays in place, then slide
     if (step === 1) slots.push(slots.shift()); else slots.unshift(slots.pop());
     // start the slide where the finger left it
-    const W = window.innerWidth;
+    const W = S.W || window.innerWidth;
     placeSlots((step === 1 ? -W : W) + from, false);
     void slots[1].offsetWidth;
     placeSlots(0, true);
@@ -495,7 +498,7 @@ wordAudio.addEventListener('error', () => { sayEl?.classList.remove('say'); if (
     if (pressed) { vp.dataset.swiped = '1'; setTimeout(() => delete vp.dataset.swiped, 400); }
     if (axis !== 'x') return;
     const v = dx / (performance.now() - t0);
-    const W = window.innerWidth;
+    const W = S.W || window.innerWidth;
     if ((dx > W * 0.18 || v > 0.45) && S.page < R.pages.length) goTo(S.page + 1, { animate: true, from: dx });
     else if ((dx < -W * 0.18 || v < -0.45) && S.page > 1) goTo(S.page - 1, { animate: true, from: dx });
     else placeSlots(0, true);
@@ -534,8 +537,25 @@ document.addEventListener('keydown', e => {
   if (e.key === 'ArrowRight') goTo(S.page - 1, { animate: true });
 });
 
+// Re-lay out when the screen turns. iOS fires 'resize' before the rotation
+// has settled (and can leave the document scrolled afterwards, which shifts
+// every tap off what's drawn), so watch the probe's own size, which only
+// changes once layout has the final dimensions, and pin the document back.
 let resizeT;
-window.addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(renderAll, 80); });
+function onResize() {
+  if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
+  document.documentElement.scrollTop = document.body.scrollTop = 0;
+  clearTimeout(resizeT);
+  resizeT = setTimeout(() => {
+    const probe = $('#probe');
+    if (!R || (probe.clientWidth === S.W && probe.clientHeight === S.H)) return;
+    renderAll();
+  }, 60);
+}
+if ('ResizeObserver' in window) new ResizeObserver(onResize).observe($('#probe'));
+window.addEventListener('resize', onResize);
+window.addEventListener('orientationchange', () => { onResize(); setTimeout(onResize, 400); });
+window.visualViewport?.addEventListener('resize', onResize);
 
 // ---------------------------------------------------------------- selection
 
@@ -833,14 +853,14 @@ async function tafsirStatus() {
   return new Set((await c.keys()).map(r => new URL(r.url).pathname.match(/tafsir\/(\d+)\.json/)?.[1]).filter(Boolean)).size;
 }
 
-const TF = { running: false, done: 0 };
+const TF = { running: false, done: 0, stop: false };
 async function downloadTafsir() {
   if (TF.running) return;
-  TF.running = true; paintTafsirCard();
+  TF.running = true; TF.stop = false; paintTafsirCard();
   let next = 1, failed = 0;
   const c = await caches.open(TAFSIR_CACHE);
   const worker = async () => {
-    while (next <= 114) {
+    while (next <= 114 && !TF.stop) {
       const s = next++;
       const url = new URL(`data/tafsir/${s}.json`, location.href).href;
       if (await c.match(url)) continue;
@@ -851,7 +871,7 @@ async function downloadTafsir() {
   await Promise.all(Array.from({ length: 6 }, worker));
   TF.running = false;
   TF.done = await tafsirStatus(); paintTafsirCard();
-  toast(failed ? 'تعذّر تحميل بعض السور — حاول مجددًا' : 'اكتمل تحميل التفسير');
+  if (!ALL.running) toast(failed ? 'تعذّر تحميل بعض السور — حاول مجددًا' : 'اكتمل تحميل التفسير');
 }
 
 function tafsirCardHTML() {
@@ -875,16 +895,21 @@ function paintTafsirCard() {
   $('#tfText').textContent = complete ? 'التفسير كاملًا محفوظ على جهازك ✓'
     : `${ar(TF.done)} من ١١٤ سورة · قرابة ٦ م.ب${TF.running ? ' · جارٍ التحميل…' : ''}`;
   $('#tfActions').innerHTML = complete || TF.running ? '' : `<button data-dl="tafsir" class="primary">${TF.done ? 'متابعة التحميل' : 'تحميل التفسير كاملًا'}</button>`;
+  paintAllCard();
 }
 
 // ---------------------------------------------------------------- offline mushaf
-// All 604 page fonts (Hafs) plus the text of every riwaya, so the whole mushaf
-// opens with no connection. Fonts go in the SW's font cache, data in its own.
+// All 604 page fonts (Hafs) plus the text and font of every riwaya, and the
+// adhkar, so the whole mushaf opens with no connection. Fonts go in the SW's
+// font cache, data in its own.
 const MUSHAF_CACHE = 'mushaf-data', FONT_CACHE = 'qcf-v2-fonts';
+const LOCAL_FONTS = ['hafs', 'shouba', 'warsh', 'qaloon', 'doori', 'soosi', 'bazzi', 'qumbul', 'qbsml', 'amiri', 'amiri-bold'];
 const MQ = { running: false, done: 0, total: 0, failed: 0, stop: false };
 const mushafTasks = () => [
   { cache: MUSHAF_CACHE, url: new URL(`data/meta.json?v=${DATA_VERSION}`, location.href).href },
   ...META.riwayat.map(r => ({ cache: MUSHAF_CACHE, url: new URL(`data/${r.id}.json?v=${DATA_VERSION}`, location.href).href })),
+  { cache: MUSHAF_CACHE, url: Adhkar.url() },
+  ...LOCAL_FONTS.map(f => ({ cache: MUSHAF_CACHE, url: new URL(`fonts/${f}.woff2`, location.href).href })),
   ...Array.from({ length: 604 }, (_, i) => ({ cache: FONT_CACHE, url: `${QCF_BASE}p${i + 1}.woff2` })),
 ];
 async function mushafStatus() {
@@ -915,9 +940,10 @@ function paintMushafCard() {
   const complete = MQ.total > 0 && MQ.done >= MQ.total;
   $('#mqText').textContent = complete ? 'خطوط الصفحات ونصوص الروايات محفوظة على جهازك ✓'
     : `خطوط الصفحات ونصوص الروايات · قرابة ١١٠ م.ب${MQ.running ? ' · جارٍ التحميل…' : ''}${MQ.failed ? ` · تعذّر ${ar(MQ.failed)}` : ''}`;
-  $('#mqActions').innerHTML = complete ? '' : MQ.running
+  $('#mqActions').innerHTML = complete || ALL.running ? '' : MQ.running
     ? '<button data-dl="mushaf-pause">إيقاف مؤقت</button>'
     : `<button data-dl="mushaf" class="primary">${MQ.done ? 'متابعة التحميل' : 'تحميل المصحف دون اتصال'}</button>`;
+  paintAllCard();
 }
 
 async function refreshMushafCard() {
@@ -946,7 +972,7 @@ async function downloadMushaf() {
   MQ.running = false;
   Object.assign(MQ, await mushafStatus());
   paintMushafCard();
-  if (!MQ.stop) toast(MQ.failed ? 'تعذّر تحميل بعض الملفات — حاول مجددًا' : 'اكتمل تحميل المصحف');
+  if (!MQ.stop && !ALL.running) toast(MQ.failed ? 'تعذّر تحميل بعض الملفات — حاول مجددًا' : 'اكتمل تحميل المصحف');
 }
 
 // ---------------------------------------------------------------- offline audio
@@ -984,6 +1010,7 @@ function settingsHTML() {
       <span class="main"><span class="t">${r.name}</span><span class="s">${ar(r.ayas)} آية</span></span>${r.id === R.id ? '<span class="check">✓</span>' : ''}</button>`;
   }).join('');
   return `
+    ${allCardHTML()}
     <div class="group-label">المظهر</div>
     <div class="themes">${themes}</div>
 
@@ -1037,10 +1064,11 @@ function paintAudioPanel() {
   $('#dlText').textContent = complete
     ? `التلاوة كاملة محفوظة على جهازك ✓`
     : `${ar(DL.done)} من ${ar(DL.total)} آية · ${ar(mb)} من ${ar(AUDIO_TOTAL_MB)} م.ب${DL.running ? ' · جارٍ التحميل…' : ''}${DL.failed ? ` · تعذّر ${ar(DL.failed)}` : ''}`;
-  $('#dlActions').innerHTML = (complete ? '' : DL.running
+  $('#dlActions').innerHTML = (complete || ALL.running ? '' : DL.running
     ? '<button data-dl="pause">إيقاف مؤقت</button>'
     : `<button data-dl="start" class="primary">${DL.done ? 'متابعة التحميل' : 'تحميل التلاوة كاملة'}</button>`)
-    + (DL.done && !DL.running ? '<button data-dl="clear" class="danger">حذف التحميلات</button>' : '');
+    + (DL.done && !DL.running && !ALL.running ? '<button data-dl="clear" class="danger">حذف التحميلات</button>' : '');
+  paintAllCard();
 }
 
 async function startAudioDownload() {
@@ -1076,8 +1104,86 @@ async function startAudioDownload() {
   try { await DL.wake?.release(); } catch {}
   DL.wake = null;
   await refreshAudioPanel();
+  if (ALL.running) return;
   if (finished && !DL.failed) toast('اكتمل تحميل التلاوة');
   else if (finished) toast('تعذّر تحميل بعض الآيات — اضغط متابعة');
+}
+
+// ---------------------------------------------------------------- everything offline
+// One button for the mushaf, tafsir, adhkar and (optionally) the recitation,
+// one after the other, with a single progress bar weighted by size.
+
+const ALL = { running: false, audio: true, stop: false, stage: '' };
+const SIZE_MB = { mushaf: 112, tafsir: 6, audio: AUDIO_TOTAL_MB };
+
+function allProgress(audio) {
+  const parts = [[SIZE_MB.mushaf, MQ.total ? MQ.done / MQ.total : 0], [SIZE_MB.tafsir, TF.done / 114]];
+  if (audio) parts.push([SIZE_MB.audio, DL.total ? DL.done / DL.total : 0]);
+  return parts.reduce((s, [w, f]) => s + w * Math.min(1, f), 0) / parts.reduce((s, [w]) => s + w, 0);
+}
+
+function allCardHTML() {
+  return `<div class="all-card" id="allCard">
+    <svg viewBox="0 0 24 24" class="all-ico"><path d="M12 3.5v11M7.5 10l4.5 4.5 4.5-4.5M4.5 15.5v2.5a2.5 2.5 0 002.5 2.5h10a2.5 2.5 0 002.5-2.5v-2.5"/></svg>
+    <div class="all-t" id="allT"></div>
+    <div class="all-s" id="allS"></div>
+    <div class="all-prog" id="allProg" hidden><i id="allBar"></i></div>
+    <div class="all-actions" id="allActions"></div>
+  </div>`;
+}
+
+function paintAllCard() {
+  if (!$('#allCard')) return;
+  const textDone = MQ.total > 0 && MQ.done >= MQ.total && TF.done >= 114;
+  const audioDone = DL.total > 0 && DL.done >= DL.total;
+  const card = $('#allCard');
+  card.classList.toggle('done', textDone && audioDone);
+  $('#allProg').hidden = !ALL.running;
+  if (ALL.running) {
+    const pct = allProgress(ALL.audio);
+    $('#allBar').style.width = (pct * 100).toFixed(1) + '%';
+    $('#allT').textContent = `جارٍ التحميل… ${ar(Math.floor(pct * 100))}٪`;
+    $('#allS').textContent = `${ALL.stage} · أبقِ التطبيق مفتوحًا حتى يكتمل`;
+    $('#allActions').innerHTML = '<button data-dl="all-pause" class="all-btn ghost">إيقاف مؤقت</button>';
+  } else if (textDone && audioDone) {
+    $('#allT').textContent = 'التطبيق كاملًا محفوظ على جهازك ✓';
+    $('#allS').textContent = 'المصحف بكل رواياته، والتفسير، والأذكار، والتلاوة تعمل دون إنترنت';
+    $('#allActions').innerHTML = '';
+  } else if (textDone) {
+    $('#allT').textContent = 'المصحف والتفسير والأذكار محفوظة ✓';
+    $('#allS').textContent = `بقيت التلاوة · قرابة ${DL.done ? ar(Math.round((1 - DL.done / DL.total) * AUDIO_TOTAL_MB)) + ' م.ب' : '١٫٥ غيغابايت'}`;
+    $('#allActions').innerHTML = '<button data-dl="all" class="all-btn">تحميل التلاوة أيضًا</button>';
+  } else {
+    const started = store.get('dlAll', false);
+    $('#allT').textContent = 'استعمل التطبيق كاملًا دون إنترنت';
+    $('#allS').textContent = 'المصحف بكل رواياته وخطوطه، والتفسير، والأذكار، والتلاوة كاملة';
+    $('#allActions').innerHTML = `<button data-dl="all" class="all-btn">${started ? 'متابعة تحميل الكل' : 'تحميل الكل'} <small>قرابة ١٫٦ غيغابايت</small></button>
+      <button data-dl="all-text" class="all-link">أو دون التلاوة · قرابة ١٢٠ م.ب</button>`;
+  }
+}
+
+async function downloadAll(audio) {
+  if (ALL.running) return;
+  Object.assign(ALL, { running: true, audio, stop: false, stage: 'المصحف والأذكار' });
+  store.set('dlAll', true);
+  paintAllCard();
+  try { await navigator.storage?.persist?.(); } catch {}
+  await downloadMushaf();
+  if (!ALL.stop) { ALL.stage = 'تفسير السعدي'; paintAllCard(); await downloadTafsir(); }
+  if (!ALL.stop && audio) { ALL.stage = 'التلاوة'; paintAllCard(); await startAudioDownload(); }
+  ALL.running = false;
+  await refreshAudioPanel();
+  await refreshMushafCard();
+  paintAllCard();
+  if (ALL.stop) return;
+  const failed = MQ.failed || DL.failed || TF.done < 114;
+  toast(failed ? 'تعذّر تحميل بعض الملفات — اضغط متابعة' : audio ? 'اكتمل التحميل — التطبيق كله يعمل دون اتصال' : 'اكتمل تحميل المصحف والتفسير والأذكار');
+}
+
+function pauseAll() {
+  ALL.stop = true;
+  MQ.stop = true; TF.stop = true; DL.running = false;
+  paintAllCard();
 }
 
 // the wake lock drops when the app is hidden; take it back on return
@@ -1292,6 +1398,7 @@ $('#tabs').addEventListener('click', e => {
   tab = b.dataset.tab;
   $('#q').value = '';
   renderSheet();
+  $('#sheetBody').scrollTop = 0;
 });
 
 let searchT;
@@ -1319,9 +1426,12 @@ function renderSheet() {
   const q = $('#q').value;
   $('#tabs').hidden = !!q.trim();
   $('.search').hidden = tab === 'prayer' || tab === 'settings';
+  $('#q').placeholder = tab === 'adhkar' ? 'ابحث في الأذكار… (مثال: الكرب، السفر)' : 'ابحث عن سورة أو آية… (مثال: البقرة ٢٥٥)';
   let html = '';
 
-  if (q.trim()) {
+  if (q.trim() && tab === 'adhkar') {
+    html = Adhkar.searchHTML(q);
+  } else if (q.trim()) {
     const res = search(q);
     if (!res.length) html = '<div class="empty"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M15.5 15.5L21 21" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg><b>لا توجد نتائج</b>جرّب كلمات أخرى أو اسم السورة.</div>';
     else {
@@ -1343,18 +1453,8 @@ function renderSheet() {
     }
   } else if (tab === 'suras') {
     html = '<div class="group">' + META.suras.map((_, i) => suraRow(i + 1)).join('') + '</div>';
-  } else if (tab === 'juz') {
-    html = '<div class="group">';
-    for (let j = 1; j <= 30; j++) {
-      const ai = R.juzStart[j];
-      if (ai == null) continue;
-      const a = R.ayas[ai];
-      const here = j === R.ayas[pageInfo(S.page).first][3] ? ' here' : '';
-      html += `<button class="row${here}" data-go-aya="${ai}"><span class="num">${ar(j)}</span>
-        <span class="main"><span class="t">الجزء ${ar(j)}</span><span class="s">${suraName(a[0])} ${ar(a[1])}</span></span>
-        <span class="meta">${ar(a[2])}</span></button>`;
-    }
-    html += '</div>';
+  } else if (tab === 'adhkar') {
+    html = '<div id="adhkarList"></div>';
   } else if (tab === 'marks') {
     const list = bookmarks();
     if (!list.length) html = '<div class="empty"><svg viewBox="0 0 24 24"><path d="M6.5 4.5h11v15.5l-5.5-3.8-5.5 3.8z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg><b>لا توجد علامات بعد</b>اضغط رقم آية ثم «علامة» لحفظها هنا.</div>';
@@ -1378,12 +1478,13 @@ function renderSheet() {
   }
   body.innerHTML = html;
   if (!q.trim()) {
-    // open the lists at the surah / juz being read
+    // open the surah list at the surah being read
     const here = body.querySelector('.row.here');
-    if (here) here.scrollIntoView({ block: 'center' }); else body.scrollTop = 0;
+    if (here) here.scrollIntoView({ block: 'center' }); else if (tab !== 'adhkar') body.scrollTop = 0;
   }
   if (tab === 'settings' && !q.trim()) { refreshAudioPanel(); refreshMushafCard(); }
   if (tab === 'prayer' && !q.trim()) Prayer.mount();
+  if (tab === 'adhkar' && !q.trim()) Adhkar.mount($('#adhkarList'));
 }
 
 $('#sheetBody').addEventListener('change', e => {
@@ -1396,6 +1497,8 @@ $('#sheetBody').addEventListener('click', async e => {
   if (e.target.closest('[data-open-lib]')) { openLibrary(); return; }
   const compass = e.target.closest('[data-pr-compass]');
   if (compass) { Prayer.startCompass(compass); return; }
+  const dk = e.target.closest('[data-dk]');
+  if (dk) { $('#q').blur(); Adhkar.open(dk.dataset.dk, dk.dataset.dkI != null ? +dk.dataset.dkI : undefined); return; }
   const del = e.target.closest('[data-del-mark]');
   if (del) {
     e.stopPropagation();
@@ -1411,6 +1514,9 @@ $('#sheetBody').addEventListener('click', async e => {
     else if (a === 'tafsir') downloadTafsir();
     else if (a === 'mushaf') downloadMushaf();
     else if (a === 'mushaf-pause') MQ.stop = true;
+    else if (a === 'all') downloadAll(true);
+    else if (a === 'all-text') downloadAll(false);
+    else if (a === 'all-pause') pauseAll();
     return;
   }
   const row = e.target.closest('.row');

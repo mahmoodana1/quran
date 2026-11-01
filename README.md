@@ -12,6 +12,12 @@ Static PWA: open it in Safari → Share → **Add to Home Screen**. It must be s
 - **Search**: surah names (Arabic/English, fuzzy), aya text (fuzzy, diacritics-insensitive),
   `2:255`, `البقرة ٢٥٥`, `baqara 255`, page numbers. Best match first; Enter jumps to it.
 - **Tafsir As-Sa'di** per aya (data/tafsir/<surah>.json, from spa5k/tafsir_api), downloadable for offline.
+- **Adhkar** (الأذكار): every chapter of Hisn al-Muslim (Sa'id al-Qahtani), text from the official
+  hisnmuslim.com edition with each dhikr's source; morning, evening, after-prayer, sleep and waking
+  adhkar are split one per card with their counts. Tap to count, swipe to move on, hold to finish one.
+  Quranic passages use the KFGQPC Uthmani text; the rest is set in Amiri (SIL OFL).
+  `data/adhkar.json` is built by `tools/adhkar.py` (see its docstring).
+- **Offline**: Settings → «تحميل الكل» saves the mushaf, tafsir, adhkar and (optionally) the recitation.
 - **Audio**: Yasser Al-Dosari per aya (everyayah.com), continuous play with page follow.
   He recites Hafs; ayat of other riwayat are mapped to the matching Hafs ayat.
 
