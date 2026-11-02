@@ -6,7 +6,7 @@
 // counter to finish one. Counts are kept for the day.
 // Uses $, store, ar, esc, show, hide and toast from app.js at call time.
 const Adhkar = (() => {
-  const VERSION = 1; // bump with data/adhkar.json
+  const VERSION = 2; // bump with data/adhkar.json
   const URL_ = `data/adhkar.json?v=${VERSION}`;
   let D = null, loading = null;
   const byId = {};
@@ -14,8 +14,28 @@ const Adhkar = (() => {
   function load() {
     return loading ||= fetch(URL_)
       .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
-      .then(d => { D = d; d.cats.forEach(c => { byId[c.id] = c; }); return d; })
+      .then(d => {
+        D = d;
+        d.cats.forEach(c => {
+          byId[c.id] = c;
+          c.core = c.items;
+          c.more?.forEach(it => { it.x = 1; });
+          applyMore(c);
+        });
+        return d;
+      })
       .catch(e => { loading = null; throw e; });
+  }
+
+  // optional authentic additions after a daily chapter, on per chapter;
+  // they come after the book's adhkar, so counts kept by index stay put
+  const moreOn = c => !!store.get('adhkar.more', {})[c.id];
+  function applyMore(c) { c.items = c.more?.length && moreOn(c) ? c.core.concat(c.more) : c.core; }
+  function setMore(c, on) {
+    const m = store.get('adhkar.more', {});
+    if (on) m[c.id] = true; else delete m[c.id];
+    store.set('adhkar.more', m);
+    applyMore(c);
   }
 
   // ---------------------------------------------------------------- progress
@@ -100,7 +120,7 @@ const Adhkar = (() => {
     for (const g of groups) {
       html += `<div class="group-label">${g.t}</div><div class="group">${g.cats.map(id => rowHTML(byId[id])).join('')}</div>`;
     }
-    return html + `<p class="note dk-cite">النصوص والتخريج من كتاب «${D.source}»</p>`;
+    return html + `<p class="note dk-cite">النصوص والتخريج من كتاب «${D.source}»${D.more ? `، والإضافات الاختيارية ${D.more}` : ''}</p>`;
   }
 
   async function mount(el) {
@@ -173,10 +193,12 @@ const Adhkar = (() => {
         <svg viewBox="0 0 64 64" class="dk-medal"><g fill="none" stroke="currentColor" stroke-width="1.4"><rect x="14" y="14" width="36" height="36" rx="3"/><rect x="14" y="14" width="36" height="36" rx="3" transform="rotate(45 32 32)"/><circle cx="32" cy="32" r="13"/></g><path d="M25.5 32.5l4.5 4.5 8.5-9" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
         <h2>${s.all ? `تمّت ${cat.t}` : `أتممت ${ar(s.d)} من ${ar(s.n)}`}</h2>
         <p>${s.all ? 'تقبّل الله منك، وجعلها لك حرزًا ونورًا' : 'يمكنك الرجوع إلى ما فاتك، أو الاكتفاء بما قرأت'}</p>
+        ${s.all && cat.more?.length && !moreOn(cat) ? moreOfferHTML() : ''}
         <div class="actions">
           ${s.all ? '' : '<button class="primary" data-dk-act="missed">أكمل ما فاتك</button>'}
-          <button class="${s.all ? 'primary' : ''}" data-dk-act="back">العودة إلى الأذكار</button>
+          <button class="${s.all && !(cat.more?.length && !moreOn(cat)) ? 'primary' : ''}" data-dk-act="back">العودة إلى الأذكار</button>
           <button data-dk-act="again">البدء من جديد</button>
+          ${cat.more?.length && moreOn(cat) ? '<button class="dk-more-off" data-dk-act="more-off">إزالة الأذكار الإضافية</button>' : ''}
         </div></div>`;
       return el;
     }
@@ -193,6 +215,7 @@ const Adhkar = (() => {
     }
     flush();
     el.innerHTML = `<div class="dk-in">
+      ${it.x ? '<span class="dk-badge">إضافة</span>' : ''}
       <div class="dk-text">${html}</div>
       ${it.f ? `<p class="dk-fadl"><i></i>${esc(it.f)}</p>` : ''}
       ${it.r ? `<p class="dk-src">رواه ${esc(it.r)}</p>` : ''}
@@ -200,12 +223,30 @@ const Adhkar = (() => {
     return el;
   }
 
+  // offered once the book's adhkar are done, never in the way before that
+  function moreOfferHTML() {
+    return `<div class="dk-more">
+      <b>زيادة من السنّة الصحيحة</b>
+      <small>${nItems(cat.more.length)} لم ترد في الحصن، ${D.more}. تُضاف بعد أذكارك، ويمكنك إزالتها متى شئت.</small>
+      <div class="actions"><button class="primary" data-dk-act="more-on">أضفها</button></div>
+    </div>`;
+  }
+
+  // the card set changed under the reader (additions on/off): redraw in place
+  function redraw() {
+    idx = Math.min(idx, cat.items.length);
+    const c = card(idx);
+    c.classList.add('arrive');
+    $('#dkStage').replaceChildren(c);
+    paint();
+  }
+
   function paint() {
     const n = cat.items.length;
     const end = idx >= n;
     // one step per dhikr: gold when done, outlined where you are
     $('#dkSteps').innerHTML = n > 1 ? cat.items.map((_, i) =>
-      `<i class="${left(cat, i) === 0 ? 'ok' : ''}${i === idx ? ' cur' : ''}" data-step="${i}"></i>`).join('') : '';
+      `<i class="${left(cat, i) === 0 ? 'ok' : ''}${i === idx ? ' cur' : ''}${cat.items[i].x ? ' x' : ''}" data-step="${i}"></i>`).join('') : '';
     const s = state(cat);
     $('#dkSub').textContent = end ? (s.all ? 'تمّت' : '') : `${ar(idx + 1)} من ${ar(n)}`;
     $('#adhkar').classList.toggle('at-end', end);
@@ -331,6 +372,8 @@ const Adhkar = (() => {
       if (a === 'back') close();
       else if (a === 'again') { reset(cat); go(0); toast('بدأت من جديد'); }
       else if (a === 'missed') go(cat.items.findIndex((_, i) => left(cat, i) > 0));
+      else if (a === 'more-on') { setMore(cat, true); idx = cat.core.length; redraw(); }
+      else if (a === 'more-off') { setMore(cat, false); redraw(); toast('أُزيلت الأذكار الإضافية'); }
     });
   })();
 

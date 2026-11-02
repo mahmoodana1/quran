@@ -13,6 +13,7 @@ written out, and Quranic passages taken from data/hafs.json (KFGQPC Uthmani).
 Every other chapter is parsed from the book's markup: ((…)) is what is said,
 text outside it is the book's instruction, [...] marks a wording from another
 narration, ﴿…﴾ is Quran. Sources (takhrij) follow the book's footnotes.
+Daily chapters may also carry `more`: optional authentic additions (see MORE).
 """
 import json
 import os
@@ -51,7 +52,7 @@ def quran(s, a1, a2=None, basmala=False):
     i = aya_index(s, a1)
     text = ' '.join(HAFS['utext'][i:i + (a2 or a1) - a1 + 1])
     if basmala:
-        text = HAFS['utext'][0].rsplit(' ', 1)[0] + ' ' + text
+        text = HAFS['utext'][0].rsplit(None, 1)[0] + ' ' + text  # the aya number follows a no-break space
     return ['q', text]
 
 
@@ -362,6 +363,48 @@ WAKING = [
     item([N('يقرأ خواتيم سورة آل عمران:'), quran(3, 190, 200)], 1, 'البخاري ومسلم'),
 ]
 
+# ---------------------------------------------------------------- optional additions
+# Shown after the book's adhkar only when the reader turns them on. Authentic
+# adhkar for the same occasion that Hisn al-Muslim leaves out, as in an-Nawawi's
+# al-Adhkar; each was checked against the six books with al-Albani's grading
+# (Bukhari/Muslim, or graded sahih/hasan). Hisn al-Muslim already holds every
+# authentic morning/evening dhikr found there, so evening has none to add.
+
+MORE = {
+    'morning': [
+        item([N('إذا طلعت الشمس:'), S('الْحَمْدُ لِلَّهِ الَّذِي أَقَالَنَا يَوْمَنَا هَذَا، وَلَمْ يُهْلِكْنَا بِذُنُوبِنَا')],
+             1, 'مسلم، من قول ابن مسعود رضي الله عنه'),
+        item(N('من صلّى الفجر في جماعة ثم قعد يذكر الله حتى تطلع الشمس، ثم صلّى ركعتين'),
+             1, 'الترمذي، وحسّنه الألباني', 'كانت له كأجر حجة وعمرة، تامة تامة تامة'),
+    ],
+    'prayer': [
+        item([N('إذا سلّم من الصلاة قال:'),
+              S('اللَّهُمَّ اغْفِرْ لِي مَا قَدَّمْتُ وَمَا أَخَّرْتُ، وَمَا أَسْرَرْتُ وَمَا أَعْلَنْتُ، وَمَا أَسْرَفْتُ، وَمَا أَنْتَ أَعْلَمُ بِهِ مِنِّي، أَنْتَ الْمُقَدِّمُ وَأَنْتَ الْمُؤَخِّرُ، لاَ إِلَهَ إِلاَّ أَنْتَ')],
+             1, 'أبو داود، وصححه الألباني'),
+        item([S('اللَّهُمَّ أَعِنِّي عَلَى ذِكْرِكَ، وَشُكْرِكَ، وَحُسْنِ عِبَادَتِكَ'),
+              N('دُبُر كل صلاة، ويشمل آخرها قبل السلام وما بعده')],
+             1, 'أبو داود والنسائي، وصححه الألباني', 'أوصى بها النبي ﷺ معاذًا فقال: لا تدعنّ أن تقولها في دبر كل صلاة'),
+        item([N('كان النبي ﷺ يتعوّذ بهن دُبُر الصلاة:'),
+              S('اللَّهُمَّ إِنِّي أَعُوذُ بِكَ مِنَ الْجُبْنِ، وَأَعُوذُ بِكَ أَنْ أُرَدَّ إِلَى أَرْذَلِ الْعُمُرِ، وَأَعُوذُ بِكَ مِنْ فِتْنَةِ الدُّنْيَا، وَأَعُوذُ بِكَ مِنْ عَذَابِ الْقَبْرِ')],
+             1, 'البخاري'),
+        item([S('رَبِّ قِنِي عَذَابَكَ يَوْمَ تَبْعَثُ عِبَادَكَ'), ['o', '[أو: تَجْمَعُ عِبَادَكَ]']], 1, 'مسلم'),
+    ],
+    'sleep': [
+        item([N('يقرأ سورة الكافرون، ثم ينام على خاتمتها:'), quran(109, 1, 6, True)],
+             1, 'أبو داود والترمذي، وصححه الألباني', 'فإنها براءة من الشرك'),
+        item(S('بِسْمِ اللَّهِ وَضَعْتُ جَنْبِي، اللَّهُمَّ اغْفِرْ لِي ذَنْبِي، وَأَخْسِئْ شَيْطَانِي، وَفُكَّ رِهَانِي، وَاجْعَلْنِي فِي النَّدِيِّ الْأَعْلَى'),
+             1, 'أبو داود، وصححه الألباني'),
+        item(N('كان النبي ﷺ لا ينام حتى يقرأ سورتي الزمر والإسراء'), 1, 'الترمذي، وصححه الألباني'),
+    ],
+    # Aisha: what he opened with when he rose in the night, each ten times
+    'waking': [
+        item([N('كان النبي ﷺ إذا قام من الليل يفتتح بهذه، كلٌّ عشرًا:'), S(t)] if k == 0 else S(t), 10, 'أبو داود، وحسّنه الألباني')
+        for k, t in enumerate(['اللَّهُ أَكْبَرُ', 'الْحَمْدُ لِلَّهِ', 'سُبْحَانَ اللَّهِ وَبِحَمْدِهِ', 'سُبْحَانَ الْمَلِكِ الْقُدُّوسِ',
+                               'أَسْتَغْفِرُ اللَّهَ', 'لاَ إِلَهَ إِلاَّ اللَّهُ',
+                               'اللَّهُمَّ إِنِّي أَعُوذُ بِكَ مِنْ ضِيقِ الدُّنْيَا، وَضِيقِ يَوْمِ الْقِيَامَةِ'])
+    ],
+}
+
 # ---------------------------------------------------------------- layout
 
 DAILY = [
@@ -409,7 +452,7 @@ def chapter(n):
     return title(name), items
 
 
-cats = [{'id': cid, 't': t, 'items': items} for cid, t, items in DAILY]
+cats = [{'id': cid, 't': t, 'items': items, **({'more': MORE[cid]} if cid in MORE else {})} for cid, t, items in DAILY]
 groups = [{'t': 'اليوم والليلة', 'cats': [c[0] for c in DAILY], 'daily': True}]
 for gt, chs in GROUPS:
     ids = []
@@ -421,6 +464,7 @@ for gt, chs in GROUPS:
 
 out = {
     'source': 'حصن المسلم من أذكار الكتاب والسنة — سعيد بن علي بن وهف القحطاني',
+    'more': 'من «الأذكار» للنووي وغيره، مما صحّ سنده',
     'groups': groups,
     'cats': cats,
 }

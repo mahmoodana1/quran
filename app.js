@@ -735,14 +735,55 @@ function nextInQueue() {
   const item = P.queue.shift();
   if (!item) return startAya(P.ai + 1);
   if (item.h != null) P.playedHafs = item.h;
-  audio.src = item.url;
+  // a file already held in memory starts at once; otherwise stream it
+  P.cur = item.url;
+  audio.src = ahead.get(item.url)?.src || item.url;
   audio.play().catch(() => $('#player').classList.add('paused'));
-  preloadNext();
+  prefetchAhead();
 }
 
-function preloadNext() {
-  const nxt = P.queue[0]?.url || (P.ai + 1 < R.ayas.length ? hafsUrl(R.ayas[P.ai + 1][5]) : null);
-  if (nxt) { const a = new Audio(); a.preload = 'auto'; a.src = nxt; }
+// Seamless playback: the next few recitation files are read whole into memory
+// ahead of time (the saved copy when downloaded, else the network, which the
+// service worker also saves), so moving to the next aya never waits on a load.
+// One <audio> element is kept so lock-screen and background playback still work.
+const AHEAD = 3;
+const ahead = new Map(); // url -> { src: blob url once read }
+
+// urls that will play after the current one, across aya boundaries
+function upcoming(n) {
+  const out = P.queue.map(q => q.url);
+  let last = Math.max(P.playedHafs, ...P.queue.map(q => q.h ?? -1));
+  for (let ai = P.ai + 1; out.length < n && ai < R.ayas.length; ai++) {
+    const a = R.ayas[ai];
+    for (let h = Math.max(a[5], last + 1); h <= a[6]; h++) {
+      const [s, k] = META.hafs[h];
+      if (k === 1 && s !== 1 && s !== 9) out.push(BASMALA_URL);
+      out.push(hafsUrl(h));
+      last = h;
+    }
+  }
+  return out.slice(0, n);
+}
+
+function dropAhead(url) {
+  const b = ahead.get(url);
+  if (b?.src) URL.revokeObjectURL(b.src);
+  ahead.delete(url);
+}
+
+function prefetchAhead() {
+  const want = new Set(upcoming(AHEAD));
+  for (const u of [...ahead.keys()]) if (!want.has(u) && u !== P.cur) dropAhead(u);
+  for (const u of want) {
+    if (ahead.has(u)) continue;
+    const b = { src: null };
+    ahead.set(u, b);
+    fetch(u, { mode: 'cors' })
+      .then(r => (r.ok ? r.blob() : null))
+      .then(x => { if (x && ahead.get(u) === b) b.src = URL.createObjectURL(x); })
+      .catch(() => {})
+      .finally(() => { if (!b.src && ahead.get(u) === b) ahead.delete(u); }); // retry on the next aya
+  }
 }
 
 audio.addEventListener('ended', nextInQueue);
@@ -769,7 +810,8 @@ function showPlayer() {
 function stopAudio() {
   audio.pause();
   audio.removeAttribute('src');
-  P.ai = null; S.play = null; P.queue = [];
+  P.ai = null; S.play = null; P.queue = []; P.cur = null;
+  [...ahead.keys()].forEach(dropAhead);
   hide($('#player'));
   paintMarks();
 }

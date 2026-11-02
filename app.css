@@ -1000,6 +1000,24 @@ svg { fill: currentColor; }
 .dk-end p { margin: 0 0 12px; font-size: 14px; line-height: 1.8; color: var(--muted); }
 .dk-end .actions { width: min(290px, 100%); }
 
+/* optional additions after the book's adhkar */
+.dk-card.arrive .dk-in, .dk-card.arrive .dk-end-in { animation: fadeIn .4s ease both; }
+.dk-badge {
+  align-self: center; font-size: 11.5px; font-weight: 600; letter-spacing: .02em; color: var(--p-ink);
+  padding: 2px 12px; border-radius: 999px; background: color-mix(in srgb, var(--p-gold) 16%, transparent); border: 1px solid var(--p-rule);
+}
+.dk-steps i.x { background: transparent; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p-gold) 55%, transparent); }
+.dk-steps i.x.ok { background: var(--p-gold); }
+.dk-steps i.x.cur { background: var(--p-ink); box-shadow: none; }
+.dk-more {
+  width: min(320px, 100%); margin: 2px 0 16px; padding: 16px 16px 14px; display: flex; flex-direction: column; align-items: center; gap: 6px;
+  border: 1px solid var(--p-rule); border-top: 2px solid var(--p-gold); border-radius: 3px; background: color-mix(in srgb, var(--p-gold) 7%, transparent);
+}
+.dk-more b { font-family: var(--dk-font); font-size: 19px; color: var(--p-ink); }
+.dk-more small { font-size: 12.5px; line-height: 1.8; color: var(--muted); }
+.dk-more .actions { margin-top: 6px; width: 100%; }
+.dk-end .actions .dk-more-off { background: none; box-shadow: none; color: var(--muted); font-size: 13px; }
+
 /* settings: one big button for everything offline */
 .all-card {
   display: flex; flex-direction: column; align-items: center; gap: 5px; text-align: center;
