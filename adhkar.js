@@ -248,6 +248,12 @@ const Adhkar = (() => {
     $('#dkSteps').innerHTML = n > 1 ? cat.items.map((_, i) =>
       `<i class="${left(cat, i) === 0 ? 'ok' : ''}${i === idx ? ' cur' : ''}${cat.items[i].x ? ' x' : ''}" data-step="${i}"></i>`).join('') : '';
     const s = state(cat);
+    const more = $('#dkMore');
+    more.hidden = !cat.more?.length;
+    if (cat.more?.length) {
+      more.classList.toggle('on', moreOn(cat));
+      more.textContent = moreOn(cat) ? '✓ الأذكار الإضافية مضافة · إزالة' : `＋ أذكار إضافية صحيحة (${ar(cat.more.length)})`;
+    }
     $('#dkSub').textContent = end ? (s.all ? 'تمّت' : '') : `${ar(idx + 1)} من ${ar(n)}`;
     $('#adhkar').classList.toggle('at-end', end);
     $('#dkPrev').disabled = idx === 0;
@@ -381,6 +387,12 @@ const Adhkar = (() => {
     const s = e.target.closest('[data-step]');
     if (s) go(+s.dataset.step);
   });
+  $('#dkMore').onclick = () => {
+    const on = !moreOn(cat);
+    setMore(cat, on);
+    redraw();
+    toast(on ? 'أُضيفت الأذكار الإضافية بعد أذكار الحصن' : 'أُزيلت الأذكار الإضافية');
+  };
   $('#dkNext').onclick = () => go(idx + 1);
   $('#dkPrev').onclick = () => go(idx - 1);
   $('#dkBack').onclick = close;

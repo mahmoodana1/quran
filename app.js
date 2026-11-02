@@ -696,103 +696,207 @@ function refreshHeader() {
 
 // ---------------------------------------------------------------- audio
 
+// Seamless recitation. Switching an <audio> element from one file to the next
+// leaves an audible cut on phones, so the aya files are joined into one long
+// MP3 instead: each is read ahead (the saved copy when downloaded, else the
+// network, which the service worker also saves), stripped to its bare MP3
+// frames and appended. One <audio> element plays it, so lock-screen controls
+// and background playback keep working on iPhone and Android. The aya being
+// recited is worked out from the play position.
+
 const audio = $('#audio');
-const P = { queue: [], ai: null, playedHafs: -1 };
 const pad3 = n => String(n).padStart(3, '0');
 const hafsUrl = h => { const [s, a] = META.hafs[h]; return `${AUDIO_BASE}${pad3(s)}${pad3(a)}.mp3`; };
 const BASMALA_URL = `${AUDIO_BASE}001001.mp3`;
+// one joined file holds at most ~26 minutes (128 kbps); as much again is read ahead
+const CHUNK_MB = 24;
+// run: playback session (stale async work checks it); list: files in order from
+// the start aya; got[k]: list[k]'s frames once read; at: index playing; chunk:
+// the joined file now loaded { from, to, starts: start time of each file }
+const P = { run: 0, ai: null, list: [], gen: null, got: [], at: -1, chunk: null, tick: 0 };
 
-function queueFor(ai) {
-  // a riwaya aya may cover part of a hafs aya or several of them; never replay a hafs aya
-  const a = R.ayas[ai], q = [];
-  for (let h = Math.max(a[5], P.playedHafs + 1); h <= a[6]; h++) {
-    const [s, n] = META.hafs[h];
-    if (n === 1 && s !== 1 && s !== 9) q.push({ url: BASMALA_URL, h: null });
-    q.push({ url: hafsUrl(h), h });
+// every recitation file from aya `ai` on: a riwaya aya may cover part of a
+// hafs aya or several of them; a hafs aya is never played twice
+function* sequence(ai) {
+  let last = R.ayas[ai][5] - 1;
+  for (; ai < R.ayas.length; ai++) {
+    const a = R.ayas[ai];
+    for (let h = Math.max(a[5], last + 1); h <= a[6]; h++) {
+      const [s, n] = META.hafs[h];
+      if (n === 1 && s !== 1 && s !== 9) yield { url: BASMALA_URL, ai };
+      yield { url: hafsUrl(h), ai };
+      last = h;
+    }
   }
-  return q;
+}
+function item(k) {
+  while (P.list.length <= k) { const x = P.gen.next(); if (x.done) return null; P.list.push(x.value); }
+  return P.list[k];
+}
+
+// MPEG audio frames of a file without its ID3 tags or Xing/Info header, which
+// would stop a decoder mid-stream; duration counted from the frames
+const MP3_KBPS = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320];
+const MP3_HZ = [44100, 48000, 32000];
+function mp3Frames(buf) {
+  const b = new Uint8Array(buf);
+  let i = 0;
+  if (b[0] === 0x49 && b[1] === 0x44 && b[2] === 0x33) i = 10 + ((b[6] & 127) << 21 | (b[7] & 127) << 14 | (b[8] & 127) << 7 | (b[9] & 127));
+  while (i + 1 < b.length && !(b[i] === 0xff && (b[i + 1] & 0xe0) === 0xe0)) i++; // to the first frame
+  const parts = [];
+  let hz = 44100, first = true;
+  while (i + 4 <= b.length && b[i] === 0xff && (b[i + 1] & 0xe0) === 0xe0) {
+    const kbps = MP3_KBPS[b[i + 2] >> 4];
+    hz = MP3_HZ[(b[i + 2] >> 2) & 3];
+    if (!kbps || !hz) break;
+    const len = Math.floor(144000 * kbps / hz) + ((b[i + 2] >> 1) & 1);
+    if (i + len > b.length) break;
+    if (!(first && /Xing|Info/.test(String.fromCharCode(...b.subarray(i + 4, i + 44))))) parts.push(b.subarray(i, i + len));
+    first = false;
+    i += len;
+  }
+  // MPEG-1 Layer III: 1152 samples a frame
+  return { parts, bytes: parts.reduce((s, p) => s + p.length, 0), dur: parts.length * 1152 / hz };
+}
+
+function fetchItem(k, tries = 3) {
+  const run = P.run, it = item(k);
+  if (!it || P.got[k]) return P.got[k]?.p;
+  const g = P.got[k] = { v: undefined };
+  g.p = (async () => {
+    for (let t = 0; t < tries && run === P.run; t++) {
+      try {
+        const r = await fetch(it.url, { mode: 'cors' });
+        if (r.ok) return (g.v = mp3Frames(await r.arrayBuffer()));
+      } catch {}
+      await new Promise(r => setTimeout(r, 600 * (t + 1)));
+    }
+    if (P.got[k] === g) delete P.got[k]; // ask again next time
+    return (g.v = null);
+  })();
+  return g.p;
+}
+
+// keep reading ahead of the file playing, a few at a time
+let pumping = false;
+async function pump() {
+  if (pumping) return;
+  pumping = true;
+  const run = P.run;
+  try {
+    // bytes read but not yet in a joined file
+    const ahead = () => P.got.reduce((s, g) => s + (g?.v?.bytes || 0), 0);
+    const worker = async () => {
+      for (let k = Math.max(P.at + 1, P.chunk?.to ?? 0); run === P.run && item(k) && ahead() < CHUNK_MB * 1e6; k++) {
+        if (!P.got[k]) await fetchItem(k);
+      }
+    };
+    await Promise.all([worker(), worker(), worker(), worker()]);
+  } finally { pumping = false; }
+}
+
+// join the files from list[from] on that are already read (waiting for the first)
+async function playChunk(from, wait = 0) {
+  const run = P.run;
+  const first = await fetchItem(from);
+  if (run !== P.run) return;
+  if (!first) { toast('تعذر تحميل الصوت'); return stopAudio(); }
+  // when starting, give the next ones a moment so the first joined file is not tiny
+  if (wait) {
+    pump();
+    const next = Array.from({ length: 12 }, (_, d) => item(from + 1 + d) && fetchItem(from + 1 + d));
+    await Promise.race([Promise.all(next), new Promise(r => setTimeout(r, wait))]);
+  }
+  if (run !== P.run) return;
+  const starts = [];
+  let t = 0, bytes = 0, to = from;
+  while (item(to) && P.got[to]?.v && (to === from || bytes + P.got[to].v.bytes < CHUNK_MB * 1e6)) {
+    starts.push(t);
+    t += P.got[to].v.dur; bytes += P.got[to].v.bytes;
+    to++;
+  }
+  // the hand-over to the next joined file may not be quite seamless on every
+  // phone: when one is coming, make it just before a surah's basmala, where
+  // the reciter pauses anyway (if that leaves over two minutes)
+  if (item(to)) {
+    for (let j = to - 1; j > from; j--) {
+      if (P.list[j].url === BASMALA_URL && starts[j - from] > 120) { to = j; t = starts[j - from]; starts.length = j - from; break; }
+    }
+  }
+  starts.push(t);
+  const parts = [];
+  for (let k = from; k < to; k++) { parts.push(...P.got[k].v.parts); P.got[k] = { v: true }; } // the joined file holds the bytes now
+  const old = audio.src;
+  P.chunk = { from, to, starts };
+  P.at = -1;
+  audio.src = URL.createObjectURL(new Blob(parts, { type: 'audio/mpeg' }));
+  if (old.startsWith('blob:')) URL.revokeObjectURL(old);
+  audio.play().catch(() => $('#player').classList.add('paused'));
+  sync();
+  pump();
+}
+
+// which file is playing: follow it with the highlight, page and title
+function sync() {
+  clearTimeout(P.tick);
+  const c = P.chunk;
+  if (!c) return;
+  const t = audio.currentTime;
+  let k = c.from;
+  while (k + 1 < c.to && c.starts[k + 1 - c.from] <= t + 0.02) k++;
+  if (k !== P.at) {
+    P.at = k;
+    const ai = P.list[k].ai;
+    if (ai !== P.ai) {
+      P.ai = S.play = ai;
+      const page = R.ayas[ai][2];
+      if (page !== S.page) goTo(page, { animate: Math.abs(page - S.page) === 1 });
+      paintMarks();
+      showPlayer();
+    }
+    pump();
+  }
+  // this aya's share of the bar
+  let a = k, b = k + 1;
+  while (a > c.from && P.list[a - 1].ai === P.ai) a--;
+  while (b < c.to && P.list[b].ai === P.ai) b++;
+  const s = c.starts[a - c.from], e = c.starts[b - c.from];
+  $('#plProg').style.transform = `scaleX(${Math.min(1, Math.max(0, (t - s) / (e - s || 1)))})`;
+  // wake up right at the next file (timeupdate alone is only ~4 times a second)
+  if (!audio.paused && k + 1 < c.to) P.tick = setTimeout(sync, (c.starts[k + 1 - c.from] - t) * 1000 / (audio.playbackRate || 1) + 15);
 }
 
 function playFrom(ai) {
-  P.playedHafs = R.ayas[ai][5] - 1;
-  startAya(ai);
-}
-
-function startAya(ai) {
-  if (ai == null || ai >= R.ayas.length) return stopAudio();
-  P.ai = ai;
-  S.play = ai;
-  P.queue = queueFor(ai);
+  stopAudio(false);
+  P.run++;
+  P.gen = sequence(ai);
+  P.ai = S.play = ai;
   const page = R.ayas[ai][2];
   if (page !== S.page) goTo(page, { animate: Math.abs(page - S.page) === 1 });
   paintMarks();
   showPlayer();
-  if (!P.queue.length) { setTimeout(() => P.ai === ai && startAya(ai + 1), 400); return; }
-  nextInQueue();
+  playChunk(0, 1500);
 }
 
-function nextInQueue() {
-  const item = P.queue.shift();
-  if (!item) return startAya(P.ai + 1);
-  if (item.h != null) P.playedHafs = item.h;
-  // a file already held in memory starts at once; otherwise stream it
-  P.cur = item.url;
-  audio.src = ahead.get(item.url)?.src || item.url;
-  audio.play().catch(() => $('#player').classList.add('paused'));
-  prefetchAhead();
-}
-
-// Seamless playback: the next few recitation files are read whole into memory
-// ahead of time (the saved copy when downloaded, else the network, which the
-// service worker also saves), so moving to the next aya never waits on a load.
-// One <audio> element is kept so lock-screen and background playback still work.
-const AHEAD = 3;
-const ahead = new Map(); // url -> { src: blob url once read }
-
-// urls that will play after the current one, across aya boundaries
-function upcoming(n) {
-  const out = P.queue.map(q => q.url);
-  let last = Math.max(P.playedHafs, ...P.queue.map(q => q.h ?? -1));
-  for (let ai = P.ai + 1; out.length < n && ai < R.ayas.length; ai++) {
-    const a = R.ayas[ai];
-    for (let h = Math.max(a[5], last + 1); h <= a[6]; h++) {
-      const [s, k] = META.hafs[h];
-      if (k === 1 && s !== 1 && s !== 9) out.push(BASMALA_URL);
-      out.push(hafsUrl(h));
-      last = h;
-    }
+// next/previous aya: inside the loaded file just move the play position
+function jump(ai) {
+  const c = P.chunk;
+  if (ai < 0 || ai >= R.ayas.length) return;
+  for (let k = c ? c.from : 0; c && k < c.to; k++) {
+    if (P.list[k].ai === ai) { audio.currentTime = c.starts[k - c.from]; sync(); if (audio.paused) audio.play(); return; }
   }
-  return out.slice(0, n);
+  playFrom(ai);
 }
 
-function dropAhead(url) {
-  const b = ahead.get(url);
-  if (b?.src) URL.revokeObjectURL(b.src);
-  ahead.delete(url);
-}
-
-function prefetchAhead() {
-  const want = new Set(upcoming(AHEAD));
-  for (const u of [...ahead.keys()]) if (!want.has(u) && u !== P.cur) dropAhead(u);
-  for (const u of want) {
-    if (ahead.has(u)) continue;
-    const b = { src: null };
-    ahead.set(u, b);
-    fetch(u, { mode: 'cors' })
-      .then(r => (r.ok ? r.blob() : null))
-      .then(x => { if (x && ahead.get(u) === b) b.src = URL.createObjectURL(x); })
-      .catch(() => {})
-      .finally(() => { if (!b.src && ahead.get(u) === b) ahead.delete(u); }); // retry on the next aya
-  }
-}
-
-audio.addEventListener('ended', nextInQueue);
-audio.addEventListener('timeupdate', () => {
-  const f = audio.duration ? audio.currentTime / audio.duration : 0;
-  $('#plProg').style.transform = `scaleX(${f})`;
+audio.addEventListener('ended', () => {
+  const c = P.chunk;
+  if (c && item(c.to)) playChunk(c.to);
+  else stopAudio();
 });
-audio.addEventListener('play', () => $('#player').classList.remove('paused'));
-audio.addEventListener('pause', () => $('#player').classList.add('paused'));
+audio.addEventListener('timeupdate', sync);
+audio.addEventListener('seeked', sync);
+audio.addEventListener('play', () => { $('#player').classList.remove('paused'); sync(); });
+audio.addEventListener('pause', () => { $('#player').classList.add('paused'); clearTimeout(P.tick); });
 audio.addEventListener('error', () => { if (P.ai != null) toast('تعذر تحميل الصوت'); });
 
 function showPlayer() {
@@ -807,19 +911,24 @@ function showPlayer() {
   }
 }
 
-function stopAudio() {
+function stopAudio(close = true) {
+  P.run++;
+  clearTimeout(P.tick);
   audio.pause();
+  const old = audio.src;
   audio.removeAttribute('src');
-  P.ai = null; S.play = null; P.queue = []; P.cur = null;
-  [...ahead.keys()].forEach(dropAhead);
+  if (old.startsWith('blob:')) URL.revokeObjectURL(old);
+  Object.assign(P, { list: [], gen: null, got: [], at: -1, chunk: null });
+  if (!close) return;
+  P.ai = null; S.play = null;
   hide($('#player'));
   paintMarks();
 }
 
 $('#plToggle').onclick = () => (audio.paused ? audio.play() : audio.pause());
-$('#plStop').onclick = stopAudio;
-$('#plNext').onclick = () => P.ai != null && playFrom(Math.min(P.ai + 1, R.ayas.length - 1));
-$('#plPrev').onclick = () => P.ai != null && playFrom(Math.max(P.ai - 1, 0));
+$('#plStop').onclick = () => stopAudio();
+$('#plNext').onclick = () => P.ai != null && jump(P.ai + 1);
+$('#plPrev').onclick = () => P.ai != null && jump(P.ai - 1);
 if ('mediaSession' in navigator) {
   navigator.mediaSession.setActionHandler('play', () => audio.play());
   navigator.mediaSession.setActionHandler('pause', () => audio.pause());
