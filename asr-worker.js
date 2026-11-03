@@ -1,5 +1,5 @@
-// Speech recognition for التسميع, off the main thread: Tarteel's Whisper
-// models fine-tuned on Quran recitation (ONNX), run by transformers.js.
+// Speech recognition for التسميع outside Hafs, off the main thread: Tarteel's
+// Whisper models fine-tuned on Quran recitation (ONNX), run by transformers.js.
 // The model is downloaded once on request and kept in the browser's cache
 // ('transformers-cache'); after that it works offline and audio never leaves
 // the device.
@@ -8,6 +8,10 @@
 import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.5';
 
 env.allowLocalModels = false;
+// the models are copies kept in mahmoodana1/quran-models (Apache-2.0, from
+// tarteel-ai's Quran Whisper), so the app doesn't depend on anyone else's account
+env.remoteHost = 'https://mahmoodana1.github.io/quran-models/';
+env.remotePathTemplate = 'whisper/{model}/';
 // several cores when the page is cross-origin isolated (see sw.js)
 if (self.crossOriginIsolated) env.backends.onnx.wasm.numThreads = Math.min(4, navigator.hardwareConcurrency || 1);
 

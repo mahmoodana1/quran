@@ -49,7 +49,7 @@ const Listen = (() => {
   async function saved() {
     try {
       const keys = await (await caches.open('transformers-cache')).keys();
-      return keys.filter(r => r.url.includes(model().id + '/') && r.url.endsWith('.onnx')).length >= 2;
+      return keys.filter(r => r.url.includes('/whisper/' + model().id + '/') && r.url.endsWith('.onnx')).length >= 2;
     } catch { return false; }
   }
 

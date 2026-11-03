@@ -123,7 +123,9 @@ async function step(final) {
 // keep reading while the recitation goes on
 async function loop() {
   while (live) {
-    if ((written() - base) / RATE - readUpTo >= MIN_NEW) await step(false);
+    if ((written() - base) / RATE - readUpTo >= MIN_NEW) {
+      try { await step(false); } catch (e) { postMessage({ type: 'error', message: String(e.stack || e) }); await new Promise(r => setTimeout(r, 200)); }
+    }
     else await new Promise(r => setTimeout(r, 15));
   }
 }

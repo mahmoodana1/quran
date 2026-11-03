@@ -98,7 +98,7 @@ const Mu = (() => {
         if (d.type === 'ready') { ready = true; info = d; resolve(); }
         if (d.type === 'text') onText?.(d);
         if (d.type === 'flushed') { const f = onFlushed; onFlushed = null; f?.(); }
-        if (d.type === 'error' && !ready) { reset(); reject(new Error(d.message)); }
+        if (d.type === 'error') { if (!ready) { reset(); reject(new Error(d.message)); } else console.warn('Muaalem:', d.message); }
       };
       worker.onerror = e => { if (!ready) { reset(); reject(new Error(e.message || 'worker failed')); } };
       worker.postMessage({ type: 'load', variant: c.variant, ep: c.ep, threads: threads(), shared });

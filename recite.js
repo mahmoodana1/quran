@@ -528,10 +528,17 @@ const Recite = (() => {
         clearTimeout(f.vt);
         f.vt = setTimeout(() => { if (F === f) { f.voice = false; syncBubble(); } }, 900);
         const h = d.final + d.tent, n = Match.units(h).length;
-        if (n < 18 || Date.now() - (f.at || 0) < 500) return;
+        if (n < 24 || Date.now() - (f.at || 0) < 500) return;
         f.at = Date.now();
-        const ai = locateMu(h);
-        if (ai == null) { if (n > 260) { stopFind(); toast('لم أجد الآية — جرّب من بداية آية'); } return; }
+        // many ayas open alike: go only once one fits clearly better than any
+        // other, and has stayed the best for a second; ayas said the same way
+        // (as in ar-Rahman) are told apart, after a while, by the page open
+        const r = locateMu(h);
+        f.same = r && r.ai === f.last ? (f.same || 0) + 1 : 0;
+        f.last = r?.ai;
+        const sure = r && f.same >= 2 && (r.ok - r.next >= 2 || (n > 150 && f.same >= 4));
+        if (!sure) { if (n > 320) { stopFind(); toast('لم أجد الآية — جرّب من بداية آية'); } return; }
+        const ai = r.ai;
         F = null; // the reading goes on, now as the session's
         syncBubble();
         start(ai, null, { stream: true });
@@ -539,14 +546,18 @@ const Recite = (() => {
       }).catch(() => { stopFind(); toast('لا يمكن الوصول إلى الميكروفون — اسمح به من إعدادات المتصفح'); });
     });
   }
+  // the aya the reading fits best: { ai, ok (words right), next (the runner-up's) },
+  // equal fits going to the one nearest the page open
   function locateMu(h) {
-    let best = null;
-    for (const { ai } of Mu.candidates(h, 8)) {
+    const fits = [];
+    for (const { ai } of Mu.candidates(h, 12)) {
       const st = Match.words(Mu.expect(ai), h, h.length, false, { freeLead: true });
       const ok = st.filter(x => x.state === 'ok').length, bad = st.filter(x => x.state === 'err').length;
-      if (ok >= 3 && ok / (ok + bad) >= 0.75 && (!best || ok > best.ok)) best = { ai, ok };
+      if (ok >= 4 && ok / (ok + bad) >= 0.75) fits.push({ ai, ok, far: Math.abs(R.ayas[ai][2] - S.page) });
     }
-    return best?.ai ?? null;
+    if (!fits.length) return null;
+    fits.sort((a, b) => b.ok - a.ok || a.far - b.far);
+    return { ai: fits[0].ai, ok: fits[0].ok, next: fits[1]?.ok ?? 0 };
   }
   function locate(text) {
     if (norm(text).trim().split(/\s+/).length < 2) return null;
