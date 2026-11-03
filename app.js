@@ -55,6 +55,7 @@ function show(el) {
   el.classList.remove('leaving');
   el.hidden = false;
   syncDock();
+  if (el.classList.contains('bar')) keepClear();
 }
 function hide(el) {
   if (el.hidden || el.classList.contains('leaving')) return;
@@ -350,6 +351,49 @@ function paintMarks(root = document) {
   if (typeof Recite !== 'undefined') Recite.paint(root);
   // bands need layout: pages not yet in the document get them on insertion
   if (root === document || root.isConnected) drawBands(root);
+  keepClear();
+}
+
+// ---------------------------------------------------------------- the aya in sight
+// The floating bars (the aya's actions, the player, the reciting bar) sit at
+// the bottom. When the aya they are about (pressed, playing or being recited)
+// would be under one, the bar slides up under the page header instead (or to
+// wherever it covers less), so the aya is always in full view; in landscape,
+// where the page scrolls, the aya is scrolled into view as well.
+const BARS = ['#ayaBar', '#player', '#recBar'];
+let clearRaf = 0;
+function keepClear() {
+  cancelAnimationFrame(clearRaf);
+  clearRaf = requestAnimationFrame(clearNow);
+}
+function clearNow() {
+  const bars = BARS.map(sel => $(sel)).filter(b => !b.hidden && !b.classList.contains('leaving'));
+  const pg = slots[1]?.firstElementChild, ai = S.act ?? S.focus ?? S.play;
+  let box = null;
+  if (ai != null && pg) for (const w of pg.querySelectorAll(`.w[data-a="${ai}"]`)) {
+    const r = w.getBoundingClientRect();
+    if (!r.height) continue;
+    box = box ? { top: Math.min(box.top, r.top), bottom: Math.max(box.bottom, r.bottom) } : { top: r.top, bottom: r.bottom };
+  }
+  // the page header's lowest part (its box can be shorter than its buttons)
+  const ph = pg?.querySelector('.phead');
+  const head = ph ? Math.max(ph.getBoundingClientRect().bottom, ...[...ph.querySelectorAll('*')].map(e => e.getBoundingClientRect().bottom)) : 0;
+  if (box && S.landscape) {
+    const lowest = Math.min(window.innerHeight, ...bars.map(b => b.getBoundingClientRect().top));
+    if (box.top < head || box.bottom > lowest) {
+      pg.scrollBy({ top: box.top - head - 24, behavior: 'smooth' });
+      setTimeout(keepClear, 450);
+      return;
+    }
+  }
+  for (const b of bars) {
+    const lifted = parseFloat(b.style.getPropertyValue('--lift')) || 0;
+    if (!box) { if (lifted) b.style.setProperty('--lift', '0px'); continue; }
+    const top = b.offsetTop, h = b.offsetHeight, up = head + 8; // where it rests (not mid-slide)
+    const over = t => Math.max(0, Math.min(t + h, box.bottom + 6) - Math.max(t, box.top - 6));
+    const down = over(top), high = over(up);
+    b.style.setProperty('--lift', (down === 0 || down <= high ? 0 : up - top) + 'px');
+  }
 }
 
 // one rounded band per line behind the words of the highlighted aya
@@ -430,6 +474,8 @@ function goTo(p, { animate = false, from = 0 } = {}) {
   const cur = slots[1].firstElementChild;
   if (cur) cur.scrollTop = 0;
   prefetchFonts();
+  keepClear();
+  setTimeout(keepClear, 420); // once the slide has settled
 }
 
 // ---------------------------------------------------------------- single word
@@ -558,6 +604,7 @@ function onResize() {
 }
 if ('ResizeObserver' in window) new ResizeObserver(onResize).observe($('#probe'));
 window.addEventListener('resize', onResize);
+window.addEventListener('resize', keepClear);
 window.addEventListener('orientationchange', () => { onResize(); setTimeout(onResize, 400); });
 window.visualViewport?.addEventListener('resize', onResize);
 

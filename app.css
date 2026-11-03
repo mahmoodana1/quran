@@ -256,10 +256,13 @@ svg { fill: currentColor; }
   border: .5px solid var(--line);
   box-shadow: var(--shadow-float);
   animation: rise .36s cubic-bezier(.2,.9,.3,1);
+  /* --lift: moved up out of the way of the aya it is about (keepClear in app.js) */
+  transform: translateY(var(--lift, 0px));
+  transition: transform .42s cubic-bezier(.2,.9,.3,1);
 }
-@keyframes rise { from { transform: translateY(24px) scale(.98); opacity: 0; } }
+@keyframes rise { from { transform: translateY(calc(var(--lift, 0px) + 24px)) scale(.98); opacity: 0; } }
 .bar.leaving { animation: sink .24s cubic-bezier(.4,0,.8,.4) forwards; }
-@keyframes sink { to { transform: translateY(24px) scale(.98); opacity: 0; } }
+@keyframes sink { to { transform: translateY(calc(var(--lift, 0px) + 24px)) scale(.98); opacity: 0; } }
 
 .x-btn {
   width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
