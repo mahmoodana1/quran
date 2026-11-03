@@ -18,7 +18,7 @@ const Listen = (() => {
   const BREATH = 0.3;
   const MAX = 15;        // s: a longer phrase is cut here
   const PREROLL = 0.3;   // s kept from before the voice started
-  const PARTIAL = 0.9;   // s of new voice between looks at the phrase so far
+  const PARTIAL = 0.5;   // s of new voice between looks at the phrase so far (one at a time)
 
   let worker = null, ready = false, loading = null, onProgress = null;
   const files = {};      // model file -> [loaded, total] while downloading
