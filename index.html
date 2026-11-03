@@ -197,8 +197,11 @@
   </div>
 </section>
 
-<!-- recite an aya and it is found: floats over the page, out of every bar's way -->
-<button id="micBubble" class="mic-bubble" aria-label="اقرأ آيةً لأجدها" hidden><svg viewBox="0 0 24 24"><path d="M12 3.5a3 3 0 00-3 3v5a3 3 0 006 0v-5a3 3 0 00-3-3zM6.5 11a5.5 5.5 0 0011 0M12 16.5v4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span id="micBubbleTxt"></span></button>
+<!-- listening for an aya to find (the mic in the page header): over the header row only -->
+<div id="micPill" class="mic-pill" hidden>
+  <span class="dot"></span><b id="micPillTxt"></b>
+  <button id="micPillX" class="x-btn" aria-label="إيقاف"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round"/></svg></button>
+</div>
 
 <!-- recitation, first time: the speech model is downloaded on request -->
 <section id="recIntro" class="modal" hidden>

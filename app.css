@@ -1276,30 +1276,28 @@ svg { fill: currentColor; }
 .rc-chips button.on { background: linear-gradient(160deg, var(--p-green), var(--p-green-2)); color: var(--p-on); border-color: var(--p-gold); font-weight: 700; }
 .rc-goal { gap: 10px; }
 
-/* the mic bubble: recite and the aya is found. It sits in the corner under
-   the page's last line, and grows into a pill while it listens */
-.mic-bubble {
-  position: fixed; z-index: 19;
-  left: max(10px, env(safe-area-inset-left)); bottom: calc(46px + env(safe-area-inset-bottom));
-  height: 40px; width: 40px; border-radius: 20px; padding: 0;
-  display: flex; align-items: center; justify-content: center; gap: 8px;
+/* the header mic: recite and the aya is found */
+.phead .side { gap: 14px; }
+.phead .mic-btn { padding: 4px; color: var(--muted); }
+.phead .mic-btn svg { width: 22px; height: 22px; display: block; }
+.rc-find .phead .mic-btn { color: var(--accent); }
+.rc-on .phead .mic-btn { display: none; }
+/* listening: a pill over the header row, never over the text */
+.mic-pill {
+  position: fixed; z-index: 25; top: calc(env(safe-area-inset-top) + 5px); left: 50%; transform: translateX(-50%);
+  height: 36px; padding: 0 4px 0 14px; border-radius: 18px; display: flex; align-items: center; gap: 9px;
   color: var(--p-on); background: linear-gradient(160deg, var(--p-green), var(--p-green-2));
-  box-shadow: 0 0 0 1.5px var(--p-gold), 0 5px 14px rgba(30, 20, 5, .26);
-  opacity: .9; transition: width .3s cubic-bezier(.2,.9,.3,1), opacity .2s ease;
-  animation: bubbleIn .4s cubic-bezier(.2,.9,.3,1);
+  box-shadow: 0 0 0 1px var(--p-gold), 0 6px 16px rgba(30, 20, 5, .22);
+  white-space: nowrap; animation: pillIn .3s cubic-bezier(.2,.9,.3,1);
 }
-@keyframes bubbleIn { from { transform: scale(.6); opacity: 0; } }
-.mic-bubble svg { width: 19px; height: 19px; flex: none; }
-.mic-bubble span { display: none; font-size: 14px; font-weight: 600; white-space: nowrap; }
-.mic-bubble.open { width: auto; padding: 0 16px 0 14px; opacity: 1; }
-.mic-bubble.open span { display: inline; }
-.mic-bubble.voice { animation: bubbleVoice 1.3s ease-out infinite; }
-@keyframes bubbleVoice {
-  0% { box-shadow: 0 0 0 1.5px var(--p-gold), 0 0 0 0 color-mix(in srgb, var(--p-gold) 55%, transparent); }
-  100% { box-shadow: 0 0 0 1.5px var(--p-gold), 0 0 0 14px color-mix(in srgb, var(--p-gold) 0%, transparent); }
-}
-.mic-bubble:active { transform: scale(.94); }
-.landscape .mic-bubble { bottom: max(14px, env(safe-area-inset-bottom)); }
+@keyframes pillIn { from { opacity: 0; transform: translate(-50%, -8px); } }
+.mic-pill.leaving { animation: pillOut .22s ease forwards; }
+@keyframes pillOut { to { opacity: 0; transform: translate(-50%, -8px); } }
+.mic-pill b { font-size: 14px; font-weight: 600; }
+.mic-pill .dot { width: 9px; height: 9px; border-radius: 50%; background: #e6cc8a; flex: none; }
+.mic-pill.voice .dot { animation: pillDot .9s ease-in-out infinite alternate; }
+@keyframes pillDot { to { transform: scale(1.5); opacity: .6; } }
+.mic-pill .x-btn { width: 28px; height: 28px; background: color-mix(in srgb, var(--p-on) 14%, transparent); color: var(--p-on); }
 
 /* the reciting bar's mic answers the voice */
 #recBar .pl-main.live.voice { animation: recPulse .9s ease-out infinite; }

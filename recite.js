@@ -12,9 +12,9 @@
 // first asked for. Each phrase the reader says between pauses is lined up
 // against the words expected from where they are (align), so a word said
 // differently, a skipped word or a stretch said again shows as such.
-// The mic bubble over the page: recite any aya and it is found, opened and
+// The mic in the page header: recite any aya and it is found, opened and
 // followed from there.
-// Uses $, store, ar, esc, show, hide, toast, panelOpen, R, S, isEnd, norm,
+// Uses $, store, ar, esc, show, hide, toast, R, S, isEnd, norm,
 // lev, wordSim, buildIndex, ayaScore, goTo, pageInfo, paintMarks, closeActions,
 // stopAudio, speakWord, suraName, ayaLabel, openRecite, renderSheet,
 // closeSheet and flashAya from app.js at call time.
@@ -111,6 +111,7 @@ const Recite = (() => {
     paintMarks();
     paintBar();
     show($('#recBar'));
+    syncBubble();
     resume();
   }
 
@@ -253,7 +254,7 @@ const Recite = (() => {
     if (w.p !== S.page) goTo(w.p, { animate: Math.abs(w.p - S.page) === 1 });
   }
 
-  // ---- the mic bubble: recite, and the aya is found
+  // ---- the header mic: recite, and the aya is found
 
   let F = null;
   function find() {
@@ -296,19 +297,18 @@ const Recite = (() => {
     return ai >= 0 ? ai : null;
   }
 
-  // the bubble keeps out of the way of every bar, sheet and dialog
-  const COVERS = ['#sheet', '#library', '#adhkar', '#tafsir', '#ayaBar', '#player', '#recBar', '#recWord', '#recIntro', '#recDone', '#khEdit', '#done'];
+  // while listening, a pill over the header row says so; the header mics
+  // step aside during a session, when the reciting bar has its own
   function syncBubble() {
-    const b = $('#micBubble');
-    if (!b) return;
-    const blocked = typeof R === 'undefined' || !R || !!G || COVERS.some(s => panelOpen($(s)));
-    b.hidden = blocked && !F;
-    b.classList.toggle('open', !!F);
-    b.classList.toggle('voice', !!F?.voice);
-    $('#micBubbleTxt').textContent = !F ? '' : F.busy ? 'أبحث عن الآية…' : F.voice ? 'أستمع…' : 'اقرأ آيةً، وأجدها لك';
-    b.setAttribute('aria-label', F ? 'إيقاف' : 'اقرأ آيةً لأجدها');
+    const pill = $('#micPill');
+    pill.hidden = !F;
+    pill.classList.toggle('voice', !!F?.voice);
+    $('#micPillTxt').textContent = !F ? '' : F.busy ? 'أبحث عن الآية…' : F.voice ? 'أستمع…' : 'اقرأ آيةً، وأجدها لك';
+    document.body.classList.toggle('rc-on', !!G);
+    document.body.classList.toggle('rc-find', !!F);
   }
-  $('#micBubble').onclick = () => (F ? stopFind() : find());
+  const mic = () => (F ? stopFind() : G ? null : find());
+  $('#micPillX').onclick = stopFind;
 
   const liveErrs = () => Object.keys(G.errs).map(Number).filter(k => !G.gone.has(k)).sort((a, b) => a - b);
 
@@ -743,5 +743,5 @@ const Recite = (() => {
 
   syncBubble();
 
-  return { start, cancel, paint, onTap, note, syncBubble, panelHTML, mounted, onSheetClick, active: () => !!G };
+  return { start, cancel, paint, onTap, note, syncBubble, mic, panelHTML, mounted, onSheetClick, active: () => !!G };
 })();

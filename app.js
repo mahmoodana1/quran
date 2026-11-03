@@ -77,7 +77,6 @@ function syncDock() {
   const panels = panelOpen($('#sheet')) || panelOpen($('#library')) || panelOpen($('#adhkar'));
   $('#dockPanels').classList.toggle('on', panels);
   $('#dockQuran').classList.toggle('on', !panels);
-  if (typeof Recite !== 'undefined') Recite.syncBubble();
 }
 $('#dockPanels').onclick = () => {
   if (panelOpen($('#adhkar'))) Adhkar.close();
@@ -258,6 +257,7 @@ function icon(name) {
   const icons = {
     bm: '<svg viewBox="0 0 22 26"><path d="M3 2.5h16v21l-8-5.6-8 5.6z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
     bmOn: '<svg viewBox="0 0 22 26"><path d="M3 2.5h16v21l-8-5.6-8 5.6z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
+    mic: '<svg viewBox="0 0 24 24"><path d="M12 3.5a3 3 0 00-3 3v5a3 3 0 006 0v-5a3 3 0 00-3-3zM6.5 11a5.5 5.5 0 0011 0M12 16.5v4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
     chev: '<svg viewBox="0 0 12 12"><path d="M4 2l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   };
   return icons[name];
@@ -301,7 +301,7 @@ function renderPage(p) {
   let html = `<header class="phead">
     <button class="sura-btn" data-act="suras"><span>${suraName(fa[0])}</span><i class="chev">${icon('chev')}</i></button>
     <span class="pnum">${ar(p)}</span>
-    <div class="side"><span class="juz">الجزء ${ar(fa[3])}</span><button class="bm-btn${marked ? ' on' : ''}" data-act="bm" aria-label="علامة">${icon(marked ? 'bmOn' : 'bm')}</button></div>
+    <div class="side"><span class="juz">الجزء ${ar(fa[3])}</span><button class="bm-btn${marked ? ' on' : ''}" data-act="bm" aria-label="علامة">${icon(marked ? 'bmOn' : 'bm')}</button><button class="mic-btn" data-act="mic" aria-label="اقرأ آيةً لأجدها">${icon('mic')}</button></div>
   </header>${ORNAMENT}<div class="lines" style="font-family:${R.glyph ? `qcf-p${p}` : R.font}">`;
 
   const n = opening ? lines.reduce((m, l, i) => (l ? i + 1 : m), 0) : 15;
@@ -518,6 +518,7 @@ wordAudio.addEventListener('error', () => { sayEl?.classList.remove('say'); if (
       if (a === 'index') openSheet('suras');
       else if (a === 'suras') openSheet('suras');
       else if (a === 'bm') toggleBookmark(S.page);
+      else if (a === 'mic') Recite.mic();
       return;
     }
     if (typeof Recite !== 'undefined' && Recite.onTap(e.target)) return;
