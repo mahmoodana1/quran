@@ -1585,6 +1585,13 @@ function suraRow(s, extra = '') {
   </button>`;
 }
 
+// the khatma shelf, first thing in the bookmarks tab
+function khatmaRowHTML() {
+  return `<div class="group kh-entry"><button class="row" data-open-lib><span class="mini-cover">${coverHTML(K, true)}</span>
+    <span class="main"><span class="t">ختماتي</span><span class="s">${esc(K.name)} · صفحة ${ar(K.page)}${KH.length > 1 ? ` · ${ar(KH.length)} ختمات` : ''}</span></span>
+    <svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button></div>`;
+}
+
 function renderSheet() {
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   const body = $('#sheetBody');
@@ -1625,9 +1632,10 @@ function renderSheet() {
     html = Recite.panelHTML();
   } else if (tab === 'marks') {
     const list = bookmarks();
-    if (!list.length) html = '<div class="empty"><svg viewBox="0 0 24 24"><path d="M6.5 4.5h11v15.5l-5.5-3.8-5.5 3.8z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg><b>لا توجد علامات بعد</b>اضغط رقم آية ثم «علامة» لحفظها هنا.</div>';
+    html = khatmaRowHTML();
+    if (!list.length) html += '<div class="empty"><svg viewBox="0 0 24 24"><path d="M6.5 4.5h11v15.5l-5.5-3.8-5.5 3.8z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg><b>لا توجد علامات بعد</b>اضغط رقم آية ثم «علامة» لحفظها هنا.</div>';
     else {
-      html = '<div class="group">' + list.map((b, k) => {
+      html += '<div class="group">' + list.map((b, k) => {
         const name = META.riwayat.find(r => r.id === b.r)?.name || b.r;
         const d = cache[b.r];
         const a = d && b.aya != null ? d.ayas[b.aya] : null;
@@ -1791,15 +1799,18 @@ function renderShelf() {
   }).join('') + `<div class="book" style="--i:${sorted.length}"><button class="book-open" data-new="1"><div class="cover new"><span>+</span><small>ختمة جديدة</small></div></button></div>`;
 }
 
+// the library goes back to the panel it was opened from
+let libFrom = 'marks';
 function openLibrary() {
+  libFrom = tab === 'settings' ? 'settings' : 'marks';
+  $('#libClose').textContent = libFrom === 'settings' ? '‹ الإعدادات' : '‹ العلامات';
   closeSheet();
   closeActions();
   renderShelf();
   show($('#library'));
 }
 
-$('#libClose').onclick = () => { hide($('#library')); openSheet('settings'); };
-$('#libBtn').onclick = openLibrary;
+$('#libClose').onclick = () => { hide($('#library')); openSheet(libFrom); };
 
 $('#shelf').addEventListener('click', async e => {
   const t = e.target.closest('[data-open],[data-edit],[data-new]');

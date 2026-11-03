@@ -5,6 +5,9 @@
 // needed a hint; «إخفاء» hides the words still to come. Mistakes are kept per
 // riwaya, by aya; an aya counts as mastered after three clean recitations on
 // different days, and a new mistake there starts the count again.
+// Tapping the hidden word you are on peeks at it (counted as a hint). The
+// panel keeps a daily goal and streak, a tracker of every surah recited from
+// memory, and «اختبرني», which starts at a random place already recited.
 // The listener is simulated for now (no microphone): it walks the words at a
 // reciting pace and makes the odd mistake, so the whole flow can be tried.
 // Uses $, store, ar, esc, show, hide, toast, R, S, isEnd, goTo, pageInfo,
@@ -58,7 +61,7 @@ const Recite = (() => {
   // ---- session
 
   // from an aya to the end of its surah, or just the ayas given (a review)
-  function start(from, review) {
+  function start(from, review, opts = {}) {
     cancel();
     stopAudio();
     closeActions();
@@ -67,7 +70,7 @@ const Recite = (() => {
     const words = ayas.flatMap(ayaWords);
     if (!words.length) return;
     G = { ayas, words, idx: new Map(words.map((w, k) => [w.p + ':' + w.n, k])), pos: 0, errs: {}, gone: new Set(),
-      hide: store.get('recite.hide', false), run: false, secs: 0, review: !!review, lastP: null };
+      hide: opts.test || store.get('recite.hide', false), run: false, secs: 0, review: !!review && !opts.test, test: !!opts.test, lastP: null };
     dirty = true;
     store.set('recite.used', true);
     syncDock();
@@ -118,8 +121,8 @@ const Recite = (() => {
     const k = G.pos, m = heard(k);
     if (m === 'hint' && !waitUntil) { waitUntil = Date.now() + HINT_WAIT; G.hint = true; paint(); paintBar(); return; }
     if (waitUntil && Date.now() < waitUntil) return;
-    waitUntil = 0; G.hint = false;
-    if (m) { G.errs[k] = m; if (navigator.vibrate) navigator.vibrate(12); }
+    waitUntil = 0; G.hint = G.peek = false;
+    if (m && !G.errs[k]) { G.errs[k] = m; if (navigator.vibrate) navigator.vibrate(12); }
     G.pos++;
     if (G.pos >= G.words.length) return finish();
     follow();
@@ -168,7 +171,7 @@ const Recite = (() => {
         const e = G.gone.has(k) ? null : G.errs[k];
         if (k < G.pos) el.classList.add(e ? 'rc-' + e : 'rc-done');
         else if (G.done) return;
-        else if (k === G.pos) { el.classList.add('rc-now'); if (G.hide) el.classList.add(G.hint ? 'rc-peek' : 'rc-hid'); }
+        else if (k === G.pos) { el.classList.add('rc-now'); if (G.hide) el.classList.add(G.hint || G.peek ? 'rc-peek' : 'rc-hid'); }
         else if (G.hide) el.classList.add('rc-hid');
       });
     }
@@ -205,7 +208,7 @@ const Recite = (() => {
     const said = G.words.slice(0, G.pos), list = liveErrs();
     const first = G.words[0].ai, last = said[said.length - 1].ai;
     $('#rdTitle').textContent = list.length ? 'انتهت الجلسة' : 'ما شاء الله، بلا أخطاء';
-    $('#rdRange').textContent = G.review ? `مراجعة مواضع الضعف · ${ayaCount(new Set(said.map(w => w.ai)).size)}`
+    $('#rdRange').textContent = G.test ? `اختبار · ${ayaLabel(first)}` : G.review ? `مراجعة مواضع الضعف · ${ayaCount(new Set(said.map(w => w.ai)).size)}`
       : first === last ? ayaLabel(first) : `${ayaLabel(first)} – ${ar(R.ayas[last][1])}`;
     $('#rdRight').textContent = ar(said.length - list.length);
     $('#rdErr').textContent = ar(list.length);
@@ -245,8 +248,13 @@ const Recite = (() => {
         if (a.ok.length >= MASTER_DAYS) { a.done = true; a.at = Date.now(); }
       }
     }
+    l.said ||= {}; l.days ||= {};
+    for (const [ai, list] of byAya) if (list.length === list[0][0].of) l.said[ai] = Date.now();
+    l.days[today] = (l.days[today] || 0) + byAya.size;
+    const days = Object.keys(l.days);
+    if (days.length > 400) days.slice(0, days.length - 400).forEach(d => delete l.days[d]);
     l.sessions.unshift({ t: Date.now(), from: said[0].ai, to: said[said.length - 1].ai, ayas: byAya.size,
-      words: said.length, errs: liveErrs().length, secs: Math.round(G.secs), review: G.review,
+      words: said.length, errs: liveErrs().length, secs: Math.round(G.secs), review: G.review, test: G.test,
       list: liveErrs().slice(0, 30).map(k => [G.words[k].ai, G.words[k].wi, G.errs[k]]) });
     l.sessions.length = Math.min(l.sessions.length, 60);
     store.set(key(), l);
@@ -271,6 +279,13 @@ const Recite = (() => {
     const pg = el.closest('.page');
     const n = [...pg.querySelectorAll('.w:not(.end)')].indexOf(el);
     const k = G.idx.get(pg.dataset.page + ':' + n);
+    // the hidden word you are on: a peek, counted as a hint
+    if (k === G.pos && G.hide && !G.done && !G.peek) {
+      G.peek = true; G.errs[k] = 'hint';
+      waitUntil = Date.now() + 1500; // simulated: give the reader a moment with it
+      paint(); paintBar();
+      return true;
+    }
     if (k == null || k >= G.pos || !G.errs[k] || G.gone.has(k)) return true;
     pause();
     G.tap = { k, el };
@@ -323,7 +338,57 @@ const Recite = (() => {
   function sessionLabel(s) {
     if (s.review) return 'مراجعة مواضع الضعف';
     if (!R.ayas[s.from] || !R.ayas[s.to]) return '';
-    return s.from === s.to ? ayaLabel(s.from) : `${ayaLabel(s.from)} – ${ar(R.ayas[s.to][1])}`;
+    const range = s.from === s.to ? ayaLabel(s.from) : `${ayaLabel(s.from)} – ${ar(R.ayas[s.to][1])}`;
+    return s.test ? `اختبار · ${range}` : range;
+  }
+
+  const streakText = n => !n ? 'سمّع اليوم لتبدأ سلسلة الأيام' : n === 1 ? 'بدأت سلسلة الأيام، عُد غدًا'
+    : n === 2 ? 'يومان متتاليان' : n <= 10 ? `${ar(n)} أيام متتالية` : `${ar(n)} يومًا متتاليًا`;
+
+  // days in a row with a session, up to today (or yesterday, before today's)
+  function streak(l) {
+    const d = new Date();
+    if (!l.days?.[day(d)]) d.setDate(d.getDate() - 1);
+    let n = 0;
+    while (l.days?.[day(d)]) { n++; d.setDate(d.getDate() - 1); }
+    return n;
+  }
+
+  // ayas in each surah of this riwaya
+  let suraSize = null;
+  function suraSizes() {
+    if (suraSize?.rid === R.id) return suraSize.n;
+    const n = new Array(115).fill(0);
+    R.ayas.forEach(a => { n[a[0]]++; });
+    suraSize = { rid: R.id, n };
+    return n;
+  }
+
+  // «اختبرني»: three ayas from a random place already recited, words hidden
+  function testAyas() {
+    const said = Object.keys(log().said || {}).map(Number).filter(ai => R.ayas[ai]);
+    if (said.length < 3) return null;
+    const a = said[Math.floor(Math.random() * said.length)];
+    const out = [a];
+    for (let b = a + 1; out.length < 3 && R.ayas[b] && R.ayas[b][0] === R.ayas[a][0]; b++) out.push(b);
+    return out;
+  }
+
+  function trackerHTML(l, weak) {
+    const said = l.said || {}, sizes = suraSizes();
+    const got = new Array(115).fill(0), weakIn = new Set(weak.map(([ai]) => R.ayas[ai][0]));
+    for (const ai of Object.keys(said)) if (R.ayas[+ai]) got[R.ayas[+ai][0]]++;
+    let full = 0, some = 0, tiles = '';
+    for (let s = 1; s <= 114; s++) {
+      const f = sizes[s] ? got[s] / sizes[s] : 0;
+      const lvl = f === 0 ? 0 : f < 1 / 3 ? 1 : f < 2 / 3 ? 2 : f < 1 ? 3 : 4;
+      if (lvl === 4) full++; else if (lvl) some++;
+      tiles += `<button class="rc-tile l${lvl}${weakIn.has(s) ? ' weak' : ''}" data-rc-sura="${s}" aria-label="${suraName(s)}: ${ar(got[s])} من ${ar(sizes[s])}">${ar(s)}</button>`;
+    }
+    return `<div class="group-label">متابعة الحفظ</div>
+      <p class="rc-track-sum">${ar(full)} سورة كاملة · ${ar(some)} بدأتها</p>
+      <div class="rc-tiles">${tiles}</div>
+      <div class="rc-legend"><span><i class="rc-tile l1"></i>بدأتها</span><span><i class="rc-tile l4"></i>كاملة</span><span><i class="rc-tile l2 weak"></i>فيها مواضع ضعف</span></div>`;
   }
 
   function panelHTML() {
@@ -331,9 +396,12 @@ const Recite = (() => {
     const all = Object.entries(l.ayas).map(([ai, a]) => [+ai, a]).filter(([ai]) => R.ayas[ai]);
     const weak = all.filter(([, a]) => !a.done).sort((x, y) => x[0] - y[0]);
     const mastered = all.filter(([, a]) => a.done).sort((x, y) => y[1].at - x[1].at);
+    const goal = store.get('recite.goal', 0);
     const settings = `<div class="group-label">إعدادات التسميع</div><div class="group">
       ${toggle('hide', 'ابدأ والكلمات مخفية', 'تظهر كل كلمة حين تقرؤها')}
-      ${toggle('weak', 'مواضع الضعف في المصحف', 'خط منقّط خفيف تحت كلمات أخطأت فيها')}</div>`;
+      ${toggle('weak', 'مواضع الضعف في المصحف', 'خط منقّط خفيف تحت كلمات أخطأت فيها')}
+      <div class="row rc-goal"><span class="main"><span class="t">هدف يومي</span><span class="s">عدد الآيات التي تسمّعها كل يوم</span></span>
+        <span class="rc-chips">${[0, 5, 10, 20].map(n => `<button data-rc-goal="${n}"${goal === n ? ' class="on"' : ''}>${n ? ar(n) : 'لا'}</button>`).join('')}</span></div></div>`;
 
     if (!all.length && !l.sessions.length) {
       return `<div class="rc-welcome"><div class="rc-badge">${MIC}</div><h2>التسميع</h2>
@@ -347,10 +415,19 @@ const Recite = (() => {
     const sum = (list, f) => list.reduce((s, x) => s + (x[f] || 0), 0);
     const e1 = sum(thisW, 'errs'), e0 = sum(lastW, 'errs');
     const trend = e0 ? (e1 <= e0 ? `الأخطاء أقل بـ ${ar(Math.round((1 - e1 / e0) * 100))}٪ من الأسبوع الماضي` : 'الأخطاء أكثر من الأسبوع الماضي') : '';
-    let html = `<div class="rc-hero"><div class="rc-hero-l">هذا الأسبوع</div>
+    const today = l.days?.[day()] || 0, run = streak(l);
+    const C = 2 * Math.PI * 19, done = goal ? Math.min(1, today / goal) : 0;
+    const ring = goal ? `<svg viewBox="0 0 44 44" class="rc-ring${today >= goal ? ' full' : ''}"><circle cx="22" cy="22" r="19" class="trk"/>
+      <circle cx="22" cy="22" r="19" class="val" style="stroke-dasharray:${(done * C).toFixed(1)} ${C.toFixed(1)}"/></svg>` : '';
+    const test = testAyas();
+    let html = `<div class="rc-hero"><div class="rc-today">${ring ? `<div class="rc-ring-w">${ring}<b>${ar(today)}</b></div>` : ''}
+      <div class="rc-today-t"><b>${goal ? (today >= goal ? 'بلغت هدف اليوم، ما شاء الله' : `اليوم ${ar(today)} من ${ayaCount(goal)}`) : `اليوم: ${today ? ayaCount(today) : 'لم تسمّع بعد'}`}</b>
+      <small>${streakText(run)}</small></div></div>
+      <div class="rc-hero-l">هذا الأسبوع</div>
       <div class="rc-hero-n"><div><b>${ar(thisW.length)}</b><small>جلسة</small></div><div><b>${ar(sum(thisW, 'ayas'))}</b><small>آية</small></div><div><b>${ar(e1)}</b><small>خطأ</small></div></div>
       ${trend ? `<div class="rc-hero-t">${trend}</div>` : ''}</div>
       <div class="rc-actions"><button class="rc-review" data-rc-resume>${MIC}تابع من ${ayaLabel(resumeAya())}</button>
+      ${test ? `<button class="rc-review ghost" data-rc-test>اختبرني من حفظي</button>` : ''}
       ${weak.length ? `<button class="rc-review ghost" data-rc-review>راجع مواضع الضعف · ${ayaCount(weak.length)}</button>` : ''}</div>`;
 
     html += '<div class="group-label">مواضع الضعف</div>';
@@ -365,6 +442,7 @@ const Recite = (() => {
     } else {
       html += '<p class="note">لا مواضع ضعف الآن، ما شاء الله.</p>';
     }
+    if (Object.keys(l.said || {}).length) html += trackerHTML(l, weak);
 
     if (mastered.length) {
       html += '<div class="group-label">أتقنتها</div><div class="group">' + mastered.slice(0, 30).map(([ai, a]) =>
@@ -394,6 +472,17 @@ const Recite = (() => {
     if (one) { e.stopPropagation(); closeSheet(); start(null, [+one.dataset.rcStart]); return true; }
     if (e.target.closest('[data-rc-resume]')) { closeSheet(); start(resumeAya()); return true; }
     if (e.target.closest('[data-rc-review]')) { closeSheet(); start(null, weakAyas()); return true; }
+    if (e.target.closest('[data-rc-test]')) { const t = testAyas(); if (t) { closeSheet(); start(null, t, { test: true }); } return true; }
+    const g = e.target.closest('[data-rc-goal]');
+    if (g) {
+      store.set('recite.goal', +g.dataset.rcGoal);
+      const y = $('#sheetBody').scrollTop;
+      renderSheet();
+      $('#sheetBody').scrollTop = y;
+      return true;
+    }
+    const su = e.target.closest('[data-rc-sura]');
+    if (su) { closeSheet(); goTo(R.ayas[R.suraStart[+su.dataset.rcSura]][2]); return true; }
     const set = e.target.closest('[data-rc-set]');
     if (set) {
       const k = 'recite.' + set.dataset.rcSet;
