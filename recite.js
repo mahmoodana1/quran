@@ -9,13 +9,13 @@
 // reciting pace and makes the odd mistake, so the whole flow can be tried.
 // Uses $, store, ar, esc, show, hide, toast, R, S, isEnd, goTo, pageInfo,
 // paintMarks, closeActions, stopAudio, speakWord, suraName, ayaLabel,
-// openMistakes, closeSheet and flashAya from app.js at call time.
+// openRecite, renderSheet, closeSheet and flashAya from app.js at call time.
 const Recite = (() => {
   const TYPES = { wrong: 'قرأتها بكلمة أخرى', skip: 'تجاوزتها', hint: 'احتجت تلميحًا' };
   const MASTER_DAYS = 3;
   const PACE = 420;       // simulated: ms a word
   const HINT_WAIT = 2200; // simulated: pause before the hint shows
-  const CLS = ['rc-done', 'rc-now', 'rc-hid', 'rc-peek', 'rc-wrong', 'rc-skip', 'rc-hint'];
+  const CLS = ['rc-weak', 'rc-done', 'rc-now', 'rc-hid', 'rc-peek', 'rc-wrong', 'rc-skip', 'rc-hint'];
 
   // the session: words in order { ai, p, n (word on its page), wi (word in its aya), of (aya length) },
   // idx 'page:n' -> word, pos = next word to say, errs[k] = type, gone = mistakes taken back
@@ -139,14 +139,30 @@ const Recite = (() => {
 
   // ---- painting
 
+  // past mistakes shown faintly while reading (a setting): 'page:n' -> type
+  let weakMap = null;
+  function weakWords() {
+    if (weakMap?.rid === R.id) return weakMap.m;
+    const m = new Map();
+    for (const [ai, a] of Object.entries(log().ayas)) {
+      if (a.done || !R.ayas[+ai]) continue;
+      const ws = ayaWords(+ai);
+      for (const [wi, e] of Object.entries(a.words)) { const w = ws[+wi]; if (w) m.set(w.p + ':' + w.n, e); }
+    }
+    weakMap = { rid: R.id, m };
+    return m;
+  }
+
   function paint(root = document) {
-    if (!G && !dirty) return;
-    if (!G && root === document) dirty = false;
+    const weak = !G && store.get('recite.weak', false) ? weakWords() : null;
+    if (!G && !dirty && !weak) return;
+    if (!G && root === document) dirty = !!weak;
     const pages = root.classList?.contains('page') ? [root] : root.querySelectorAll('.page');
     for (const pg of pages) {
       const p = +pg.dataset.page;
       pg.querySelectorAll('.w:not(.end)').forEach((el, n) => {
         el.classList.remove(...CLS);
+        if (weak) { if (weak.has(p + ':' + n)) el.classList.add('rc-weak'); return; }
         const k = G?.idx.get(p + ':' + n);
         if (k == null) return;
         const e = G.gone.has(k) ? null : G.errs[k];
@@ -230,10 +246,12 @@ const Recite = (() => {
       }
     }
     l.sessions.unshift({ t: Date.now(), from: said[0].ai, to: said[said.length - 1].ai, ayas: byAya.size,
-      words: said.length, errs: liveErrs().length, secs: Math.round(G.secs), review: G.review });
+      words: said.length, errs: liveErrs().length, secs: Math.round(G.secs), review: G.review,
+      list: liveErrs().slice(0, 30).map(k => [G.words[k].ai, G.words[k].wi, G.errs[k]]) });
     l.sessions.length = Math.min(l.sessions.length, 60);
     store.set(key(), l);
-    store.set('recite.last', Math.min(said[said.length - 1].ai + 1, R.ayas.length - 1));
+    weakMap = null;
+    store.set('recite.last.' + R.id, Math.min(said[said.length - 1].ai + 1, R.ayas.length - 1));
   }
 
   function closeDone() {
@@ -277,7 +295,9 @@ const Recite = (() => {
     $('#dockRec').classList.toggle('on', !!G);
   }
 
-  // ---- history: the «أخطائي» half of the bookmarks tab
+  // ---- the «التسميع» panel: progress, weak spots, sessions and settings
+
+  const MIC = '<svg viewBox="0 0 24 24"><path d="M12 3.5a3 3 0 00-3 3v5a3 3 0 006 0v-5a3 3 0 00-3-3zM6.5 11a5.5 5.5 0 0011 0M12 16.5v4"/></svg>';
 
   function snippet(ai, words) {
     const toks = ayaTokens(ai), ks = Object.keys(words).map(Number);
@@ -288,53 +308,81 @@ const Recite = (() => {
     }).join(' ') + (b < toks.length ? ' …' : '');
   }
 
-  function historyHTML() {
+  // where «تابع» picks up: after the last session, else this page
+  function resumeAya() {
+    const last = store.get('recite.last.' + R.id);
+    return last != null && R.ayas[last] ? last : pageInfo(S.page).first;
+  }
+
+  const toggle = (id, label, sub) => {
+    const on = !!store.get('recite.' + id, false);
+    return `<button class="row rc-set" data-rc-set="${id}" role="switch" aria-checked="${on}">
+      <span class="main"><span class="t">${label}</span><span class="s">${sub}</span></span><span class="tog${on ? ' on' : ''}"><i></i></span></button>`;
+  };
+
+  function sessionLabel(s) {
+    if (s.review) return 'مراجعة مواضع الضعف';
+    if (!R.ayas[s.from] || !R.ayas[s.to]) return '';
+    return s.from === s.to ? ayaLabel(s.from) : `${ayaLabel(s.from)} – ${ar(R.ayas[s.to][1])}`;
+  }
+
+  function panelHTML() {
     const l = log();
     const all = Object.entries(l.ayas).map(([ai, a]) => [+ai, a]).filter(([ai]) => R.ayas[ai]);
     const weak = all.filter(([, a]) => !a.done).sort((x, y) => x[0] - y[0]);
     const mastered = all.filter(([, a]) => a.done).sort((x, y) => y[1].at - x[1].at);
+    const settings = `<div class="group-label">إعدادات التسميع</div><div class="group">
+      ${toggle('hide', 'ابدأ والكلمات مخفية', 'تظهر كل كلمة حين تقرؤها')}
+      ${toggle('weak', 'مواضع الضعف في المصحف', 'خط منقّط خفيف تحت كلمات أخطأت فيها')}</div>`;
+
     if (!all.length && !l.sessions.length) {
-      return `<div class="empty"><svg viewBox="0 0 24 24"><path d="M12 3.5a3 3 0 00-3 3v5a3 3 0 006 0v-5a3 3 0 00-3-3zM6.5 11a5.5 5.5 0 0011 0M12 16.5v4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>
-        <b>لا أخطاء محفوظة بعد</b>اضغط رقم آية ثم «تسميع» لتقرأ من حفظك.</div>`;
+      return `<div class="rc-welcome"><div class="rc-badge">${MIC}</div><h2>التسميع</h2>
+        <p>اقرأ من حفظك، ويتابعك التطبيق كلمةً كلمة، وينبّهك إلى ما أخطأت فيه ويحفظه هنا لتراجعه.</p>
+        <button class="rc-review" data-rc-resume>${MIC}ابدأ من ${ayaLabel(pageInfo(S.page).first)}</button>
+        <p class="note">أو اضغط رقم أي آية في المصحف ثم «تسميع».</p></div>${settings}`;
     }
+
     const now = Date.now(), wk = now - 7 * 864e5, wk2 = now - 14 * 864e5;
     const thisW = l.sessions.filter(s => s.t >= wk), lastW = l.sessions.filter(s => s.t >= wk2 && s.t < wk);
     const sum = (list, f) => list.reduce((s, x) => s + (x[f] || 0), 0);
     const e1 = sum(thisW, 'errs'), e0 = sum(lastW, 'errs');
-    const trend = e0 ? (e1 <= e0 ? `الأخطاء أقل بـ ${ar(Math.round((1 - e1 / e0) * 100))}٪ من الأسبوع الماضي` : `الأخطاء أكثر من الأسبوع الماضي`) : '';
+    const trend = e0 ? (e1 <= e0 ? `الأخطاء أقل بـ ${ar(Math.round((1 - e1 / e0) * 100))}٪ من الأسبوع الماضي` : 'الأخطاء أكثر من الأسبوع الماضي') : '';
     let html = `<div class="rc-hero"><div class="rc-hero-l">هذا الأسبوع</div>
       <div class="rc-hero-n"><div><b>${ar(thisW.length)}</b><small>جلسة</small></div><div><b>${ar(sum(thisW, 'ayas'))}</b><small>آية</small></div><div><b>${ar(e1)}</b><small>خطأ</small></div></div>
-      ${trend ? `<div class="rc-hero-t">${trend}</div>` : ''}</div>`;
+      ${trend ? `<div class="rc-hero-t">${trend}</div>` : ''}</div>
+      <div class="rc-actions"><button class="rc-review" data-rc-resume>${MIC}تابع من ${ayaLabel(resumeAya())}</button>
+      ${weak.length ? `<button class="rc-review ghost" data-rc-review>راجع مواضع الضعف · ${ayaCount(weak.length)}</button>` : ''}</div>`;
+
+    html += '<div class="group-label">مواضع الضعف</div>';
     if (weak.length) {
-      html += `<button class="rc-review" data-rc-review><svg viewBox="0 0 24 24"><path d="M12 3.5a3 3 0 00-3 3v5a3 3 0 006 0v-5a3 3 0 00-3-3zM6.5 11a5.5 5.5 0 0011 0M12 16.5v4"/></svg>راجع مواضع الضعف · ${ayaCount(weak.length)}</button>`;
-      let sura = 0;
-      weak.forEach(([ai, a]) => {
-        const s = R.ayas[ai][0];
-        if (s !== sura) { html += `${sura ? '</div>' : ''}<div class="group-label">${suraName(s)}</div><div class="group">`; sura = s; }
+      html += '<div class="group">' + weak.map(([ai, a]) => {
         const dots = [0, 1, 2].map(j => `<i${j < a.ok.length ? ' class="on"' : ''}></i>`).join('');
-        html += `<button class="row rc-row" data-rc-aya="${ai}"><span class="num">${ar(R.ayas[ai][1])}</span>
+        return `<button class="row rc-row" data-rc-aya="${ai}"><span class="num">${ar(R.ayas[ai][1])}</span>
           <span class="main"><span class="verse rc-snip" style="font-family:${R.font}">${snippet(ai, a.words)}</span>
-          <span class="s">${times(a.n)} · آخرها ${ago(a.last)}<span class="rc-dots" aria-label="${ar(a.ok.length)} من ${ar(MASTER_DAYS)} قراءات صحيحة">${dots}</span></span></span>
-          <svg viewBox="0 0 24 24" class="go"><path d="M14.5 6l-6 6 6 6"/></svg></button>`;
-      });
-      html += '</div>';
+          <span class="s">${suraName(R.ayas[ai][0])} · ${times(a.n)} · آخرها ${ago(a.last)}<span class="rc-dots" aria-label="${ar(a.ok.length)} من ${ar(MASTER_DAYS)} قراءات صحيحة">${dots}</span></span></span>
+          <span class="rc-mic" data-rc-start="${ai}" aria-label="سمّع الآية">${MIC}</span></button>`;
+      }).join('') + '</div>';
     } else {
-      html += '<p class="note">لا مواضع ضعف الآن — ما شاء الله.</p>';
+      html += '<p class="note">لا مواضع ضعف الآن، ما شاء الله.</p>';
     }
+
     if (mastered.length) {
-      html += `<div class="group-label">أتقنتها</div><div class="group">` + mastered.slice(0, 20).map(([ai, a]) =>
+      html += '<div class="group-label">أتقنتها</div><div class="group">' + mastered.slice(0, 30).map(([ai, a]) =>
         `<button class="row rc-row rc-mastered" data-rc-aya="${ai}"><span class="num">${ar(R.ayas[ai][1])}</span>
           <span class="main"><span class="t">${ayaLabel(ai)}</span><span class="s">أتقنتها ${ago(a.at)}</span></span><span class="check">✓</span></button>`).join('') + '</div>';
     }
+
     if (l.sessions.length) {
-      html += `<div class="group-label">الجلسات الأخيرة</div><div class="group">` + l.sessions.slice(0, 8).map(s => {
-        const ok = R.ayas[s.from] && R.ayas[s.to];
-        const range = s.review ? 'مراجعة مواضع الضعف' : !ok ? '' : s.from === s.to ? ayaLabel(s.from) : `${ayaLabel(s.from)} – ${ar(R.ayas[s.to][1])}`;
-        return `<div class="row"><span class="main"><span class="t">${range}</span>
-          <span class="s">${ago(s.t)} · ${ayaCount(s.ayas || 1)} · ${s.errs ? errs(s.errs) : 'بلا أخطاء'}</span></span></div>`;
+      html += '<div class="group-label">الجلسات</div><div class="group">' + l.sessions.slice(0, 20).map(s => {
+        const items = (s.list || []).filter(([ai]) => R.ayas[ai]).map(([ai, wi, e]) =>
+          `<div class="rc-sess-i"><span class="rc-mk rc-${e}"></span><b style="font-family:${R.font}">${esc(ayaTokens(ai)[wi] || '')}</b><small>${ayaLabel(ai)} · ${TYPES[e]}</small></div>`).join('');
+        return `<details class="rc-sess"><summary class="row"><span class="main"><span class="t">${sessionLabel(s)}</span>
+          <span class="s">${ago(s.t)} · ${ayaCount(s.ayas || 1)} · ${s.errs ? errs(s.errs) : 'بلا أخطاء'}</span></span>
+          <svg viewBox="0 0 24 24" class="go"><path d="M14.5 6l-6 6 6 6"/></svg></summary>
+          <div class="rc-sess-list">${items || '<p class="note">بلا أخطاء، ما شاء الله.</p>'}</div></details>`;
       }).join('') + '</div>';
     }
-    return html;
+    return html + settings;
   }
 
   function weakAyas() {
@@ -342,7 +390,21 @@ const Recite = (() => {
   }
 
   function onSheetClick(e) {
+    const one = e.target.closest('[data-rc-start]');
+    if (one) { e.stopPropagation(); closeSheet(); start(null, [+one.dataset.rcStart]); return true; }
+    if (e.target.closest('[data-rc-resume]')) { closeSheet(); start(resumeAya()); return true; }
     if (e.target.closest('[data-rc-review]')) { closeSheet(); start(null, weakAyas()); return true; }
+    const set = e.target.closest('[data-rc-set]');
+    if (set) {
+      const k = 'recite.' + set.dataset.rcSet;
+      store.set(k, !store.get(k, false));
+      weakMap = null;
+      const y = $('#sheetBody').scrollTop;
+      renderSheet();
+      $('#sheetBody').scrollTop = y;
+      paintMarks();
+      return true;
+    }
     const row = e.target.closest('[data-rc-aya]');
     if (row) {
       const ai = +row.dataset.rcAya;
@@ -384,7 +446,7 @@ const Recite = (() => {
     if (G.gone.has(k)) G.gone.delete(k); else G.gone.add(k);
     paint(); paintDone();
   });
-  $('#rdNote').addEventListener('click', e => { if (e.target.closest('[data-rd-log]')) { closeDone(); openMistakes(); } });
+  $('#rdNote').addEventListener('click', e => { if (e.target.closest('[data-rd-log]')) { closeDone(); openRecite(); } });
   $('#rdOk').onclick = () => closeDone();
   $('#rdAgain').onclick = () => {
     const g = G;
@@ -399,11 +461,11 @@ const Recite = (() => {
     if (G) return;
     $('#dockQuran').onclick();
     const { first, last } = pageInfo(S.page);
-    const lastAi = store.get('recite.last');
+    const lastAi = store.get('recite.last.' + R.id);
     start(lastAi != null && lastAi >= first && lastAi <= last ? lastAi : first);
   };
 
   syncDock();
 
-  return { start, cancel, paint, onTap, note, syncDock, historyHTML, onSheetClick, active: () => !!G };
+  return { start, cancel, paint, onTap, note, syncDock, panelHTML, onSheetClick, active: () => !!G };
 })();

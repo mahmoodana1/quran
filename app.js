@@ -1539,8 +1539,7 @@ function applyTheme() {
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
 
 let tab = 'suras';
-let marksSeg = 'bm';
-function openMistakes() { marksSeg = 'mist'; openSheet('marks'); }
+function openRecite() { openSheet('recite'); }
 function openSheet(t = tab) {
   tab = t;
   $('#sheetTitle').textContent = 'اللوحات';
@@ -1552,6 +1551,12 @@ function openSheet(t = tab) {
 }
 function closeSheet() { hide($('#sheet')); $('#q').blur(); }
 $('#sheetClose').onclick = closeSheet;
+$('#setBtn').onclick = () => {
+  tab = tab === 'settings' ? 'suras' : 'settings';
+  $('#q').value = '';
+  renderSheet();
+  $('#sheetBody').scrollTop = 0;
+};
 $('#tabs').addEventListener('click', e => {
   const b = e.target.closest('[data-tab]');
   if (!b) return;
@@ -1580,17 +1585,13 @@ function suraRow(s, extra = '') {
   </button>`;
 }
 
-function marksSegHTML() {
-  if (!store.get('recite.used')) return '';
-  return `<div class="seg"><button data-marks="bm"${marksSeg === 'bm' ? ' class="on"' : ''}>علاماتي</button><button data-marks="mist"${marksSeg === 'mist' ? ' class="on"' : ''}>أخطائي</button></div>`;
-}
-
 function renderSheet() {
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   const body = $('#sheetBody');
   const q = $('#q').value;
   $('#tabs').hidden = !!q.trim();
-  $('.search').hidden = tab === 'prayer' || tab === 'settings';
+  $('#setBtn').classList.toggle('on', tab === 'settings');
+  $('.search').hidden = tab === 'prayer' || tab === 'settings' || tab === 'recite';
   $('#q').placeholder = tab === 'adhkar' ? 'ابحث في الأذكار… (مثال: الكرب، السفر)' : 'ابحث عن سورة أو آية… (مثال: البقرة ٢٥٥)';
   let html = '';
 
@@ -1620,8 +1621,8 @@ function renderSheet() {
     html = '<div class="group">' + META.suras.map((_, i) => suraRow(i + 1)).join('') + '</div>';
   } else if (tab === 'adhkar') {
     html = '<div id="adhkarList"></div>';
-  } else if (tab === 'marks' && marksSeg === 'mist' && store.get('recite.used')) {
-    html = marksSegHTML() + Recite.historyHTML();
+  } else if (tab === 'recite') {
+    html = Recite.panelHTML();
   } else if (tab === 'marks') {
     const list = bookmarks();
     if (!list.length) html = '<div class="empty"><svg viewBox="0 0 24 24"><path d="M6.5 4.5h11v15.5l-5.5-3.8-5.5 3.8z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg><b>لا توجد علامات بعد</b>اضغط رقم آية ثم «علامة» لحفظها هنا.</div>';
@@ -1638,7 +1639,6 @@ function renderSheet() {
           <span class="del" data-del-mark="${k}" aria-label="حذف"><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>`;
       }).join('') + '</div>';
     }
-    html = marksSegHTML() + html;
   } else if (tab === 'prayer') {
     html = '<div id="prayer"></div>';
   } else if (tab === 'settings') {
@@ -1667,8 +1667,6 @@ $('#sheetBody').addEventListener('click', async e => {
   if (compass) { Prayer.startCompass(compass); return; }
   const dk = e.target.closest('[data-dk]');
   if (dk) { $('#q').blur(); Adhkar.open(dk.dataset.dk, dk.dataset.dkI != null ? +dk.dataset.dkI : undefined); return; }
-  const seg = e.target.closest('[data-marks]');
-  if (seg) { marksSeg = seg.dataset.marks; renderSheet(); return; }
   if (typeof Recite !== 'undefined' && Recite.onSheetClick(e)) return;
   const del = e.target.closest('[data-del-mark]');
   if (del) {

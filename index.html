@@ -111,7 +111,10 @@
   <div class="sheet-head">
     <button id="sheetClose" class="txt-btn">تم</button>
     <div class="sheet-title"><h1 id="sheetTitle">الفهرس</h1><small id="sheetSub"></small></div>
-    <button id="libBtn" class="lib-btn" aria-label="ختماتي"><svg viewBox="0 0 24 24"><path d="M5 4.5h3.5v15H5zM10.5 4.5H14v15h-3.5zM15.6 5.6l3.3-.9 3.4 14.2-3.3.9z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>
+    <div class="head-tools">
+      <button id="libBtn" class="lib-btn" aria-label="ختماتي"><svg viewBox="0 0 24 24"><path d="M5 4.5h3.5v15H5zM10.5 4.5H14v15h-3.5zM15.6 5.6l3.3-.9 3.4 14.2-3.3.9z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>
+      <button id="setBtn" class="lib-btn set-btn" aria-label="الإعدادات"><svg viewBox="0 0 24 24"><path d="M12 2.8l1.6 2.3 2.7-.8.6 2.8 2.8.6-.8 2.7 2.3 1.6-2.3 1.6.8 2.7-2.8.6-.6 2.8-2.7-.8L12 21.2l-1.6-2.3-2.7.8-.6-2.8-2.8-.6.8-2.7L2.8 12l2.3-1.6-.8-2.7 2.8-.6.6-2.8 2.7.8z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
+    </div>
   </div>
   <div class="search">
     <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15.5 15.5L21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
@@ -120,9 +123,9 @@
   <nav class="tabs" id="tabs">
     <button data-tab="suras" class="on"><span>السور</span></button>
     <button data-tab="adhkar"><span>الأذكار</span></button>
+    <button data-tab="recite"><span>التسميع</span></button>
     <button data-tab="marks"><span>العلامات</span></button>
     <button data-tab="prayer"><span>الصلاة</span></button>
-    <button data-tab="settings"><span>الإعدادات</span></button>
   </nav>
   <div id="sheetBody"></div>
 </section>
