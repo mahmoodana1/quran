@@ -1319,3 +1319,21 @@ svg { fill: currentColor; }
   0%, 60% { box-shadow: 0 0 0 2px var(--c-marks), var(--shadow-float); }
   100% { box-shadow: 0 0 0 0 transparent, var(--shadow-float); }
 }
+
+/* التسميع settings: the Muaalem models, each with its time on this device */
+.rc-models { display: grid; gap: 6px; padding: 0 12px 12px; }
+.rc-m { display: grid; grid-template-columns: 1fr auto; grid-template-areas: "n t" "b b" "g g"; gap: 4px 10px; align-items: center;
+  text-align: right; width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); color: var(--ink); font: inherit; cursor: pointer; }
+.rc-m.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 8%, var(--card)); }
+.rc-m:disabled { opacity: .5; cursor: default; }
+.rc-mn { grid-area: n; font-weight: 600; }
+.rc-mn small { font-weight: 400; color: var(--muted); margin-inline-start: 6px; }
+.rc-mt { grid-area: t; font-size: .86em; color: var(--muted); font-variant-numeric: tabular-nums; }
+.rc-mt.na { grid-column: 1 / -1; grid-row: 2; }
+.rc-mbar { grid-area: b; height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; }
+.rc-mbar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
+.rc-tags { grid-area: g; display: flex; gap: 6px; flex-wrap: wrap; }
+.rc-tags:empty { display: none; }
+.rc-tag { font-size: .75em; padding: 1px 8px; border-radius: 99px; background: var(--tint-2); color: var(--muted); }
+.rc-tag.on { background: var(--accent); color: var(--on-accent); }
+.rc-mfoot { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-start; padding-top: 4px; }

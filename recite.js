@@ -860,7 +860,9 @@ const Recite = (() => {
       ${toggle('weak', 'مواضع الضعف في المصحف', 'خط منقّط خفيف تحت كلمات أخطأت فيها')}
       ${MU() ? '' : `<div class="row rc-goal"><span class="main"><span class="t">سرعة التعرّف</span><span class="s">السريع أخفّ وأسرع بمرتين، والدقيق أثبت قليلًا</span></span>
         <span class="rc-chips">${[['fast', 'سريع'], ['exact', 'دقيق']].map(([k, t]) => `<button data-rc-use="${k}"${Listen.which() === k ? ' class="on"' : ''}>${t}</button>`).join('')}</span></div>`}
-      <div class="row rc-model"><span class="main"><span class="t">نموذج التعرّف على التلاوة</span><span class="s" id="rcModelS">…</span></span><span id="rcModelB"></span></div>
+      ${MU() ? `<div class="row rc-model"><span class="main"><span class="t">نموذج التعرّف على التلاوة</span><span class="s" id="rcModelS">…</span></span><span id="rcModelB"></span></div>
+      <div class="rc-models" id="rcModels"></div>`
+      : `<div class="row rc-model"><span class="main"><span class="t">نموذج التعرّف على التلاوة</span><span class="s" id="rcModelS">…</span></span><span id="rcModelB"></span></div>`}
       <div class="row rc-goal"><span class="main"><span class="t">هدف يومي</span><span class="s">عدد الآيات التي تسمّعها كل يوم</span></span>
         <span class="rc-chips">${[0, 5, 10, 20].map(n => `<button data-rc-goal="${n}"${goal === n ? ' class="on"' : ''}>${n ? ar(n) : 'لا'}</button>`).join('')}</span></div></div>`;
 
@@ -927,17 +929,7 @@ const Recite = (() => {
 
   // the model row in the settings, once the panel is on screen
   function mounted() {
-    if (MU()) {
-      Mu.saved().then(have => {
-        const s = $('#rcModelS'), b = $('#rcModelB'), c = Mu.choice();
-        if (!s) return;
-        s.textContent = !c ? 'يُختار أسرع نموذج لجهازك قبل التنزيل'
-          : `${MU_NAMES[c.id]} · ${ar(Mu.mb())} م.ب · ${have ? 'على جهازك، يعمل دون إنترنت' : 'غير منزّل'} · نحو ${ar(c.ms)} م.ث لكل تحديث`;
-        b.innerHTML = (c ? `<button class="rc-not" data-rc-model="probe">اختبر من جديد</button>` : '')
-          + `<button class="rc-not" data-rc-model="${have ? 'del' : 'get'}">${have ? 'حذف' : 'تنزيل'}</button>`;
-      });
-      return;
-    }
+    if (MU()) return paintModels();
     Listen.saved().then(have => {
       const s = $('#rcModelS'), b = $('#rcModelB');
       if (!s) return;
@@ -946,6 +938,30 @@ const Recite = (() => {
         + (st.ms ? ` · آخر تعرّف ${ar((st.ms / 1000).toFixed(1))} ث · ${ar(st.threads)} ${st.threads > 1 ? 'أنوية' : 'نواة'}` : '');
       b.innerHTML = `<button class="rc-not" data-rc-model="${have ? 'del' : 'get'}">${have ? 'حذف' : 'تنزيل'}</button>`;
     });
+  }
+
+  // the Muaalem models, each with how fast it ran in this device's test
+  async function paintModels(testing) {
+    const box = $('#rcModels'), s = $('#rcModelS'), b = $('#rcModelB');
+    if (!box) return;
+    const have = await Mu.savedVariants(), bench = Mu.bench(), c = Mu.choice();
+    if (!$('#rcModels')) return;
+    s.textContent = testing ? `نختبر النماذج على جهازك… ${testing}`
+      : bench ? `اختبرناها على جهازك ${ago(bench.at)}: الأسرع يكتب ما تقرؤه أسرع، وكلها بالدقة نفسها تقريبًا`
+      : 'لم نختبرها على جهازك بعد';
+    b.innerHTML = `<button class="rc-not" data-rc-model="probe"${testing ? ' disabled' : ''}>${bench ? 'اختبر من جديد' : 'اختبر جهازك'}</button>`;
+    const times = bench?.times || {}, ok = Object.values(times).filter(x => x != null), fastest = ok.length ? Math.min(...ok) : null;
+    box.innerHTML = Mu.CANDS.map(x => {
+      const t = times[x.id], on = c?.id === x.id, got = have[x.variant];
+      const speed = !bench ? '<span class="rc-mt">لم يُختبر</span>'
+        : t == null ? '<span class="rc-mt na">لا يعمل على جهازك</span>'
+        : `<span class="rc-mt">نحو ${ar(t)} م.ث</span><span class="rc-mbar"><i style="width:${Math.max(6, Math.round(fastest / t * 100))}%"></i></span>`;
+      const tags = (bench && t == null ? [] : [x.id === bench?.best ? 'الأسرع' : '', on ? 'المستعمل' : '', got ? 'على جهازك' : '']).filter(Boolean)
+        .map(k => `<span class="rc-tag${k === 'المستعمل' ? ' on' : ''}">${k}</span>`).join('');
+      return `<button class="rc-m${on ? ' on' : ''}" data-rc-pick="${x.id}"${bench && t == null ? ' disabled' : ''}>
+        <span class="rc-mn">${MU_NAMES[x.id]}<small>${ar(x.mb)} م.ب</small></span>${speed}<span class="rc-tags">${tags}</span></button>`;
+    }).join('') + (Object.values(have).some(Boolean) ? `<div class="rc-mfoot">${Object.entries(have).filter(([, v]) => v).map(([k]) =>
+      `<button class="rc-not" data-rc-delv="${k}">حذف ${k === 'q8' ? '٨ بت' : k === 'q4' ? '٤ بت' : '١٦ بت'} من جهازك</button>`).join('')}</div>` : '');
   }
 
   function weakAyas() {
@@ -958,10 +974,23 @@ const Recite = (() => {
     if (e.target.closest('[data-rc-resume]')) { closeSheet(); start(resumeAya()); return true; }
     if (e.target.closest('[data-rc-review]')) { closeSheet(); start(null, weakAyas()); return true; }
     if (e.target.closest('[data-rc-test]')) { const t = testAyas(); if (t) { closeSheet(); start(null, t, { test: true }); } return true; }
+    const pick = e.target.closest('[data-rc-pick]');
+    if (pick) {
+      if (G) { toast('أنهِ جلسة التسميع أولًا'); return true; }
+      Mu.use(pick.dataset.rcPick);
+      paintModels();
+      Mu.saved().then(have => { if (have) toast(`سيُستعمل ${MU_NAMES[pick.dataset.rcPick]}`); else withModel(() => paintModels()); });
+      return true;
+    }
+    const dv = e.target.closest('[data-rc-delv]');
+    if (dv) { Mu.remove(dv.dataset.rcDelv).then(() => { toast('حُذف من جهازك'); paintModels(); }); return true; }
     const md = e.target.closest('[data-rc-model]');
     if (md) {
       if (md.dataset.rcModel === 'get') withModel(() => mounted());
-      else if (md.dataset.rcModel === 'probe') { Mu.reprobe(); withModel(() => mounted()); }
+      else if (md.dataset.rcModel === 'probe' && MU()) {
+        paintModels('');
+        Mu.probe((n, all) => paintModels(`${ar(n)} من ${ar(all)}`), true).then(() => { paintModels(); toast('انتهى الاختبار'); }, () => { paintModels(); toast('تعذر الاختبار على هذا الجهاز'); });
+      }
       else (MU() ? Mu.remove() : Listen.remove()).then(() => { toast('حُذف النموذج من جهازك'); mounted(); });
       return true;
     }

@@ -31,8 +31,9 @@ const Mu = (() => {
   async function gpuInfo() {
     try { const a = navigator.gpu && await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }); return a ? { f16: a.features.has('shader-f16') } : null; } catch { return null; }
   }
-  // onStep(done, total); resolves with the chosen candidate
-  async function probe(onStep) {
+  // onStep(done, total); resolves with the fastest candidate, which becomes the
+  // choice unless keep (a choice made by hand stays)
+  async function probe(onStep, keep = false) {
     const gpu = await gpuInfo();
     const list = CANDS.filter(c => !(c.ep === 'webgpu' && (!gpu || (c.f16 && !gpu.f16))));
     const res = {};
@@ -50,7 +51,11 @@ const Mu = (() => {
     const fastest = Math.min(...ok.map(c => res[c.id].ms));
     // the fastest; within 10% of it, the smaller download
     const best = ok.filter(c => res[c.id].ms <= fastest * 1.1).sort((a, b) => a.mb - b.mb || res[a.id].ms - res[b.id].ms)[0];
-    store.set('mu.choice', { id: best.id, ms: Math.round(res[best.id].ms * PROBE_X), at: Date.now() });
+    // every candidate's time, for choosing by hand in the settings: ms per update, or null (doesn't run here)
+    const times = {};
+    for (const c of CANDS) times[c.id] = res[c.id] && !res[c.id].error ? Math.round(res[c.id].ms * PROBE_X) : null;
+    store.set('mu.bench', { at: Date.now(), times, best: best.id });
+    if (!choice() || !keep) store.set('mu.choice', { id: best.id, ms: times[best.id], at: Date.now() });
     return best;
   }
 
@@ -67,12 +72,31 @@ const Mu = (() => {
       return true;
     } catch { return false; }
   }
-  async function remove() {
-    const c = cand();
-    reset();
-    if (!c) return;
+  // which variants are downloaded: { q8: true, … }
+  async function savedVariants() {
+    const out = {};
     try {
-      const v = (await manifest()).variants[c.variant], cache = await caches.open('muaalem-lab');
+      const m = await manifest(), cache = await caches.open('muaalem-lab');
+      for (const [k, v] of Object.entries(m.variants)) {
+        let all = true;
+        for (const p of v.parts) if (!(await cache.match(partUrl(p)))) { all = false; break; }
+        out[k] = all;
+      }
+    } catch {}
+    return out;
+  }
+  // use this candidate from now on (its time from the last test, if any)
+  function use(id) {
+    if (!CANDS.some(c => c.id === id) || choice()?.id === id) return;
+    store.set('mu.choice', { id, ms: store.get('mu.bench', null)?.times?.[id] ?? null, at: Date.now() });
+    reset();
+  }
+  // delete a downloaded variant (the one in use by default)
+  async function remove(variant = cand()?.variant) {
+    if (variant === cand()?.variant) reset();
+    if (!variant) return;
+    try {
+      const v = (await manifest()).variants[variant], cache = await caches.open('muaalem-lab');
       for (const p of v.parts) await cache.delete(partUrl(p));
     } catch {}
   }
@@ -208,7 +232,7 @@ const Mu = (() => {
   }
 
   return {
-    CANDS, choice, mb, probe, saved, remove, load, prime, start, listen, stop, sounds, expect, expect2, candidates,
+    CANDS, choice, mb, probe, saved, savedVariants, use, bench: () => store.get('mu.bench', null), remove, load, prime, start, listen, stop, sounds, expect, expect2, candidates,
     ready: () => ready, listening: () => !!mic, info: () => info,
     reprobe: () => { store.set('mu.choice', null); reset(); },
   };
