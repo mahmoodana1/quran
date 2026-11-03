@@ -5,8 +5,13 @@
 // phrase goes to asr-worker.js, which runs the Quran Whisper model in this
 // browser. Nothing is sent anywhere.
 const Listen = (() => {
-  const MODEL = 'An0xity/whisper-base-ar-quran-onnx-timestamped';
-  const MODEL_MB = 77;
+  // two Quran fine-tunes of Whisper (Tarteel's): tiny is about twice as fast, base a little surer
+  const MODELS = {
+    fast: { id: 'Sharjeelbaig/whisper-tiny-ar-quran-onnx', dtype: { encoder_model: 'fp32', decoder_model_merged: 'q8' }, mb: 63 },
+    exact: { id: 'An0xity/whisper-base-ar-quran-onnx-timestamped', dtype: { encoder_model: 'q8', decoder_model_merged: 'q8' }, mb: 77 },
+  };
+  let which = MODELS[store.get('recite.model', 'fast')] ? store.get('recite.model', 'fast') : 'fast';
+  const model = () => MODELS[which];
   const RATE = 16000;
   const PAUSE = 0.7;     // s of quiet that ends a phrase
   const LONG = 7;        // s: past this, a breath (BREATH s) is enough
@@ -19,6 +24,7 @@ const Listen = (() => {
   const files = {};      // model file -> [loaded, total] while downloading
   const waiting = new Map();
   let nextId = 0;
+  let lastMs = 0, threads = 1; // the last recognition's time, for the settings
 
   function getWorker() {
     if (worker) return worker;
@@ -27,14 +33,14 @@ const Listen = (() => {
       if (d.type === 'progress') {
         files[d.file] = [d.loaded, d.total];
         const v = Object.values(files), got = v.reduce((s, x) => s + x[0], 0), all = v.reduce((s, x) => s + x[1], 0);
-        onProgress?.(Math.min(1, got / Math.max(all, MODEL_MB * 1e6)));
+        onProgress?.(Math.min(1, got / Math.max(all, model().mb * 1e6)));
       }
-      if (d.type === 'ready') { ready = true; loading?.resolve(); }
+      if (d.type === 'ready') { ready = true; threads = d.threads || 1; loading?.resolve(); }
       if (d.type === 'error') {
         if (d.id != null && waiting.has(d.id)) { waiting.get(d.id)(''); waiting.delete(d.id); }
         else { loading?.reject(new Error(d.message)); loading = null; }
       }
-      if (d.type === 'text' && waiting.has(d.id)) { waiting.get(d.id)(d.text); waiting.delete(d.id); }
+      if (d.type === 'text' && waiting.has(d.id)) { lastMs = d.ms || 0; waiting.get(d.id)(d.text); waiting.delete(d.id); }
     };
     return worker;
   }
@@ -43,7 +49,7 @@ const Listen = (() => {
   async function saved() {
     try {
       const keys = await (await caches.open('transformers-cache')).keys();
-      return keys.filter(r => r.url.includes(MODEL) && r.url.endsWith('.onnx')).length >= 2;
+      return keys.filter(r => r.url.includes(model().id + '/') && r.url.endsWith('.onnx')).length >= 2;
     } catch { return false; }
   }
 
@@ -55,17 +61,29 @@ const Listen = (() => {
     let resolve, reject;
     const promise = new Promise((a, b) => { resolve = a; reject = b; });
     loading = { promise, resolve, reject };
-    getWorker().postMessage({ type: 'load' });
+    getWorker().postMessage({ type: 'load', model: model().id, dtype: model().dtype });
     return promise;
   }
 
   async function remove() {
     try {
       const c = await caches.open('transformers-cache');
-      for (const r of await c.keys()) if (r.url.includes(MODEL)) await c.delete(r);
+      for (const r of await c.keys()) if (r.url.includes(model().id + '/')) await c.delete(r);
     } catch {}
+    reset();
+  }
+
+  function reset() {
     worker?.terminate();
     worker = null; ready = false; loading = null;
+    waiting.forEach(res => res('')); waiting.clear();
+  }
+
+  // 'fast' or 'exact'; the other one stays saved if it was downloaded
+  function use(k) {
+    if (!MODELS[k] || k === which) return;
+    which = k; store.set('recite.model', k);
+    reset();
   }
 
   function transcribe(audio) {
@@ -151,5 +169,5 @@ const Listen = (() => {
     node = src = stream = mic = null;
   }
 
-  return { MODEL_MB, saved, load, remove, transcribe, prime, start, stop, ready: () => ready, listening: () => !!stream };
+  return { mb: () => model().mb, which: () => which, use, stats: () => ({ ms: lastMs, threads }), saved, load, remove, transcribe, prime, start, stop, ready: () => ready, listening: () => !!stream };
 })();

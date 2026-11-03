@@ -83,7 +83,7 @@ const Recite = (() => {
     $('#riLater').hidden = busy;
     $('#riBar').style.width = ((p || 0) * 100).toFixed(1) + '%';
     $('#riPct').textContent = ar(Math.round((p || 0) * 100)) + '٪';
-    $('#riGo').textContent = busy ? 'جارٍ التنزيل…' : `تنزيل النموذج · ${ar(Listen.MODEL_MB)} م.ب`;
+    $('#riGo').textContent = busy ? 'جارٍ التنزيل…' : `تنزيل النموذج · ${ar(Listen.mb())} م.ب`;
   }
 
   // ---- session
@@ -139,7 +139,7 @@ const Recite = (() => {
     if (!G) return;
     clearInterval(timer);
     Listen.stop();
-    G = null;
+    G = null; S.focus = null;
     ['#recBar', '#recWord', '#recDone'].forEach(s => hide($(s)));
     paintMarks();
     syncBubble();
@@ -315,9 +315,10 @@ const Recite = (() => {
     }
   }
 
-  // turn the page when the next word is on another one
+  // the band follows the aya being recited; turn the page when the next word is on another one
   function follow() {
     const w = G.words[Math.min(Math.max(G.pos, G.tent), G.words.length - 1)];
+    if (S.focus !== w.ai) { S.focus = w.ai; drawBands(document); }
     if (w.p === G.lastP) return;
     G.lastP = w.p;
     if (w.p !== S.page) goTo(w.p, { animate: Math.abs(w.p - S.page) === 1 });
@@ -656,6 +657,8 @@ const Recite = (() => {
     const settings = `<div class="group-label">إعدادات التسميع</div><div class="group">
       ${toggle('hide', 'ابدأ والكلمات مخفية', 'تظهر كل كلمة حين تقرؤها')}
       ${toggle('weak', 'مواضع الضعف في المصحف', 'خط منقّط خفيف تحت كلمات أخطأت فيها')}
+      <div class="row rc-goal"><span class="main"><span class="t">سرعة التعرّف</span><span class="s">السريع أخفّ وأسرع بمرتين، والدقيق أثبت قليلًا</span></span>
+        <span class="rc-chips">${[['fast', 'سريع'], ['exact', 'دقيق']].map(([k, t]) => `<button data-rc-use="${k}"${Listen.which() === k ? ' class="on"' : ''}>${t}</button>`).join('')}</span></div>
       <div class="row rc-model"><span class="main"><span class="t">نموذج التعرّف على التلاوة</span><span class="s" id="rcModelS">…</span></span><span id="rcModelB"></span></div>
       <div class="row rc-goal"><span class="main"><span class="t">هدف يومي</span><span class="s">عدد الآيات التي تسمّعها كل يوم</span></span>
         <span class="rc-chips">${[0, 5, 10, 20].map(n => `<button data-rc-goal="${n}"${goal === n ? ' class="on"' : ''}>${n ? ar(n) : 'لا'}</button>`).join('')}</span></div></div>`;
@@ -726,7 +729,9 @@ const Recite = (() => {
     Listen.saved().then(have => {
       const s = $('#rcModelS'), b = $('#rcModelB');
       if (!s) return;
-      s.textContent = have ? `على جهازك · ${ar(Listen.MODEL_MB)} م.ب · يعمل دون إنترنت` : `غير منزّل · ${ar(Listen.MODEL_MB)} م.ب`;
+      const st = Listen.stats();
+      s.textContent = (have ? `على جهازك · ${ar(Listen.mb())} م.ب · يعمل دون إنترنت` : `غير منزّل · ${ar(Listen.mb())} م.ب`)
+        + (st.ms ? ` · آخر تعرّف ${ar((st.ms / 1000).toFixed(1))} ث · ${ar(st.threads)} ${st.threads > 1 ? 'أنوية' : 'نواة'}` : '');
       b.innerHTML = `<button class="rc-not" data-rc-model="${have ? 'del' : 'get'}">${have ? 'حذف' : 'تنزيل'}</button>`;
     });
   }
@@ -745,6 +750,14 @@ const Recite = (() => {
     if (md) {
       if (md.dataset.rcModel === 'get') withModel(() => mounted());
       else Listen.remove().then(() => { toast('حُذف النموذج من جهازك'); mounted(); });
+      return true;
+    }
+    const u = e.target.closest('[data-rc-use]');
+    if (u) {
+      Listen.use(u.dataset.rcUse);
+      const y = $('#sheetBody').scrollTop;
+      renderSheet();
+      $('#sheetBody').scrollTop = y;
       return true;
     }
     const g = e.target.closest('[data-rc-goal]');

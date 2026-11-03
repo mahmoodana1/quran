@@ -1947,9 +1947,10 @@ $('#doneLater').onclick = () => hide($('#done'));
     console.error(err);
   }
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    // reload once when an updated service worker takes over, so updates show up
+    // reload once when an updated service worker takes over, so updates show up;
+    // on the first visit too, as its headers are what let recitation use several cores
     const hadController = !!navigator.serviceWorker.controller;
-    navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController) location.reload(); });
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController || !self.crossOriginIsolated) location.reload(); });
     navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
   }
 })();
