@@ -3,16 +3,20 @@
 // requests data with ?v=N, so bumping DATA_VERSION there fetches new copies.
 // Hafs page fonts (verses.quran.foundation) are cached as pages are opened.
 // Recitation audio: see audioResponse below.
-const VERSION = 'quran-v36';
+const VERSION = 'quran-v37';
 const TAFSIR = 'tafsir-saadi';
 // recitation files saved by the app (or while listening); kept across versions
 const AUDIO = 'audio-yasser-128';
+// the speech recogniser's code (transformers.js and its ONNX runtime, pinned
+// versions from jsDelivr), kept across versions so التسميع works offline; the
+// model itself is cached by transformers.js
+const ASR = 'asr-lib';
 // page fonts never change, so they live in their own cache across versions
 const FONTS = 'qcf-v2-fonts';
 // the Quran text files and local fonts also outlive app updates, so a phone that
 // saved the mushaf for offline use keeps it
 const MUSHAF = 'mushaf-data';
-const SHELL = ['./', 'index.html', 'app.css', 'app.js', 'prayer.js', 'adhkar.js', 'recite.js', 'manifest.webmanifest', 'icons/icon-180.png'];
+const SHELL = ['./', 'index.html', 'app.css', 'app.js', 'prayer.js', 'adhkar.js', 'listen.js', 'recite.js', 'asr-worker.js', 'manifest.webmanifest', 'icons/icon-180.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION)
@@ -22,7 +26,7 @@ self.addEventListener('install', e => {
 
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys()
-    .then(keys => Promise.all(keys.filter(k => k !== VERSION && k !== FONTS && k !== AUDIO && k !== TAFSIR && k !== MUSHAF).map(k => caches.delete(k))))
+    .then(keys => Promise.all(keys.filter(k => k !== VERSION && k !== FONTS && k !== ASR && k !== AUDIO && k !== TAFSIR && k !== MUSHAF).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 
@@ -31,6 +35,16 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   if (url.hostname === 'everyayah.com') {
     e.respondWith(audioResponse(e.request));
+    return;
+  }
+  if (url.hostname === 'cdn.jsdelivr.net' && /^\/npm\/(@huggingface\/transformers|onnxruntime-web)@/.test(url.pathname)) {
+    e.respondWith(caches.open(ASR).then(async c => {
+      const hit = await c.match(e.request);
+      if (hit) return hit;
+      const res = await fetch(e.request);
+      if (res.ok) c.put(e.request, res.clone());
+      return res;
+    }));
     return;
   }
   if (url.hostname === 'verses.quran.foundation') {

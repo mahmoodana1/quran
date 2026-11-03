@@ -77,6 +77,7 @@ function syncDock() {
   const panels = panelOpen($('#sheet')) || panelOpen($('#library')) || panelOpen($('#adhkar'));
   $('#dockPanels').classList.toggle('on', panels);
   $('#dockQuran').classList.toggle('on', !panels);
+  if (typeof Recite !== 'undefined') Recite.syncBubble();
 }
 $('#dockPanels').onclick = () => {
   if (panelOpen($('#adhkar'))) Adhkar.close();
@@ -1660,6 +1661,7 @@ function renderSheet() {
   }
   if (tab === 'settings' && !q.trim()) { refreshAudioPanel(); refreshMushafCard(); }
   if (tab === 'prayer' && !q.trim()) Prayer.mount();
+  if (tab === 'recite' && !q.trim()) Recite.mounted();
   if (tab === 'adhkar' && !q.trim()) Adhkar.mount($('#adhkarList'));
 }
 

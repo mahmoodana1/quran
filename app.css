@@ -1275,3 +1275,38 @@ svg { fill: currentColor; }
 .rc-chips button { min-width: 34px; height: 30px; padding: 0 8px; border: 1px solid var(--p-rule); border-radius: 3px; font-size: 13px; color: var(--muted); }
 .rc-chips button.on { background: linear-gradient(160deg, var(--p-green), var(--p-green-2)); color: var(--p-on); border-color: var(--p-gold); font-weight: 700; }
 .rc-goal { gap: 10px; }
+
+/* the mic bubble: recite and the aya is found. It sits in the corner under
+   the page's last line, and grows into a pill while it listens */
+.mic-bubble {
+  position: fixed; z-index: 19;
+  left: max(10px, env(safe-area-inset-left)); bottom: calc(46px + env(safe-area-inset-bottom));
+  height: 40px; width: 40px; border-radius: 20px; padding: 0;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  color: var(--p-on); background: linear-gradient(160deg, var(--p-green), var(--p-green-2));
+  box-shadow: 0 0 0 1.5px var(--p-gold), 0 5px 14px rgba(30, 20, 5, .26);
+  opacity: .9; transition: width .3s cubic-bezier(.2,.9,.3,1), opacity .2s ease;
+  animation: bubbleIn .4s cubic-bezier(.2,.9,.3,1);
+}
+@keyframes bubbleIn { from { transform: scale(.6); opacity: 0; } }
+.mic-bubble svg { width: 19px; height: 19px; flex: none; }
+.mic-bubble span { display: none; font-size: 14px; font-weight: 600; white-space: nowrap; }
+.mic-bubble.open { width: auto; padding: 0 16px 0 14px; opacity: 1; }
+.mic-bubble.open span { display: inline; }
+.mic-bubble.voice { animation: bubbleVoice 1.3s ease-out infinite; }
+@keyframes bubbleVoice {
+  0% { box-shadow: 0 0 0 1.5px var(--p-gold), 0 0 0 0 color-mix(in srgb, var(--p-gold) 55%, transparent); }
+  100% { box-shadow: 0 0 0 1.5px var(--p-gold), 0 0 0 14px color-mix(in srgb, var(--p-gold) 0%, transparent); }
+}
+.mic-bubble:active { transform: scale(.94); }
+.landscape .mic-bubble { bottom: max(14px, env(safe-area-inset-bottom)); }
+
+/* the reciting bar's mic answers the voice */
+#recBar .pl-main.live.voice { animation: recPulse .9s ease-out infinite; }
+
+/* model download */
+.rc-dl { display: flex; align-items: center; gap: 12px; }
+.rc-dl .prog { flex: 1; height: 6px; }
+.rc-dl .prog i { width: 0; transition: width .3s linear; }
+.rc-dl span { font-size: 14px; font-weight: 700; color: var(--gold-ink); min-width: 3em; text-align: left; font-variant-numeric: tabular-nums; }
+.rc-model .rc-not { margin-inline-start: 8px; }

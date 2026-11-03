@@ -197,7 +197,10 @@
   </div>
 </section>
 
-<!-- recitation, first time: what it is before it starts -->
+<!-- recite an aya and it is found: floats over the page, out of every bar's way -->
+<button id="micBubble" class="mic-bubble" aria-label="اقرأ آيةً لأجدها" hidden><svg viewBox="0 0 24 24"><path d="M12 3.5a3 3 0 00-3 3v5a3 3 0 006 0v-5a3 3 0 00-3-3zM6.5 11a5.5 5.5 0 0011 0M12 16.5v4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><span id="micBubbleTxt"></span></button>
+
+<!-- recitation, first time: the speech model is downloaded on request -->
 <section id="recIntro" class="modal" hidden>
   <div class="card rc-intro">
     <div class="rc-badge"><svg viewBox="0 0 24 24"><path d="M12 3.5a3 3 0 00-3 3v5a3 3 0 006 0v-5a3 3 0 00-3-3zM6.5 11a5.5 5.5 0 0011 0M12 16.5v4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
@@ -208,9 +211,10 @@
       <div><svg viewBox="0 0 24 24"><path d="M4 18h16" stroke-dasharray="2 3"/><path d="M8 13l4-7 4 7"/></svg><span>المس الكلمة المخفية لتلمحها، والمخطوءة لتسمعها أو تلغي الخطأ</span></div>
       <div><svg viewBox="0 0 24 24"><rect x="5.5" y="10.5" width="13" height="9.5" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 017 0v2.5"/></svg><span>يعمل على جهازك دون إنترنت، وصوتك لا يغادره</span></div>
     </div>
-    <p class="note rc-demo">نسخة تجريبية للواجهة: المتابعة الآن محاكاة دون ميكروفون، ويُضاف التعرّف على الصوت لاحقًا.</p>
+    <p class="note rc-demo">يحتاج التسميع إلى نموذج التعرّف على التلاوة، يُنزَّل مرة واحدة ويبقى على جهازك.</p>
+    <div id="riProg" class="rc-dl" hidden><div class="prog"><i id="riBar"></i></div><span id="riPct"></span></div>
     <div class="actions">
-      <button id="riGo" class="primary">ابدأ التجربة</button>
+      <button id="riGo" class="primary">تنزيل النموذج</button>
       <button id="riLater">ليس الآن</button>
     </div>
   </div>
@@ -238,7 +242,6 @@
 <!-- always-visible switcher: reader / recitation (once used) / all other panels -->
 <nav id="dock" aria-label="التنقل">
   <button id="dockQuran" class="on" aria-label="القرآن"><svg viewBox="0 0 24 24"><path d="M12 6.5C10 5 7 4.5 3.5 5v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5zM12 6.5v13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></button>
-  <button id="dockRec" aria-label="تسميع" hidden><svg viewBox="0 0 24 24"><path d="M12 3.5a3 3 0 00-3 3v5a3 3 0 006 0v-5a3 3 0 00-3-3zM6.5 11a5.5 5.5 0 0011 0M12 16.5v4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>
   <button id="dockPanels" aria-label="اللوحات"><svg viewBox="0 0 28 28"><g fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="8.5" height="8.5" rx="2.6"/><rect x="15.5" y="4" width="8.5" height="8.5" rx="2.6"/><rect x="4" y="15.5" width="8.5" height="8.5" rx="2.6"/><rect x="15.5" y="15.5" width="8.5" height="8.5" rx="2.6"/></g></svg></button>
 </nav>
 
@@ -246,6 +249,7 @@
 <script src="prayer.js"></script>
 <script src="app.js"></script>
 <script src="adhkar.js"></script>
+<script src="listen.js"></script>
 <script src="recite.js"></script>
 </body>
 </html>
