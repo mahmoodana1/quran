@@ -8,10 +8,15 @@
 // a new mistake there starts the count again. The panel keeps a daily goal and
 // streak, a tracker of every surah recited from memory, and «اختبرني», which
 // starts at a random place already recited.
-// Listening (listen.js) needs the Quran speech model, downloaded once when
-// first asked for. Each phrase the reader says between pauses is lined up
-// against the words expected from where they are (align), so a word said
-// differently, a skipped word or a stretch said again shows as such.
+// In Hafs, listening is Muaalem (mu.js): a model that writes what the reader
+// actually says, harakat included, read again every quarter second over the
+// last 2.5 s; match.js lines that up with how the aya should sound, word by
+// word, so a wrong haraka, a wrong or skipped word shows as such, and the
+// reader is followed from aya to aya. The model that runs fastest on the
+// device is found first and downloaded once.
+// In the other riwayat, listening (listen.js) is a Whisper model: each phrase
+// said between pauses is lined up against the words expected from where the
+// reader is (align).
 // The mic in the page header: recite any aya and it is found, opened and
 // followed from there.
 // Uses $, store, ar, esc, show, hide, toast, R, S, isEnd, norm,
@@ -19,10 +24,14 @@
 // stopAudio, speakWord, suraName, ayaLabel, openRecite, renderSheet,
 // closeSheet and flashAya from app.js at call time.
 const Recite = (() => {
-  const TYPES = { wrong: 'قرأتها بكلمة أخرى', skip: 'تجاوزتها', hint: 'احتجت تلميحًا' };
+  const TYPES = { wrong: 'قرأتها بكلمة أخرى', haraka: 'أخطأت في حركتها', skip: 'تجاوزتها', hint: 'احتجت تلميحًا' };
   const MASTER_DAYS = 3;
   const HINT_AFTER = 7000; // ms of silence on a hidden word before it shows
-  const CLS = ['rc-weak', 'rc-done', 'rc-now', 'rc-hid', 'rc-peek', 'rc-wrong', 'rc-skip', 'rc-hint'];
+  const CLS = ['rc-weak', 'rc-done', 'rc-now', 'rc-hid', 'rc-peek', 'rc-wrong', 'rc-haraka', 'rc-skip', 'rc-hint'];
+  // Muaalem listens in Hafs (its phonetic script is Hafs's)
+  const MU = () => R.id === 'hafs' && typeof Mu !== 'undefined';
+  const MU_NAMES = { 'q8-cpu': '٨ بت · المعالج', 'q8-gpu': '٨ بت · المعالج الرسومي', 'fp16-gpu': '١٦ بت · المعالج الرسومي', 'q4-cpu': '٤ بت · المعالج', 'q4-gpu': '٤ بت · المعالج الرسومي' };
+  const ready = () => MU() ? Mu.ready() : Listen.ready();
 
   // the session: words in order { ai, p, n (word on its page), wi (word in its aya), of (aya length), nt (normalised) },
   // idx 'page:n' -> word, pos = next word to say, errs[k] = type, gone = mistakes taken back
@@ -67,6 +76,17 @@ const Recite = (() => {
 
   let pending = null;
   function withModel(then) {
+    if (MU()) {
+      Mu.prime();
+      if (Mu.ready()) return Mu.sounds().then(then, () => toast('تعذر تحضير التسميع'));
+      if (!Mu.choice()) { pending = then; paintDl(); show($('#recIntro')); return; }
+      Mu.saved().then(have => {
+        if (!have) { pending = then; paintDl(); show($('#recIntro')); return; }
+        toast('جارٍ تحضير التسميع…');
+        Promise.all([Mu.load(), Mu.sounds()]).then(then, () => toast('تعذر تحضير التسميع'));
+      });
+      return;
+    }
     Listen.prime();
     if (Listen.ready()) return then();
     Listen.saved().then(have => {
@@ -76,14 +96,27 @@ const Recite = (() => {
     });
   }
 
+  // p: 0..1 while downloading, 'probe' while timing the models on this device
   function paintDl(p) {
     const busy = p != null;
+    if (p === 'probe') {
+      $('#riProg').hidden = true; $('#riGo').disabled = true; $('#riLater').hidden = true;
+      $('#riGo').textContent = 'نختبر أسرع نموذج لجهازك…';
+      return;
+    }
     $('#riProg').hidden = !busy;
     $('#riGo').disabled = busy;
     $('#riLater').hidden = busy;
     $('#riBar').style.width = ((p || 0) * 100).toFixed(1) + '%';
     $('#riPct').textContent = ar(Math.round((p || 0) * 100)) + '٪';
-    $('#riGo').textContent = busy ? 'جارٍ التنزيل…' : `تنزيل النموذج · ${ar(Listen.mb())} م.ب`;
+    const c = MU() && Mu.choice();
+    $('#recIntro .rc-demo').textContent = c
+      ? `الأسرع على جهازك: نموذج معلّم ${MU_NAMES[c.id]} · نحو ${ar(c.ms)} م.ث لكل تحديث. يُنزَّل مرة واحدة ويبقى على جهازك، ويكشف أخطاء الحركات أيضًا.`
+      : MU() ? 'يحتاج التسميع إلى نموذج التعرّف على التلاوة. نختبر أولًا أيّ نسخه أسرع على جهازك (ثوانٍ)، ثم يُنزَّل مرة واحدة ويبقى عليه.'
+      : 'يحتاج التسميع إلى نموذج التعرّف على التلاوة، يُنزَّل مرة واحدة ويبقى على جهازك.';
+    $('#riGo').textContent = busy ? 'جارٍ التنزيل…'
+      : !MU() ? `تنزيل النموذج · ${ar(Listen.mb())} م.ب`
+      : Mu.choice() ? `تنزيل النموذج · ${ar(Mu.mb())} م.ب` : 'اختبر جهازك ونزّل النموذج';
   }
 
   // ---- session
@@ -91,7 +124,7 @@ const Recite = (() => {
   // from an aya to the end of its surah, or just the ayas given (a review or a test);
   // opts.test hides the words, opts.seed is the phrase that found the aya (bubble)
   function start(from, review, opts = {}) {
-    if (!Listen.ready()) return withModel(() => start(from, review, opts));
+    if (!ready()) return withModel(() => start(from, review, opts));
     cancel();
     stopFind();
     stopAudio();
@@ -103,6 +136,13 @@ const Recite = (() => {
     G = { ayas, words, idx: new Map(words.map((w, k) => [w.p + ':' + w.n, k])), pos: 0, errs: {}, gone: new Set(),
       hide: !!opts.test || (!opts.seed && store.get('recite.hide', false)), run: false, secs: 0, busy: 0,
       review: !!review && !opts.test, test: !!opts.test, lastP: null, miss: 0, tent: 0 };
+    // Muaalem: c = the aya being said (in G.ayas), w0 = its first word still to
+    // match, cut = how much of the reading belongs to ayas already done
+    if (MU()) {
+      const starts = [];
+      words.forEach((w, k) => { if (w.wi === 0) starts.push(k); });
+      G.mu = { c: 0, w0: 0, cut: 0, final: '', tent: '', starts, lead: true, stream: !!opts.stream };
+    }
     // found by reciting: what was already said counts as said
     if (opts.seed) { const r = align(opts.seed, 0, words[0].of); if (r) G.pos = Math.min(r.end, words.length - 1); }
     dirty = true;
@@ -120,8 +160,13 @@ const Recite = (() => {
     G.run = true; G.t = G.lastAct = Date.now();
     hide($('#recWord'));
     const g = G;
-    Listen.start(audio => onPhrase(g, audio), on => { if (G === g) { G.voice = on; if (on) G.lastAct = Date.now(); paintBar(); } }, audio => onPartial(g, audio))
-      .catch(() => { if (G === g) { pause(); toast('لا يمكن الوصول إلى الميكروفون — اسمح به من إعدادات المتصفح'); } });
+    const noMic = () => { if (G === g) { pause(); toast('لا يمكن الوصول إلى الميكروفون — اسمح به من إعدادات المتصفح'); } };
+    if (MU()) {
+      const h = d => onMu(g, d);
+      if (g.mu.stream && Mu.listening()) { g.mu.stream = false; Mu.listen(h); } // the reading that found the aya goes on
+      else Mu.start(h).catch(noMic);
+    } else Listen.start(audio => onPhrase(g, audio), on => { if (G === g) { G.voice = on; if (on) G.lastAct = Date.now(); paintBar(); } }, audio => onPartial(g, audio))
+      .catch(noMic);
     clearInterval(timer);
     timer = setInterval(tick, 500);
     paintBar();
@@ -129,8 +174,21 @@ const Recite = (() => {
   function pause() {
     if (!G?.run) return;
     G.run = false; G.voice = false; G.secs += (Date.now() - G.t) / 1000;
-    Listen.stop();
     clearInterval(timer);
+    if (MU()) {
+      // what was read to the end counts; the next stretch is matched from the first word not yet said
+      const g = G;
+      Mu.stop().then(() => {
+        if (G !== g || !g.mu) return;
+        g.mu.tent = '';
+        muFollow(false);
+        if (g.done) { muSettle(); paint(); paintDone(); return; }
+        const m = g.mu;
+        m.w0 = Math.max(0, Math.min(G.pos - m.starts[m.c], G.words[m.starts[m.c]].of));
+        if (m.w0 >= G.words[m.starts[m.c]].of && m.c + 1 < G.ayas.length) { m.c++; m.w0 = 0; }
+        m.cut = 0; m.final = ''; m.lead = false;
+      });
+    } else Listen.stop();
     paintBar();
   }
 
@@ -138,7 +196,7 @@ const Recite = (() => {
   function cancel() {
     if (!G) return;
     clearInterval(timer);
-    Listen.stop();
+    if (G.mu) Mu.stop(); else Listen.stop();
     G = null; S.focus = null;
     ['#recBar', '#recWord', '#recDone'].forEach(s => hide($(s)));
     paintMarks();
@@ -156,6 +214,103 @@ const Recite = (() => {
       const r = align(text, g.pos);
       if (r && r.fit >= 0.75 && r.end > Math.max(g.pos, g.tent)) { g.tent = r.end; follow(); paint(); }
     });
+  }
+
+  // ---- Muaalem: the reading so far, matched against the aya being said and
+  // the next one together; once the next one has begun, the one before is
+  // closed (words never reached count as skipped)
+  const MU_TYPE = { haraka: 'haraka', letter: 'wrong', extra: 'wrong', skipped: 'skip' };
+  function onMu(g, d) {
+    if (G !== g) return;
+    if (g.done) { g.mu.final = d.final; g.mu.tent = d.tent; return; } // the last of it, read after «finish»: pause() applies it
+    const m = g.mu, grew = d.final.length + d.tent.length !== m.final.length + m.tent.length;
+    m.final = d.final; m.tent = d.tent;
+    if (grew && g.run) {
+      g.lastAct = Date.now();
+      if (!g.voice) { g.voice = true; paintBar(); }
+      clearTimeout(g.voiceT);
+      g.voiceT = setTimeout(() => { if (G === g) { g.voice = false; paintBar(); } }, 900);
+    }
+    muFollow(false);
+  }
+  function muFollow(done) {
+    const m = G.mu, U = Match.units(m.final + m.tent), uf = Match.units(m.final).length;
+    for (let guard = 0; guard < 40 && m.c < G.ayas.length; guard++) {
+      const ai = G.ayas[m.c], nx = done ? null : G.ayas[m.c + 1];
+      const cur = Mu.expect(ai, m.w0), ex = nx != null ? Mu.expect2(cur, Mu.expect(nx)) : cur;
+      const sub = Match.text(U.slice(m.cut)), fin = Match.text(U.slice(m.cut, Math.max(m.cut, uf))).length;
+      const st = Match.words(ex, sub, fin, done, { freeLead: m.lead });
+      const n0 = cur.spans.length;
+      const begun = nx != null && st.slice(n0, n0 + 2).some(x => x.state === 'ok' || x.state === 'err');
+      muApply(st.slice(0, n0), begun);
+      if (!begun) { if (!done && muRelocate(st.slice(0, n0), sub, fin)) continue; break; }
+      m.cut += st[n0].at[0]; m.c++; m.w0 = 0; m.lead = false;
+    }
+    if (G.pos >= G.words.length) return finish();
+    follow();
+    paint();
+    paintBar();
+  }
+  // the session is over: the words of the aya being said that were begun are
+  // judged as they were said (the reading's end is their end); the rest stay unsaid
+  function muSettle() {
+    const m = G.mu;
+    if (m.c >= G.ayas.length) return;
+    const U = Match.units(m.final), sub = Match.text(U.slice(m.cut));
+    const cur = Mu.expect(G.ayas[m.c], m.w0);
+    const st = Match.words(cur, sub, sub.length, false, { freeLead: m.lead });
+    const t = st.findLastIndex(x => x.state !== 'todo');
+    if (t < 0) return;
+    const part = { ph: cur.ph.slice(0, cur.spans[t][1]), spans: cur.spans.slice(0, t + 1), wasl: cur.wasl.filter(k => k <= t) };
+    const fin = Match.words(part, sub, sub.length, true, { freeLead: m.lead });
+    muApply(fin.concat(st.slice(t + 1)), false);
+  }
+
+  // the words of the aya being said, from w0: what each turned out to be
+  function muApply(states, closing) {
+    const m = G.mu, base = m.starts[m.c] + m.w0, skips = [];
+    let pos = base, tent = base, fresh = false;
+    states.forEach((x, i) => {
+      const k = base + i;
+      let decided = x.state === 'ok' || x.state === 'err', e = null;
+      if (x.state === 'err') e = MU_TYPE[x.type] || (x.heard && x.heard.length > 1 ? 'wrong' : 'skip');
+      else if (closing && !decided) { decided = true; e = 'skip'; }
+      if (decided) {
+        pos = tent = k + 1;
+        if (e) {
+          if (G.errs[k] !== e && G.errs[k] !== 'hint') { G.errs[k] = e; fresh = true; }
+          if (e === 'skip') skips.push([k, 'skip']);
+        } else if (G.errs[k] && G.errs[k] !== 'hint') delete G.errs[k];
+      } else if (x.state === 'hear') tent = k + 1;
+    });
+    if (pos > G.pos) G.peek = false;
+    G.pos = pos; G.tent = tent;
+    if (fresh && navigator.vibrate) navigator.vibrate(12);
+    warnSkipped(skips);
+  }
+  // nothing of the aya being said is heard, but plenty is: another aya of the
+  // session it fits clearly (a skip ahead, or a step back)
+  function muRelocate(states, sub, fin) {
+    const m = G.mu;
+    if (Date.now() - (m.relocAt || 0) < 800 || states.some(x => x.state === 'ok')) return false;
+    if (Match.units(sub).length < 25) return false;
+    m.relocAt = Date.now();
+    let best = null;
+    for (let j = Math.max(0, m.c - 3); j < Math.min(G.ayas.length, m.c + 9); j++) {
+      if (j === m.c || j === m.c + 1) continue;
+      const st = Match.words(Mu.expect(G.ayas[j]), sub, fin, false, { freeLead: true });
+      const ok = st.filter(x => x.state === 'ok').length, bad = st.filter(x => x.state === 'err').length;
+      if (ok >= 3 && ok / (ok + bad) >= 0.7 && (!best || ok > best.ok)) best = { j, ok };
+    }
+    if (!best) return false;
+    if (best.j > m.c) {
+      const marks = [];
+      for (let k = G.pos; k < m.starts[best.j]; k++) { if (G.errs[k] !== 'hint') G.errs[k] = 'skip'; marks.push([k, 'skip']); }
+      warnSkipped(marks);
+    } else toast(`رجعت إلى الآية ${ar(R.ayas[G.ayas[best.j]][1])}`);
+    m.c = best.j; m.w0 = 0; m.lead = true;
+    G.pos = G.tent = m.starts[best.j];
+    return true;
   }
 
   // a phrase from the microphone: recognised in order, then lined up
@@ -328,6 +483,7 @@ const Recite = (() => {
 
   let F = null;
   function find() {
+    if (MU()) return findMu();
     withModel(() => {
       if (G) return;
       F = { tries: 0, busy: false, voice: false };
@@ -355,8 +511,42 @@ const Recite = (() => {
   function stopFind() {
     if (!F) return;
     F = null;
-    Listen.stop();
+    if (MU()) Mu.stop(); else Listen.stop();
     syncBubble();
+  }
+  // Muaalem: the reading so far, looked up among all ayas by its consonants,
+  // the likeliest checked word by word; the session then goes on with it
+  function findMu() {
+    withModel(() => {
+      if (G) return;
+      F = { tries: 0, busy: false, voice: false };
+      syncBubble();
+      const f = F;
+      Mu.start(d => {
+        if (F !== f) return;
+        if (!f.voice) { f.voice = true; syncBubble(); }
+        clearTimeout(f.vt);
+        f.vt = setTimeout(() => { if (F === f) { f.voice = false; syncBubble(); } }, 900);
+        const h = d.final + d.tent, n = Match.units(h).length;
+        if (n < 18 || Date.now() - (f.at || 0) < 500) return;
+        f.at = Date.now();
+        const ai = locateMu(h);
+        if (ai == null) { if (n > 260) { stopFind(); toast('لم أجد الآية — جرّب من بداية آية'); } return; }
+        F = null; // the reading goes on, now as the session's
+        syncBubble();
+        start(ai, null, { stream: true });
+        toast(ayaLabel(ai));
+      }).catch(() => { stopFind(); toast('لا يمكن الوصول إلى الميكروفون — اسمح به من إعدادات المتصفح'); });
+    });
+  }
+  function locateMu(h) {
+    let best = null;
+    for (const { ai } of Mu.candidates(h, 8)) {
+      const st = Match.words(Mu.expect(ai), h, h.length, false, { freeLead: true });
+      const ok = st.filter(x => x.state === 'ok').length, bad = st.filter(x => x.state === 'err').length;
+      if (ok >= 3 && ok / (ok + bad) >= 0.75 && (!best || ok > best.ok)) best = { ai, ok };
+    }
+    return best?.ai ?? null;
   }
   function locate(text) {
     if (norm(text).trim().split(/\s+/).length < 2) return null;
@@ -657,8 +847,8 @@ const Recite = (() => {
     const settings = `<div class="group-label">إعدادات التسميع</div><div class="group">
       ${toggle('hide', 'ابدأ والكلمات مخفية', 'تظهر كل كلمة حين تقرؤها')}
       ${toggle('weak', 'مواضع الضعف في المصحف', 'خط منقّط خفيف تحت كلمات أخطأت فيها')}
-      <div class="row rc-goal"><span class="main"><span class="t">سرعة التعرّف</span><span class="s">السريع أخفّ وأسرع بمرتين، والدقيق أثبت قليلًا</span></span>
-        <span class="rc-chips">${[['fast', 'سريع'], ['exact', 'دقيق']].map(([k, t]) => `<button data-rc-use="${k}"${Listen.which() === k ? ' class="on"' : ''}>${t}</button>`).join('')}</span></div>
+      ${MU() ? '' : `<div class="row rc-goal"><span class="main"><span class="t">سرعة التعرّف</span><span class="s">السريع أخفّ وأسرع بمرتين، والدقيق أثبت قليلًا</span></span>
+        <span class="rc-chips">${[['fast', 'سريع'], ['exact', 'دقيق']].map(([k, t]) => `<button data-rc-use="${k}"${Listen.which() === k ? ' class="on"' : ''}>${t}</button>`).join('')}</span></div>`}
       <div class="row rc-model"><span class="main"><span class="t">نموذج التعرّف على التلاوة</span><span class="s" id="rcModelS">…</span></span><span id="rcModelB"></span></div>
       <div class="row rc-goal"><span class="main"><span class="t">هدف يومي</span><span class="s">عدد الآيات التي تسمّعها كل يوم</span></span>
         <span class="rc-chips">${[0, 5, 10, 20].map(n => `<button data-rc-goal="${n}"${goal === n ? ' class="on"' : ''}>${n ? ar(n) : 'لا'}</button>`).join('')}</span></div></div>`;
@@ -726,6 +916,17 @@ const Recite = (() => {
 
   // the model row in the settings, once the panel is on screen
   function mounted() {
+    if (MU()) {
+      Mu.saved().then(have => {
+        const s = $('#rcModelS'), b = $('#rcModelB'), c = Mu.choice();
+        if (!s) return;
+        s.textContent = !c ? 'يُختار أسرع نموذج لجهازك قبل التنزيل'
+          : `${MU_NAMES[c.id]} · ${ar(Mu.mb())} م.ب · ${have ? 'على جهازك، يعمل دون إنترنت' : 'غير منزّل'} · نحو ${ar(c.ms)} م.ث لكل تحديث`;
+        b.innerHTML = (c ? `<button class="rc-not" data-rc-model="probe">اختبر من جديد</button>` : '')
+          + `<button class="rc-not" data-rc-model="${have ? 'del' : 'get'}">${have ? 'حذف' : 'تنزيل'}</button>`;
+      });
+      return;
+    }
     Listen.saved().then(have => {
       const s = $('#rcModelS'), b = $('#rcModelB');
       if (!s) return;
@@ -749,7 +950,8 @@ const Recite = (() => {
     const md = e.target.closest('[data-rc-model]');
     if (md) {
       if (md.dataset.rcModel === 'get') withModel(() => mounted());
-      else Listen.remove().then(() => { toast('حُذف النموذج من جهازك'); mounted(); });
+      else if (md.dataset.rcModel === 'probe') { Mu.reprobe(); withModel(() => mounted()); }
+      else (MU() ? Mu.remove() : Listen.remove()).then(() => { toast('حُذف النموذج من جهازك'); mounted(); });
       return true;
     }
     const u = e.target.closest('[data-rc-use]');
@@ -812,7 +1014,27 @@ const Recite = (() => {
     if (b.dataset.rw === 'close') hide($('#recWord'));
   });
 
-  $('#riGo').onclick = () => {
+  $('#riGo').onclick = async () => {
+    if (MU()) {
+      Mu.prime();
+      if (!Mu.choice()) {
+        paintDl('probe');
+        try { await Mu.probe(); } catch { paintDl(); toast('تعذر تشغيل النموذج على هذا الجهاز'); return; }
+        paintDl();
+        const have = await Mu.saved();
+        if (!have) { toast(`الأسرع على جهازك: ${MU_NAMES[Mu.choice().id]}`); return; } // its size is on the button now
+      }
+      paintDl(0);
+      Promise.all([Mu.load(paintDl), Mu.sounds()]).then(() => {
+        hide($('#recIntro'));
+        paintDl();
+        toast('نُزّل النموذج، ويعمل الآن دون إنترنت');
+        const f = pending;
+        pending = null;
+        f?.();
+      }, () => { paintDl(); toast('تعذر التنزيل — تحقق من الاتصال'); });
+      return;
+    }
     Listen.prime();
     paintDl(0);
     Listen.load(paintDl).then(() => {

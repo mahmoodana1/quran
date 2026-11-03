@@ -1071,13 +1071,16 @@ svg { fill: currentColor; }
 }
 .w.rc-now.rc-hid::before { background: color-mix(in srgb, var(--accent) 40%, transparent); }
 .w.rc-peek { color: color-mix(in srgb, var(--ink) 26%, transparent); }
-.w.rc-wrong::after, .w.rc-skip::after, .w.rc-hint::after {
+.w.rc-wrong::after, .w.rc-haraka::after, .w.rc-skip::after, .w.rc-hint::after {
   content: ""; position: absolute; left: 4%; right: 4%; bottom: .1em;
   border-bottom: .08em solid var(--c-marks);
 }
 .w.rc-skip { color: var(--muted); }
 .w.rc-skip::after { border-bottom-style: dashed; }
 .w.rc-hint::after { border-bottom: .11em dotted var(--c-marks); }
+/* a haraka said wrong: the word is right, so it keeps its colour; a wavy mark */
+.w.rc-haraka::after { border-bottom: none; height: .22em; bottom: .02em;
+  background: radial-gradient(circle at 50% 100%, transparent .09em, var(--c-marks) .1em, var(--c-marks) .15em, transparent .16em) 0 0 / .32em .22em repeat-x; }
 
 /* the reciting bar */
 #recBar .pl-main { order: -1; }
@@ -1138,6 +1141,7 @@ svg { fill: currentColor; }
 .rd-list { max-height: 32vh; overflow-y: auto; margin: -6px 0; }
 .rd-list .row { min-height: 54px; padding: 6px 4px; }
 .rc-mk { flex: none; width: 16px; border-bottom: 2.5px solid var(--c-marks); }
+.rc-mk.rc-haraka { border-bottom-style: double; border-bottom-width: 4px; }
 .rc-mk.rc-skip { border-bottom-style: dashed; }
 .rc-mk.rc-hint { border-bottom-style: dotted; border-bottom-width: 3px; }
 .rc-row .t { font-size: 21px; font-weight: 400; line-height: 1.6; }
