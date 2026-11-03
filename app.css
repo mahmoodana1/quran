@@ -1308,3 +1308,10 @@ svg { fill: currentColor; }
 .rc-dl .prog i { width: 0; transition: width .3s linear; }
 .rc-dl span { font-size: 14px; font-weight: 700; color: var(--gold-ink); min-width: 3em; text-align: left; font-variant-numeric: tabular-nums; }
 .rc-model .rc-not { margin-inline-start: 8px; }
+
+/* an aya skipped: the reciting bar flashes amber once */
+#recBar.warn { animation: recWarn 1.6s ease; }
+@keyframes recWarn {
+  0%, 60% { box-shadow: 0 0 0 2px var(--c-marks), var(--shadow-float); }
+  100% { box-shadow: 0 0 0 0 transparent, var(--shadow-float); }
+}

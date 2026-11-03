@@ -3,7 +3,7 @@
 // requests data with ?v=N, so bumping DATA_VERSION there fetches new copies.
 // Hafs page fonts (verses.quran.foundation) are cached as pages are opened.
 // Recitation audio: see audioResponse below.
-const VERSION = 'quran-v37';
+const VERSION = 'quran-v38';
 const TAFSIR = 'tafsir-saadi';
 // recitation files saved by the app (or while listening); kept across versions
 const AUDIO = 'audio-yasser-128';
@@ -82,12 +82,25 @@ self.addEventListener('fetch', e => {
     try {
       const res = await fetch(e.request, { cache: 'no-cache' });
       if (res.ok) c.put(e.request, res.clone());
-      return res;
+      return isolate(res);
     } catch {
-      return (await c.match(e.request, { ignoreSearch: true })) || Response.error();
+      const hit = await c.match(e.request, { ignoreSearch: true });
+      return hit ? isolate(hit) : Response.error();
     }
   }));
 });
+
+// The app's own pages and scripts are served cross-origin isolated (static
+// hosts such as GitHub Pages cannot send these headers), which lets the speech
+// model use several CPU cores. 'credentialless' keeps other sites' audio and
+// fonts loading as before; browsers that don't know it simply stay as they were.
+function isolate(res) {
+  if (res.type !== 'basic' && res.type !== 'default') return res;
+  const h = new Headers(res.headers);
+  h.set('Cross-Origin-Opener-Policy', 'same-origin');
+  h.set('Cross-Origin-Embedder-Policy', 'credentialless');
+  return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h });
+}
 
 // Serve a saved recitation file, honouring Range requests (Safari's <audio>
 // always asks for ranges). Unsaved files come from the network and, when the

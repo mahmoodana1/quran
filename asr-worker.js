@@ -9,6 +9,8 @@ import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transfo
 
 const MODEL = 'An0xity/whisper-base-ar-quran-onnx-timestamped';
 env.allowLocalModels = false;
+// several cores when the page is cross-origin isolated (see sw.js)
+if (self.crossOriginIsolated) env.backends.onnx.wasm.numThreads = Math.min(4, navigator.hardwareConcurrency || 1);
 
 let asr = null, loading = null;
 

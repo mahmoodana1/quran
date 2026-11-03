@@ -102,7 +102,7 @@ const Recite = (() => {
     if (!words.length) return;
     G = { ayas, words, idx: new Map(words.map((w, k) => [w.p + ':' + w.n, k])), pos: 0, errs: {}, gone: new Set(),
       hide: !!opts.test || (!opts.seed && store.get('recite.hide', false)), run: false, secs: 0, busy: 0,
-      review: !!review && !opts.test, test: !!opts.test, lastP: null, miss: 0 };
+      review: !!review && !opts.test, test: !!opts.test, lastP: null, miss: 0, tent: 0 };
     // found by reciting: what was already said counts as said
     if (opts.seed) { const r = align(opts.seed, 0, words[0].of); if (r) G.pos = Math.min(r.end, words.length - 1); }
     dirty = true;
@@ -120,7 +120,7 @@ const Recite = (() => {
     G.run = true; G.t = G.lastAct = Date.now();
     hide($('#recWord'));
     const g = G;
-    Listen.start(audio => onPhrase(g, audio), on => { if (G === g) { G.voice = on; if (on) G.lastAct = Date.now(); paintBar(); } })
+    Listen.start(audio => onPhrase(g, audio), on => { if (G === g) { G.voice = on; if (on) G.lastAct = Date.now(); paintBar(); } }, audio => onPartial(g, audio))
       .catch(() => { if (G === g) { pause(); toast('لا يمكن الوصول إلى الميكروفون — اسمح به من إعدادات المتصفح'); } });
     clearInterval(timer);
     timer = setInterval(tick, 500);
@@ -145,6 +145,19 @@ const Recite = (() => {
     syncBubble();
   }
 
+  // while the reader is still going: a look at the phrase so far reveals the
+  // words it reaches (no mistakes are marked until the phrase is finished)
+  function onPartial(g, audio) {
+    if (g.busy || g.partial) return; // never hold up a finished phrase
+    g.partial = true;
+    Listen.transcribe(audio).then(text => {
+      g.partial = false;
+      if (G !== g || g.done || g.busy) return;
+      const r = align(text, g.pos);
+      if (r && r.fit >= 0.75 && r.end > Math.max(g.pos, g.tent)) { g.tent = r.end; follow(); paint(); }
+    });
+  }
+
   // a phrase from the microphone: recognised in order, then lined up
   function onPhrase(g, audio) {
     g.busy++;
@@ -159,19 +172,75 @@ const Recite = (() => {
 
   function heard(text) {
     G.lastAct = Date.now();
-    const r = align(text, G.pos);
+    G.tent = 0;
+    let r = align(text, G.pos);
+    // another aya of this surah that fits clearly better (ayas that open
+    // alike, as al-Mulk 2 and 3, would otherwise pass for wrong words)
+    const j = !r || r.fit < 0.85 ? relocate(text) : null;
+    if (j && (!r || j.score > r.fit + 0.25)) r = null;
     if (!r) {
-      if (norm(text).trim() && ++G.miss >= 2) { toast('لم أتبيّن القراءة، أعد من موضعك'); G.miss = 0; }
-      return;
+      if (!j) {
+        if (norm(text).trim() && ++G.miss >= 2) { toast('لم أتبيّن القراءة، أعد من موضعك'); G.miss = 0; }
+        paint();
+        return;
+      }
+      if (j.k > G.pos) {
+        const skipped = [];
+        for (let k = G.pos; k < j.k; k++) skipped.push([k, 'skip']);
+        r = { end: j.end, marks: skipped };
+      } else {
+        toast(`رجعت إلى الآية ${ar(R.ayas[G.words[j.k].ai][1])}`);
+        r = { end: j.end, marks: [] };
+        G.pos = j.k;
+      }
     }
     G.miss = 0;
     let marked = false;
     for (const [k, e] of r.marks) if (!G.errs[k]) { G.errs[k] = e; marked = true; }
+    warnSkipped(r.marks);
     if (marked && navigator.vibrate) navigator.vibrate(12);
-    if (r.end > G.pos) { G.pos = r.end; G.peek = false; }
+    if (r.end > G.pos || r.end < G.pos) { G.pos = r.end; G.peek = false; }
     if (G.pos >= G.words.length) return finish();
     follow();
     paint();
+  }
+
+  // a phrase that does not fit where the reader is: the aya of the session it
+  // starts best, with where it ends there
+  function relocate(text) {
+    const t = norm(text).split(/\s+/).filter(Boolean);
+    if (t.length < 2) return null;
+    let best = null;
+    G.words.forEach((w, k0) => {
+      if (w.wi !== 0 || Math.abs(k0 - G.pos) < 3) return;
+      // in-order matches of the phrase's words in this aya's opening
+      const lim = Math.min(G.words.length, k0 + t.length + 4);
+      let q = k0, ok = 0;
+      for (const x of t) {
+        for (let y = q; y < lim; y++) if (fit(x, G.words[y].nt) >= 0.75) { ok++; q = y + 1; break; }
+      }
+      const score = ok / t.length;
+      if (score >= 0.6 && (!best || score > best.score)) best = { k: k0, score };
+    });
+    if (!best) return null;
+    const r = align(text, best.k, G.words[best.k].of);
+    return r ? { k: best.k, end: r.end, score: best.score } : null;
+  }
+
+  // whole ayas among the skipped words: say so
+  function warnSkipped(marks) {
+    const skipped = new Set(marks.filter(([, e]) => e === 'skip').map(([k]) => k));
+    const ayas = [];
+    for (const k of skipped) {
+      const w = G.words[k];
+      if (w.wi === 0 && !ayas.includes(w.ai) && [...Array(w.of).keys()].every(i => skipped.has(k + i))) ayas.push(w.ai);
+    }
+    if (!ayas.length) return;
+    ayas.sort((a, b) => a - b);
+    const n = a => ar(R.ayas[a][1]);
+    toast(ayas.length === 1 ? `تنبيه: تجاوزت الآية ${n(ayas[0])}` : `تنبيه: تجاوزت الآيات ${n(ayas[0])}–${n(ayas[ayas.length - 1])}`);
+    $('#recBar').classList.remove('warn'); void $('#recBar').offsetWidth; $('#recBar').classList.add('warn');
+    if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
   }
 
   // How well a spoken word fits the expected one. One letter apart counts as
@@ -233,7 +302,7 @@ const Recite = (() => {
     }
     if (ok < Math.max(1, Math.ceil(n * 0.4))) return null;
     const at = Math.max(pos, s0 + end);
-    return { end: at, marks: freeStart ? [] : marks.filter(([k]) => k >= pos && k < at) };
+    return { end: at, fit: ok / n, marks: freeStart ? [] : marks.filter(([k]) => k >= pos && k < at) };
   }
 
   // every half second: the clock, and a hidden word that has kept the reader silent
@@ -241,14 +310,14 @@ const Recite = (() => {
     if (!G?.run) return;
     if (G.hide && !G.peek && !G.voice && !G.busy && Date.now() - G.lastAct > HINT_AFTER) {
       G.peek = true;
-      G.errs[G.pos] ||= 'hint';
+      G.errs[Math.max(G.pos, G.tent)] ||= 'hint';
       paint(); paintBar();
     }
   }
 
   // turn the page when the next word is on another one
   function follow() {
-    const w = G.words[Math.min(G.pos, G.words.length - 1)];
+    const w = G.words[Math.min(Math.max(G.pos, G.tent), G.words.length - 1)];
     if (w.p === G.lastP) return;
     G.lastP = w.p;
     if (w.p !== S.page) goTo(w.p, { animate: Math.abs(w.p - S.page) === 1 });
@@ -312,6 +381,22 @@ const Recite = (() => {
 
   const liveErrs = () => Object.keys(G.errs).map(Number).filter(k => !G.gone.has(k)).sort((a, b) => a - b);
 
+  // the session's mistakes as the reader sees them: a whole aya skipped is one
+  // ({ k: its first word, aya }), any other word on its own ({ k, e })
+  function mistakes(withGone = false) {
+    const ks = Object.keys(G.errs).map(Number).filter(k => withGone || !G.gone.has(k)).sort((a, b) => a - b);
+    const set = new Set(ks), out = [], seen = new Set();
+    for (const k of ks) {
+      if (seen.has(k)) continue;
+      const w = G.words[k];
+      if (G.errs[k] === 'skip' && w.wi === 0 && [...Array(w.of).keys()].every(i => set.has(k + i) && G.errs[k + i] === 'skip')) {
+        for (let i = 0; i < w.of; i++) seen.add(k + i);
+        out.push({ k, aya: w.ai });
+      } else out.push({ k, e: G.errs[k] });
+    }
+    return out;
+  }
+
   // ---- painting
 
   // past mistakes shown faintly while reading (a setting): 'page:n' -> type
@@ -341,9 +426,11 @@ const Recite = (() => {
         const k = G?.idx.get(p + ':' + n);
         if (k == null) return;
         const e = G.gone.has(k) ? null : G.errs[k];
+        const cur = Math.max(G.pos, G.tent);
         if (k < G.pos) el.classList.add(e ? 'rc-' + e : 'rc-done');
+        else if (k < cur) el.classList.add('rc-done'); // heard, the phrase not yet finished
         else if (G.done) return;
-        else if (k === G.pos) { el.classList.add('rc-now'); if (G.hide) el.classList.add(G.peek ? 'rc-peek' : 'rc-hid'); }
+        else if (k === cur) { el.classList.add('rc-now'); if (G.hide) el.classList.add(G.peek ? 'rc-peek' : 'rc-hid'); }
         else if (G.hide) el.classList.add('rc-hid');
       });
     }
@@ -352,7 +439,7 @@ const Recite = (() => {
   function paintBar() {
     if (!G) return;
     const w = G.words[Math.min(G.pos, G.words.length - 1)];
-    const n = liveErrs().length;
+    const n = mistakes().length;
     $('#recTitle').textContent = !G.run ? (G.pos ? 'متوقف مؤقتًا' : 'اضغط وابدأ القراءة')
       : G.busy ? 'يتعرّف على ما قرأت…' : G.voice ? 'يستمع…' : G.peek ? 'هذه الكلمة التالية' : 'اقرأ، أنا أستمع';
     $('#recSub').textContent = `${ayaLabel(w.ai)}${n ? ' · ' + errs(n) : ''}`;
@@ -379,20 +466,21 @@ const Recite = (() => {
   }
 
   function paintDone() {
-    const said = G.words.slice(0, G.pos), list = liveErrs();
+    const said = G.words.slice(0, G.pos), list = mistakes();
     const first = G.words[0].ai, last = said[said.length - 1].ai;
     $('#rdTitle').textContent = list.length ? 'انتهت الجلسة' : 'ما شاء الله، بلا أخطاء';
     $('#rdRange').textContent = G.test ? `اختبار · ${ayaLabel(first)}` : G.review ? `مراجعة مواضع الضعف · ${ayaCount(new Set(said.map(w => w.ai)).size)}`
       : first === last ? ayaLabel(first) : `${ayaLabel(first)} – ${ar(R.ayas[last][1])}`;
-    $('#rdRight').textContent = ar(said.length - list.length);
+    $('#rdRight').textContent = ar(said.length - liveErrs().length);
     $('#rdErr').textContent = ar(list.length);
     const secs = Math.round(G.secs);
     $('#rdTime').textContent = `${ar(Math.floor(secs / 60))}:${ar(String(secs % 60).padStart(2, '0'))}`;
-    const rows = Object.keys(G.errs).map(Number).sort((a, b) => a - b).map(k => {
-      const w = G.words[k], e = G.errs[k], gone = G.gone.has(k);
-      return `<div class="row rc-row${gone ? ' gone' : ''}"><span class="rc-mk rc-${e}"></span>
-        <span class="main"><span class="t" style="font-family:${R.font}">${esc(wordText(w))}</span><span class="s">${ayaLabel(w.ai)} · ${TYPES[e]}</span></span>
-        <button class="rc-not" data-rd-gone="${k}">${gone ? 'تراجع' : 'لم أخطئ'}</button></div>`;
+    const rows = mistakes(true).map(({ k, e, aya }) => {
+      const w = G.words[k], gone = G.gone.has(k);
+      const t = aya != null ? `<span class="t">${ayaLabel(aya)}</span><span class="s">تجاوزت الآية كلها</span>`
+        : `<span class="t" style="font-family:${R.font}">${esc(wordText(w))}</span><span class="s">${ayaLabel(w.ai)} · ${TYPES[e]}</span>`;
+      return `<div class="row rc-row${gone ? ' gone' : ''}"><span class="rc-mk rc-${e || 'skip'}"></span><span class="main">${t}</span>
+        <button class="rc-not" data-rd-gone="${k}"${aya != null ? ` data-rd-n="${w.of}"` : ''}>${gone ? 'تراجع' : 'لم أخطئ'}</button></div>`;
     }).join('');
     $('#rdList').innerHTML = rows;
     $('#rdList').hidden = !rows;
@@ -415,7 +503,8 @@ const Recite = (() => {
       const a = l.ayas[ai];
       if (bad.length) {
         const r = l.ayas[ai] = a || { n: 0, words: {}, ok: [] };
-        r.n += bad.length; r.last = Date.now(); r.ok = []; r.done = false;
+        r.n += bad.length === list[0][0].of && bad.every(x => x[1] === 'skip') ? 1 : bad.length;
+        r.last = Date.now(); r.ok = []; r.done = false;
         bad.forEach(([w, e]) => { r.words[w.wi] = e; });
       } else if (a && list.length === list[0][0].of && !a.ok.includes(today)) {
         a.ok.push(today);
@@ -428,8 +517,8 @@ const Recite = (() => {
     const days = Object.keys(l.days);
     if (days.length > 400) days.slice(0, days.length - 400).forEach(d => delete l.days[d]);
     l.sessions.unshift({ t: Date.now(), from: said[0].ai, to: said[said.length - 1].ai, ayas: byAya.size,
-      words: said.length, errs: liveErrs().length, secs: Math.round(G.secs), review: G.review, test: G.test,
-      list: liveErrs().slice(0, 30).map(k => [G.words[k].ai, G.words[k].wi, G.errs[k]]) });
+      words: said.length, errs: mistakes().length, secs: Math.round(G.secs), review: G.review, test: G.test,
+      list: mistakes().slice(0, 30).map(({ k, e, aya }) => aya != null ? [aya, -1, 'skip'] : [G.words[k].ai, G.words[k].wi, e]) });
     l.sessions.length = Math.min(l.sessions.length, 60);
     store.set(key(), l);
     weakMap = null;
@@ -454,7 +543,7 @@ const Recite = (() => {
     const n = [...pg.querySelectorAll('.w:not(.end)')].indexOf(el);
     const k = G.idx.get(pg.dataset.page + ':' + n);
     // the hidden word you are on: a peek, counted as a hint
-    if (k === G.pos && G.hide && !G.done && !G.peek) {
+    if (k === Math.max(G.pos, G.tent) && G.hide && !G.done && !G.peek) {
       G.peek = true; G.errs[k] = 'hint';
       G.lastAct = Date.now();
       paint(); paintBar();
@@ -620,8 +709,9 @@ const Recite = (() => {
 
     if (l.sessions.length) {
       html += '<div class="group-label">الجلسات</div><div class="group">' + l.sessions.slice(0, 20).map(s => {
-        const items = (s.list || []).filter(([ai]) => R.ayas[ai]).map(([ai, wi, e]) =>
-          `<div class="rc-sess-i"><span class="rc-mk rc-${e}"></span><b style="font-family:${R.font}">${esc(ayaTokens(ai)[wi] || '')}</b><small>${ayaLabel(ai)} · ${TYPES[e]}</small></div>`).join('');
+        const items = (s.list || []).filter(([ai]) => R.ayas[ai]).map(([ai, wi, e]) => wi < 0
+          ? `<div class="rc-sess-i"><span class="rc-mk rc-skip"></span><b>${ayaLabel(ai)}</b><small>تجاوزت الآية كلها</small></div>`
+          : `<div class="rc-sess-i"><span class="rc-mk rc-${e}"></span><b style="font-family:${R.font}">${esc(ayaTokens(ai)[wi] || '')}</b><small>${ayaLabel(ai)} · ${TYPES[e]}</small></div>`).join('');
         return `<details class="rc-sess"><summary class="row"><span class="main"><span class="t">${sessionLabel(s)}</span>
           <span class="s">${ago(s.t)} · ${ayaCount(s.ayas || 1)} · ${s.errs ? errs(s.errs) : 'بلا أخطاء'}</span></span>
           <svg viewBox="0 0 24 24" class="go"><path d="M14.5 6l-6 6 6 6"/></svg></summary>
@@ -726,8 +816,8 @@ const Recite = (() => {
   $('#rdList').addEventListener('click', e => {
     const b = e.target.closest('[data-rd-gone]');
     if (!b || !G) return;
-    const k = +b.dataset.rdGone;
-    if (G.gone.has(k)) G.gone.delete(k); else G.gone.add(k);
+    const k = +b.dataset.rdGone, n = +(b.dataset.rdN || 1), back = G.gone.has(k);
+    for (let i = k; i < k + n; i++) if (back) G.gone.delete(i); else G.gone.add(i);
     paint(); paintDone();
   });
   $('#rdNote').addEventListener('click', e => { if (e.target.closest('[data-rd-log]')) { closeDone(); openRecite(); } });

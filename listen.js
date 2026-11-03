@@ -13,6 +13,7 @@ const Listen = (() => {
   const BREATH = 0.3;
   const MAX = 15;        // s: a longer phrase is cut here
   const PREROLL = 0.3;   // s kept from before the voice started
+  const PARTIAL = 0.9;   // s of new voice between looks at the phrase so far
 
   let worker = null, ready = false, loading = null, onProgress = null;
   const files = {};      // model file -> [loaded, total] while downloading
@@ -85,23 +86,24 @@ const Listen = (() => {
     ctx.resume?.();
   }
 
-  // onPhrase(Float32Array at 16 kHz), onVoice(true/false) as the reader starts and stops
-  async function start(onPhrase, onVoice) {
+  // onPhrase(Float32Array at 16 kHz) at each pause, onVoice(true/false) as the
+  // reader starts and stops, onPartial(the phrase so far) while they recite
+  async function start(onPhrase, onVoice, onPartial) {
     prime();
     stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
     src = ctx.createMediaStreamSource(stream);
     node = ctx.createScriptProcessor(4096, 1, 1);
     const step = ctx.sampleRate / RATE;
-    let floor = 0.01, voiced = false, quiet = 0, buf = [], pre = [], preLen = 0;
+    let floor = 0.01, voiced = false, quiet = 0, buf = [], pre = [], preLen = 0, fresh = 0;
+    const joined = () => {
+      const out = new Float32Array(buf.reduce((s, b) => s + b.length, 0));
+      let o = 0;
+      for (const b of buf) { out.set(b, o); o += b.length; }
+      return out;
+    };
     const flush = () => {
-      const n = buf.reduce((s, b) => s + b.length, 0);
-      if (n > RATE * 0.35) {
-        const out = new Float32Array(n);
-        let o = 0;
-        for (const b of buf) { out.set(b, o); o += b.length; }
-        onPhrase(out);
-      }
-      buf = []; voiced = false; quiet = 0;
+      if (buf.reduce((s, b) => s + b.length, 0) > RATE * 0.35) onPhrase(joined());
+      buf = []; voiced = false; quiet = 0; fresh = 0;
       onVoice(false);
     };
     mic = { flush };
@@ -133,6 +135,7 @@ const Listen = (() => {
         quiet = loud ? 0 : quiet + dur;
         const len = buf.reduce((s, b) => s + b.length, 0) / RATE;
         if (quiet >= (len >= LONG ? BREATH : PAUSE) || len >= MAX) flush();
+        else if (onPartial && loud && (fresh += dur) >= PARTIAL) { fresh = 0; onPartial(joined()); }
       } else {
         pre.push(y); preLen += dur;
         while (preLen > PREROLL && pre.length > 1) preLen -= pre.shift().length / RATE;
