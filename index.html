@@ -45,8 +45,10 @@
     <div class="acts-title"><span class="dot"></span><b id="ayaBarTitle"></b></div>
     <button data-act="close" class="x-btn" aria-label="إغلاق"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round"/></svg></button>
   </div>
+  <p id="ayaBarNote" class="acts-note" hidden></p>
   <div class="acts-row">
     <button data-act="play"><i><svg viewBox="0 0 24 24"><path d="M8.5 5.5v13l10.5-6.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></i><span>استماع</span></button>
+    <button data-act="recite"><i><svg viewBox="0 0 24 24"><path d="M12 3.5a3 3 0 00-3 3v5a3 3 0 006 0v-5a3 3 0 00-3-3zM6.5 11a5.5 5.5 0 0011 0M12 16.5v4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></i><span>تسميع</span></button>
     <button data-act="tafsir"><i><svg viewBox="0 0 24 24"><path d="M12 6.5C10 5 7 4.5 3.5 5v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5zM12 6.5v13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></i><span>تفسير</span></button>
     <button data-act="copy"><i><svg viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M15.5 8.5V6a2.5 2.5 0 00-2.5-2.5H7A2.5 2.5 0 004.5 6v7A2.5 2.5 0 007 15.5h1.5" fill="none" stroke="currentColor" stroke-width="1.7"/></svg></i><span>نسخ</span></button>
     <button data-act="bookmark"><i><svg viewBox="0 0 24 24"><path d="M6.5 4.5h11v15.5l-5.5-3.8-5.5 3.8z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></i><span>علامة</span></button>
@@ -62,6 +64,29 @@
     <button id="plToggle" class="pl-main" aria-label="تشغيل/إيقاف"><svg viewBox="0 0 24 24" class="ic-pause"><rect x="7" y="5.5" width="3.6" height="13" rx="1.2"/><rect x="13.4" y="5.5" width="3.6" height="13" rx="1.2"/></svg><svg viewBox="0 0 24 24" class="ic-play"><path d="M8.5 5.5v13l10.5-6.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></button>
     <button id="plNext" class="pl-btn" aria-label="الآية التالية"><svg viewBox="0 0 24 24"><path d="M17 6v12M13.5 12L5 18V6z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" transform="matrix(-1 0 0 1 24 0)"/></svg></button>
     <button id="plStop" class="x-btn" aria-label="إغلاق"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round"/></svg></button>
+  </div>
+</div>
+
+<!-- reciting from memory: takes the player's place -->
+<div id="recBar" class="bar mini" hidden>
+  <div class="pl-track"><i id="recProg"></i></div>
+  <button id="recToggle" class="pl-main" aria-label="إيقاف مؤقت"><svg viewBox="0 0 24 24" class="ic-mic"><path d="M12 3.5a3 3 0 00-3 3v5a3 3 0 006 0v-5a3 3 0 00-3-3zM6.5 11a5.5 5.5 0 0011 0M12 16.5v4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><svg viewBox="0 0 24 24" class="ic-play"><path d="M8.5 5.5v13l10.5-6.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></button>
+  <div class="pl-info"><b id="recTitle"></b><small id="recSub"></small></div>
+  <div class="pl-ctrl">
+    <button id="recHide" class="rec-hide" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" stroke-width="1.7"/></svg><span>إخفاء</span></button>
+    <button id="recStop" class="x-btn" aria-label="إنهاء التسميع"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round"/></svg></button>
+  </div>
+</div>
+
+<!-- a word marked as a mistake, tapped mid-session -->
+<div id="recWord" class="bar acts" hidden>
+  <div class="acts-head">
+    <div class="acts-title"><span class="dot"></span><b id="rwWord"></b><small id="rwType"></small></div>
+    <button data-rw="close" class="x-btn" aria-label="إغلاق"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round"/></svg></button>
+  </div>
+  <div class="rw-row">
+    <button data-rw="say"><svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4zM15.5 9a4 4 0 010 6M18 6.5a7.5 7.5 0 010 11" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/></svg>استمع للكلمة</button>
+    <button data-rw="gone">لم أخطئ هنا</button>
   </div>
 </div>
 
@@ -170,9 +195,48 @@
   </div>
 </section>
 
-<!-- always-visible switcher: reader / all other panels -->
+<!-- recitation, first time: what it is before it starts -->
+<section id="recIntro" class="modal" hidden>
+  <div class="card rc-intro">
+    <div class="rc-badge"><svg viewBox="0 0 24 24"><path d="M12 3.5a3 3 0 00-3 3v5a3 3 0 006 0v-5a3 3 0 00-3-3zM6.5 11a5.5 5.5 0 0011 0M12 16.5v4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg></div>
+    <h2>التسميع</h2>
+    <p class="rc-lead">اقرأ من حفظك، ويتابعك التطبيق كلمةً كلمة، وينبّهك إلى ما أخطأت فيه ويحفظه لتراجعه.</p>
+    <div class="rc-points">
+      <div><svg viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg><span>«إخفاء» يخفي ما بعد موضعك، وتظهر كل كلمة حين تقرؤها</span></div>
+      <div><svg viewBox="0 0 24 24"><path d="M4 18h16" stroke-dasharray="2 3"/><path d="M8 13l4-7 4 7"/></svg><span>اضغط الكلمة المخطوءة لتسمعها، أو لتلغي الخطأ</span></div>
+      <div><svg viewBox="0 0 24 24"><rect x="5.5" y="10.5" width="13" height="9.5" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 017 0v2.5"/></svg><span>يعمل على جهازك دون إنترنت، وصوتك لا يغادره</span></div>
+    </div>
+    <p class="note rc-demo">نسخة تجريبية للواجهة: المتابعة الآن محاكاة دون ميكروفون، ويُضاف التعرّف على الصوت لاحقًا.</p>
+    <div class="actions">
+      <button id="riGo" class="primary">ابدأ التجربة</button>
+      <button id="riLater">ليس الآن</button>
+    </div>
+  </div>
+</section>
+
+<!-- recitation over -->
+<section id="recDone" class="modal" hidden>
+  <div class="card rc-end">
+    <h2 id="rdTitle"></h2>
+    <p id="rdRange" class="rd-range"></p>
+    <div class="rd-stats">
+      <div><b id="rdRight" class="ok"></b><small>صحيحة</small></div>
+      <div><b id="rdErr" class="err"></b><small>أخطاء</small></div>
+      <div><b id="rdTime"></b><small>المدة</small></div>
+    </div>
+    <div id="rdList" class="group rd-list"></div>
+    <p id="rdNote" class="note rd-note"></p>
+    <div class="actions">
+      <button id="rdAgain" class="primary"></button>
+      <button id="rdOk">تم</button>
+    </div>
+  </div>
+</section>
+
+<!-- always-visible switcher: reader / recitation (once used) / all other panels -->
 <nav id="dock" aria-label="التنقل">
   <button id="dockQuran" class="on" aria-label="القرآن"><svg viewBox="0 0 24 24"><path d="M12 6.5C10 5 7 4.5 3.5 5v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5zM12 6.5v13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></button>
+  <button id="dockRec" aria-label="تسميع" hidden><svg viewBox="0 0 24 24"><path d="M12 3.5a3 3 0 00-3 3v5a3 3 0 006 0v-5a3 3 0 00-3-3zM6.5 11a5.5 5.5 0 0011 0M12 16.5v4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button>
   <button id="dockPanels" aria-label="اللوحات"><svg viewBox="0 0 28 28"><g fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="8.5" height="8.5" rx="2.6"/><rect x="15.5" y="4" width="8.5" height="8.5" rx="2.6"/><rect x="4" y="15.5" width="8.5" height="8.5" rx="2.6"/><rect x="15.5" y="15.5" width="8.5" height="8.5" rx="2.6"/></g></svg></button>
 </nav>
 
@@ -180,5 +244,6 @@
 <script src="prayer.js"></script>
 <script src="app.js"></script>
 <script src="adhkar.js"></script>
+<script src="recite.js"></script>
 </body>
 </html>

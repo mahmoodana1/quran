@@ -275,7 +275,7 @@ svg { fill: currentColor; }
 .acts-title .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--sel); }
 .bar.swap .acts-title { animation: swapIn .3s ease; }
 @keyframes swapIn { from { opacity: 0; transform: translateY(4px); } }
-.acts-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.acts-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
 .acts-row button { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; color: var(--ink); }
 .acts-row i {
   width: 100%; height: 44px; border-radius: 14px; display: grid; place-items: center;
@@ -1054,3 +1054,129 @@ svg { fill: currentColor; }
 .all-card.done { padding: 16px 18px; }
 .all-card.done .all-ico { display: none; }
 .all-card.done .all-t { font-size: 16px; color: #e6cc8a; }
+
+/* =====================================================================
+   Recitation from memory (التسميع)
+   ===================================================================== */
+.acts-note { margin: -4px 2px -2px; font-size: 12.5px; color: var(--gold-ink); display: flex; align-items: center; gap: 7px; }
+.acts-note::before { content: ""; width: 14px; flex: none; border-bottom: 2px dotted var(--c-marks); }
+
+/* words: said, now, hidden, and the three kinds of mistake */
+.w.rc-done { color: color-mix(in srgb, var(--ok) 70%, var(--ink)); }
+.w.rc-now { color: var(--accent); }
+.w.rc-hid { color: transparent; }
+.w.rc-hid::before {
+  content: ""; position: absolute; left: 8%; right: 8%; top: 44%; height: .16em;
+  border-radius: 99px; background: var(--tint-2);
+}
+.w.rc-now.rc-hid::before { background: color-mix(in srgb, var(--accent) 40%, transparent); }
+.w.rc-peek { color: color-mix(in srgb, var(--ink) 26%, transparent); }
+.w.rc-wrong::after, .w.rc-skip::after, .w.rc-hint::after {
+  content: ""; position: absolute; left: 4%; right: 4%; bottom: .1em;
+  border-bottom: .08em solid var(--c-marks);
+}
+.w.rc-skip { color: var(--muted); }
+.w.rc-skip::after { border-bottom-style: dashed; }
+.w.rc-hint::after { border-bottom: .11em dotted var(--c-marks); }
+
+/* the reciting bar */
+#recBar .pl-main { order: -1; }
+#recBar .pl-main.live { animation: recPulse 1.8s ease-out infinite; }
+@keyframes recPulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent); }
+  100% { box-shadow: 0 0 0 14px color-mix(in srgb, var(--accent) 0%, transparent); }
+}
+#recBar .ic-play, #recBar.paused .ic-mic { display: none; }
+#recBar.paused .ic-play { display: block; }
+#recBar .pl-info small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rec-hide {
+  height: 34px; padding: 0 11px; border-radius: 17px; display: flex; align-items: center; gap: 5px;
+  font-size: 13px; background: var(--tint); color: var(--ink); transition: background-color .2s ease, color .2s ease;
+}
+.rec-hide svg { width: 17px; height: 17px; }
+.rec-hide.on { background: var(--accent); color: var(--on-accent); }
+
+/* a tapped mistake, above the reciting bar */
+#recWord { bottom: calc(52px + 80px + env(safe-area-inset-bottom)); }
+#recWord .dot { background: var(--c-marks); box-shadow: 0 0 0 4px color-mix(in srgb, var(--c-marks) 18%, transparent); }
+#recWord .acts-title b { font-size: 21px; font-weight: 400; line-height: 1.5; }
+#recWord .acts-title small { font-size: 12.5px; color: var(--gold-ink); }
+.rw-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.rw-row button {
+  height: 42px; border-radius: 14px; display: flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 14px; font-weight: 600; background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--accent);
+}
+.rw-row button:active { background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.rw-row svg { width: 18px; height: 18px; }
+
+#dock.three { grid-template-columns: 1fr 1fr 1fr; }
+
+/* first time */
+.rc-intro { text-align: center; }
+.rc-badge {
+  width: 64px; height: 64px; margin: 6px auto 0; border-radius: 50%; display: grid; place-items: center;
+  color: var(--p-on); background: linear-gradient(160deg, var(--p-green), var(--p-green-2));
+  box-shadow: 0 0 0 1.5px var(--p-gold), 0 0 0 4px var(--p-bg), 0 0 0 5px color-mix(in srgb, var(--p-gold) 60%, transparent);
+}
+.rc-badge svg { width: 30px; height: 30px; }
+.rc-intro h2 { font-size: 21px; }
+.rc-lead { margin: -8px 0 0; color: var(--muted); font-size: 15px; line-height: 1.8; }
+.rc-points { display: flex; flex-direction: column; gap: 12px; padding: 12px 4px; text-align: right; border-top: 1px solid var(--p-rule); border-bottom: 1px solid var(--p-rule); }
+.rc-points div { display: flex; align-items: center; gap: 12px; font-size: 14.5px; line-height: 1.6; }
+.rc-points svg { width: 22px; height: 22px; flex: none; fill: none; stroke: var(--p-gold); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.rc-demo { margin: -4px 4px 0; }
+
+/* session over */
+.rd-range { margin: -10px 0 0; text-align: center; color: var(--muted); font-size: 14px; }
+.rd-stats { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--p-rule); border-bottom: 1px solid var(--p-rule); }
+.rd-stats div { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 0; }
+.rd-stats div + div { border-inline-start: 1px dotted var(--p-rule); }
+.rd-stats b { font-size: 21px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.rd-stats b.ok { color: var(--ok); }
+.rd-stats b.err { color: var(--c-marks); }
+.rd-stats small { font-size: 12px; color: var(--muted); }
+.rd-list { max-height: 32vh; overflow-y: auto; margin: -6px 0; }
+.rd-list .row { min-height: 54px; padding: 6px 4px; }
+.rc-mk { flex: none; width: 16px; border-bottom: 2.5px solid var(--c-marks); }
+.rc-mk.rc-skip { border-bottom-style: dashed; }
+.rc-mk.rc-hint { border-bottom-style: dotted; border-bottom-width: 3px; }
+.rc-row .t { font-size: 21px; font-weight: 400; line-height: 1.6; }
+.rc-row.gone { opacity: .45; }
+.rc-row.gone .t { text-decoration: line-through; }
+.rc-not { flex: none; font-size: 12.5px; color: var(--p-ink); padding: 6px 10px; border: 1px solid var(--p-rule); border-radius: 3px; }
+.rd-note { margin: 0 4px; }
+.rd-note button { color: var(--p-ink); font-weight: 700; font-size: inherit; text-decoration: underline; text-underline-offset: 3px; }
+
+/* history: «علاماتي | أخطائي» in the bookmarks tab */
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; margin: 8px 0 12px; padding: 3px; border: 1px solid var(--p-rule); border-radius: 3px; }
+.seg button { padding: 8px 0; font-size: 14px; font-weight: 500; color: var(--muted); border-radius: 2px; }
+.seg button.on { background: linear-gradient(160deg, var(--p-green), var(--p-green-2)); color: var(--p-on); font-weight: 700; }
+.rc-hero {
+  border-radius: 3px; color: var(--p-on); padding: 16px 16px 14px; margin-bottom: 12px;
+  background: var(--p-pattern) 0 0 / 30px 30px, linear-gradient(160deg, var(--p-green), var(--p-green-2));
+  border: 1px solid var(--p-gold);
+  box-shadow: inset 0 0 0 4px var(--p-green-2), inset 0 0 0 5px color-mix(in srgb, var(--p-gold) 70%, transparent);
+}
+.rc-hero-l { font-size: 13px; opacity: .78; text-align: center; }
+.rc-hero-n { display: grid; grid-template-columns: repeat(3, 1fr); margin-top: 6px; }
+.rc-hero-n div { display: flex; flex-direction: column; align-items: center; }
+.rc-hero-n div + div { border-inline-start: 1px solid color-mix(in srgb, var(--p-gold) 45%, transparent); }
+.rc-hero-n b { font-size: 24px; font-weight: 800; color: #e6cc8a; font-variant-numeric: tabular-nums; }
+.rc-hero-n small { font-size: 12px; opacity: .8; }
+.rc-hero-t { margin-top: 10px; text-align: center; font-size: 12.5px; opacity: .9; }
+.rc-review {
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 14px; margin-bottom: 4px;
+  font-size: 16px; font-weight: 700; border-radius: 3px; color: var(--p-on);
+  background: linear-gradient(160deg, var(--p-green), var(--p-green-2)); border: 1px solid var(--p-gold);
+  box-shadow: inset 0 0 0 2px var(--p-green), inset 0 0 0 3px color-mix(in srgb, var(--p-gold) 60%, transparent);
+}
+.rc-review svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.rc-review:active { transform: scale(.98); }
+.rc-snip { font-size: 19px; }
+.rc-snip mark { background: none; color: inherit; border-bottom: 2px solid var(--c-marks); }
+.rc-snip mark.rc-skip { border-bottom-style: dashed; }
+.rc-snip mark.rc-hint { border-bottom-style: dotted; border-bottom-width: 3px; }
+.rc-dots { display: inline-flex; gap: 3px; margin-inline-start: 8px; vertical-align: middle; }
+.rc-dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--tint-2); }
+.rc-dots i.on { background: var(--ok); }
+.rc-mastered { opacity: .62; }

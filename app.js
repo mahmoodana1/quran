@@ -346,6 +346,7 @@ function paintMarks(root = document) {
   const saved = new Set(bookmarks().filter(b => b.r === R.id).map(b => b.aya));
   root.querySelectorAll('.w.end').forEach(e => { if (saved.has(+e.dataset.a)) e.classList.add('sel'); });
   if (S.play != null) root.querySelectorAll(`.w.end[data-a="${S.play}"]`).forEach(e => e.classList.add('play'));
+  if (typeof Recite !== 'undefined') Recite.paint(root);
   // bands need layout: pages not yet in the document get them on insertion
   if (root === document || root.isConnected) drawBands(root);
 }
@@ -518,6 +519,7 @@ wordAudio.addEventListener('error', () => { sayEl?.classList.remove('say'); if (
       else if (a === 'bm') toggleBookmark(S.page);
       return;
     }
+    if (typeof Recite !== 'undefined' && Recite.onTap(e.target)) return;
     // only the aya number marks; tapping anywhere else just closes the actions
     const w = e.target.closest('.w.end');
     if (w) {
@@ -591,6 +593,9 @@ function openActions(i) {
   $('#ayaBarTitle').textContent = ayaLabel(i);
   $('#ayaBar [data-act=bookmark] span').textContent = isSaved(i) ? 'محفوظة' : 'علامة';
   $('#ayaBar [data-act=bookmark]').classList.toggle('on', isSaved(i));
+  const note = typeof Recite !== 'undefined' ? Recite.note(i) : '';
+  $('#ayaBarNote').textContent = note;
+  $('#ayaBarNote').hidden = !note;
   if (P.ai == null) hide($('#player'));
   const bar = $('#ayaBar');
   if (!bar.hidden && !bar.classList.contains('leaving')) { bar.classList.remove('swap'); void bar.offsetWidth; bar.classList.add('swap'); }
@@ -627,6 +632,7 @@ $('#ayaBar').addEventListener('click', async e => {
   if (!b || S.act == null) return;
   const i = S.act;
   if (b.dataset.act === 'play') { closeActions(); playFrom(i); }
+  if (b.dataset.act === 'recite') Recite.start(i);
   if (b.dataset.act === 'copy') {
     const a = R.ayas[i];
     const txt = R.text[i].replace(/\s*[٠-٩]+$/, '');
@@ -867,6 +873,7 @@ function sync() {
 }
 
 function playFrom(ai) {
+  if (typeof Recite !== 'undefined') Recite.cancel();
   stopAudio(false);
   P.run++;
   P.gen = sequence(ai);
@@ -1532,6 +1539,8 @@ function applyTheme() {
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
 
 let tab = 'suras';
+let marksSeg = 'bm';
+function openMistakes() { marksSeg = 'mist'; openSheet('marks'); }
 function openSheet(t = tab) {
   tab = t;
   $('#sheetTitle').textContent = 'اللوحات';
@@ -1571,6 +1580,11 @@ function suraRow(s, extra = '') {
   </button>`;
 }
 
+function marksSegHTML() {
+  if (!store.get('recite.used')) return '';
+  return `<div class="seg"><button data-marks="bm"${marksSeg === 'bm' ? ' class="on"' : ''}>علاماتي</button><button data-marks="mist"${marksSeg === 'mist' ? ' class="on"' : ''}>أخطائي</button></div>`;
+}
+
 function renderSheet() {
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   const body = $('#sheetBody');
@@ -1606,6 +1620,8 @@ function renderSheet() {
     html = '<div class="group">' + META.suras.map((_, i) => suraRow(i + 1)).join('') + '</div>';
   } else if (tab === 'adhkar') {
     html = '<div id="adhkarList"></div>';
+  } else if (tab === 'marks' && marksSeg === 'mist' && store.get('recite.used')) {
+    html = marksSegHTML() + Recite.historyHTML();
   } else if (tab === 'marks') {
     const list = bookmarks();
     if (!list.length) html = '<div class="empty"><svg viewBox="0 0 24 24"><path d="M6.5 4.5h11v15.5l-5.5-3.8-5.5 3.8z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg><b>لا توجد علامات بعد</b>اضغط رقم آية ثم «علامة» لحفظها هنا.</div>';
@@ -1622,6 +1638,7 @@ function renderSheet() {
           <span class="del" data-del-mark="${k}" aria-label="حذف"><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>`;
       }).join('') + '</div>';
     }
+    html = marksSegHTML() + html;
   } else if (tab === 'prayer') {
     html = '<div id="prayer"></div>';
   } else if (tab === 'settings') {
@@ -1650,6 +1667,9 @@ $('#sheetBody').addEventListener('click', async e => {
   if (compass) { Prayer.startCompass(compass); return; }
   const dk = e.target.closest('[data-dk]');
   if (dk) { $('#q').blur(); Adhkar.open(dk.dataset.dk, dk.dataset.dkI != null ? +dk.dataset.dkI : undefined); return; }
+  const seg = e.target.closest('[data-marks]');
+  if (seg) { marksSeg = seg.dataset.marks; renderSheet(); return; }
+  if (typeof Recite !== 'undefined' && Recite.onSheetClick(e)) return;
   const del = e.target.closest('[data-del-mark]');
   if (del) {
     e.stopPropagation();
@@ -1695,6 +1715,7 @@ $('#sheetBody').addEventListener('click', async e => {
 async function switchRiwaya(id, keepPlace) {
   // keep the reader on the same passage: go through the hafs aya numbering
   const h = keepPlace ? R.ayas[pageInfo(S.page).first][5] : null;
+  if (typeof Recite !== 'undefined') Recite.cancel();
   stopAudio();
   $('#loading').hidden = false;
   try {
