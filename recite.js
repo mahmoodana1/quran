@@ -860,100 +860,163 @@ const Recite = (() => {
     return out;
   }
 
-  function trackerHTML(l, weak) {
-    const said = l.said || {}, sizes = suraSizes();
-    const got = new Array(115).fill(0), weakIn = new Set(weak.map(([ai]) => R.ayas[ai][0]));
-    for (const ai of Object.keys(said)) if (R.ayas[+ai]) got[R.ayas[+ai][0]]++;
-    let full = 0, some = 0, tiles = '';
+  // the 114 surahs as tiles, by how much of each was recited
+  function mapHTML(got, sizes, weakIn) {
+    let tiles = '';
     for (let s = 1; s <= 114; s++) {
       const f = sizes[s] ? got[s] / sizes[s] : 0;
       const lvl = f === 0 ? 0 : f < 1 / 3 ? 1 : f < 2 / 3 ? 2 : f < 1 ? 3 : 4;
-      if (lvl === 4) full++; else if (lvl) some++;
       tiles += `<button class="rc-tile l${lvl}${weakIn.has(s) ? ' weak' : ''}" data-rc-sura="${s}" aria-label="${suraName(s)}: ${ar(got[s])} من ${ar(sizes[s])}">${ar(s)}</button>`;
     }
-    return `<div class="group-label">متابعة الحفظ</div>
-      <p class="rc-track-sum">${ar(full)} سورة كاملة · ${ar(some)} بدأتها</p>
+    return `<details class="rc-map"><summary class="row"><span class="main"><span class="t">خريطة السور</span><span class="s">كل سورة بلون ما سمّعته منها</span></span><svg viewBox="0 0 24 24" class="go"><path d="M14.5 6l-6 6 6 6"/></svg></summary>
       <div class="rc-tiles">${tiles}</div>
-      <div class="rc-legend"><span><i class="rc-tile l1"></i>بدأتها</span><span><i class="rc-tile l4"></i>كاملة</span><span><i class="rc-tile l2 weak"></i>فيها مواضع ضعف</span></div>`;
+      <div class="rc-legend"><span><i class="rc-tile l1"></i>بدأتها</span><span><i class="rc-tile l4"></i>كاملة</span><span><i class="rc-tile l2 weak"></i>فيها مواضع ضعف</span></div></details>`;
   }
 
+  // in a surah: the first aya after the last one recited (else its first aya)
+  function nextIn(s, said) {
+    const a0 = R.suraStart[s], n = suraSizes()[s];
+    let last = -1;
+    for (let a = a0; a < a0 + n; a++) if (said[a] && (last < 0 || said[a] >= said[last])) last = a;
+    return last >= 0 && last + 1 < a0 + n ? last + 1 : a0;
+  }
+
+  const ICONS = {
+    review: '<svg viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 0113-5.1M19.5 12a7.5 7.5 0 01-13 5.1"/><path d="M17.5 3.5v3.4h-3.4M6.5 20.5v-3.4h3.4"/></svg>',
+    test: '<svg viewBox="0 0 24 24"><path d="M6.5 4.5h11v15h-11z"/><path d="M9.5 9.5l1.6 1.6 3.4-3.4M9.5 15h5"/></svg>',
+    find: '<svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5M10.5 7.8v3.6M8.7 10.4a1.8 1.8 0 003.6 0"/></svg>',
+  };
+  const SEGS = [['memo', 'حفظي'], ['errs', 'الأخطاء'], ['log', 'السجل'], ['set', 'الإعدادات']];
+
   function panelHTML() {
-    const l = log();
+    const l = log(), said = l.said || {}, sizes = suraSizes();
     const all = Object.entries(l.ayas).map(([ai, a]) => [+ai, a]).filter(([ai]) => R.ayas[ai]);
     const weak = all.filter(([, a]) => !a.done).sort((x, y) => x[0] - y[0]);
     const mastered = all.filter(([, a]) => a.done).sort((x, y) => y[1].at - x[1].at);
-    const goal = store.get('recite.goal', 0);
-    const settings = `<div class="group-label">إعدادات التسميع</div><div class="group">
-      ${toggle('hide', 'ابدأ والكلمات مخفية', 'تظهر كل كلمة حين تقرؤها')}
-      ${toggle('weak', 'مواضع الضعف في المصحف', 'خط منقّط خفيف تحت كلمات أخطأت فيها')}
-      ${MU() ? '' : `<div class="row rc-goal"><span class="main"><span class="t">سرعة التعرّف</span><span class="s">السريع أخفّ وأسرع بمرتين، والدقيق أثبت قليلًا</span></span>
-        <span class="rc-chips">${[['fast', 'سريع'], ['exact', 'دقيق']].map(([k, t]) => `<button data-rc-use="${k}"${Listen.which() === k ? ' class="on"' : ''}>${t}</button>`).join('')}</span></div>`}
-      ${MU() ? `<div class="row rc-model"><span class="main"><span class="t">نموذج التعرّف على التلاوة</span><span class="s" id="rcModelS">…</span></span><span id="rcModelB"></span></div>
-      <div class="rc-models" id="rcModels"></div>
-      <div class="row rc-model" id="rcDiag" hidden><span class="main"><span class="t">تسجيل آخر جلسة</span><span class="s">إن أخطأ التعرّف، شارك هذا التسجيل (آخر ٥ دقائق) لنحسّنه</span></span><button class="rc-not" data-rc-diag>مشاركة</button></div>`
-      : `<div class="row rc-model"><span class="main"><span class="t">نموذج التعرّف على التلاوة</span><span class="s" id="rcModelS">…</span></span><span id="rcModelB"></span></div>`}
-      <div class="row rc-goal"><span class="main"><span class="t">هدف يومي</span><span class="s">عدد الآيات التي تسمّعها كل يوم</span></span>
-        <span class="rc-chips">${[0, 5, 10, 20].map(n => `<button data-rc-goal="${n}"${goal === n ? ' class="on"' : ''}>${n ? ar(n) : 'لا'}</button>`).join('')}</span></div></div>`;
+    const goal = store.get('recite.goal', 0), fresh = !all.length && !l.sessions.length;
+    const seg = SEGS.some(([k]) => k === store.get('recite.seg')) ? store.get('recite.seg') : 'memo';
 
-    if (!all.length && !l.sessions.length) {
-      return `<div class="rc-welcome"><div class="rc-badge">${MIC}</div><h2>التسميع</h2>
-        <p>اقرأ من حفظك، ويتابعك التطبيق كلمةً كلمة، وينبّهك إلى ما أخطأت فيه ويحفظه هنا لتراجعه. يحتاج أول مرة إلى تنزيل نموذج التعرّف على التلاوة.</p>
-        <button class="rc-review" data-rc-resume>${MIC}ابدأ من ${ayaLabel(pageInfo(S.page).first)}</button>
-        <p class="note">أو اضغط رقم أي آية في المصحف ثم «تسميع».</p></div>${settings}`;
-    }
-
-    const now = Date.now(), wk = now - 7 * 864e5, wk2 = now - 14 * 864e5;
-    const thisW = l.sessions.filter(s => s.t >= wk), lastW = l.sessions.filter(s => s.t >= wk2 && s.t < wk);
-    const sum = (list, f) => list.reduce((s, x) => s + (x[f] || 0), 0);
-    const e1 = sum(thisW, 'errs'), e0 = sum(lastW, 'errs');
-    const trend = e0 ? (e1 <= e0 ? `الأخطاء أقل بـ ${ar(Math.round((1 - e1 / e0) * 100))}٪ من الأسبوع الماضي` : 'الأخطاء أكثر من الأسبوع الماضي') : '';
+    // ---- where to go on from: the aya, its opening words, and the surah so far
+    const at = resumeAya(), s0 = R.ayas[at][0];
+    const got = new Array(115).fill(0), lastIn = new Array(115).fill(0);
+    for (const k of Object.keys(said)) { const a = R.ayas[+k]; if (a) { got[a[0]]++; lastIn[a[0]] = Math.max(lastIn[a[0]], said[k]); } }
+    const words = ayaTokens(at), open = words.slice(0, 7).join(' ') + (words.length > 7 ? ' …' : '');
     const today = l.days?.[day()] || 0, run = streak(l);
-    const C = 2 * Math.PI * 19, done = goal ? Math.min(1, today / goal) : 0;
-    const ring = goal ? `<svg viewBox="0 0 44 44" class="rc-ring${today >= goal ? ' full' : ''}"><circle cx="22" cy="22" r="19" class="trk"/>
-      <circle cx="22" cy="22" r="19" class="val" style="stroke-dasharray:${(done * C).toFixed(1)} ${C.toFixed(1)}"/></svg>` : '';
+    const C = 2 * Math.PI * 15, part = goal ? Math.min(1, today / goal) : 0;
+    const ring = goal ? `<svg viewBox="0 0 36 36" class="rc-ring${today >= goal ? ' full' : ''}"><circle cx="18" cy="18" r="15" class="trk"/>
+      <circle cx="18" cy="18" r="15" class="val" style="stroke-dasharray:${(part * C).toFixed(1)} ${C.toFixed(1)}"/></svg>` : '';
+    const todayTxt = goal ? (today >= goal ? 'بلغت هدف اليوم' : `اليوم ${ar(today)} من ${ayaCount(goal)}`) : today ? `اليوم ${ayaCount(today)}` : 'لم تسمّع اليوم بعد';
+    let html = `<div class="rc-go">
+      <div class="rc-go-l">${fresh ? 'ابدأ التسميع' : 'تابع من حيث توقفت'}</div>
+      <div class="rc-go-t">${ayaLabel(at)}</div>
+      <div class="rc-go-v" style="font-family:${R.font}">${esc(open)}</div>
+      <div class="rc-go-p"><span class="rc-bar"><i style="width:${Math.round(got[s0] / sizes[s0] * 100)}%"></i></span><small>${ar(got[s0])} من ${ar(sizes[s0])} في ${suraName(s0)}</small></div>
+      <button class="rc-go-b" data-rc-resume>${MIC}${fresh ? 'ابدأ التسميع' : 'تابع التسميع'}</button>
+      <div class="rc-go-f">${ring ? `<span class="rc-ring-w">${ring}</span>` : ''}<span>${todayTxt}</span><span class="sep">·</span><span>${streakText(run)}</span></div>
+    </div>`;
+
+    // ---- the three things most often wanted next
     const test = testAyas();
-    let html = `<div class="rc-hero"><div class="rc-today">${ring ? `<div class="rc-ring-w">${ring}<b>${ar(today)}</b></div>` : ''}
-      <div class="rc-today-t"><b>${goal ? (today >= goal ? 'بلغت هدف اليوم، ما شاء الله' : `اليوم ${ar(today)} من ${ayaCount(goal)}`) : `اليوم: ${today ? ayaCount(today) : 'لم تسمّع بعد'}`}</b>
-      <small>${streakText(run)}</small></div></div>
-      <div class="rc-hero-l">هذا الأسبوع</div>
-      <div class="rc-hero-n"><div><b>${ar(thisW.length)}</b><small>جلسة</small></div><div><b>${ar(sum(thisW, 'ayas'))}</b><small>آية</small></div><div><b>${ar(e1)}</b><small>خطأ</small></div></div>
-      ${trend ? `<div class="rc-hero-t">${trend}</div>` : ''}</div>
-      <div class="rc-actions"><button class="rc-review" data-rc-resume>${MIC}تابع من ${ayaLabel(resumeAya())}</button>
-      ${test ? `<button class="rc-review ghost" data-rc-test>اختبرني من حفظي</button>` : ''}
-      ${weak.length ? `<button class="rc-review ghost" data-rc-review>راجع مواضع الضعف · ${ayaCount(weak.length)}</button>` : ''}</div>`;
+    html += `<div class="rc-quick">
+      <button data-rc-review${weak.length ? '' : ' disabled'}>${ICONS.review}<b>راجع أخطاءك</b><small>${weak.length ? ayaCount(weak.length) : 'لا أخطاء الآن'}</small></button>
+      <button data-rc-test${test ? '' : ' disabled'}>${ICONS.test}<b>اختبرني</b><small>${test ? 'من مواضع حفظتها' : 'سمّع ٣ آيات أولًا'}</small></button>
+      <button data-rc-find>${ICONS.find}<b>ابحث بصوتك</b><small>اقرأ، ونجد الآية</small></button>
+    </div>`;
 
-    html += '<div class="group-label">مواضع الضعف</div>';
-    if (weak.length) {
-      html += '<div class="group">' + weak.map(([ai, a]) => {
-        const dots = [0, 1, 2].map(j => `<i${j < a.ok.length ? ' class="on"' : ''}></i>`).join('');
-        return `<button class="row rc-row" data-rc-aya="${ai}"><span class="num">${ar(R.ayas[ai][1])}</span>
-          <span class="main"><span class="verse rc-snip" style="font-family:${R.font}">${snippet(ai, a.words)}</span>
-          <span class="s">${suraName(R.ayas[ai][0])} · ${times(a.n)} · آخرها ${ago(a.last)}<span class="rc-dots" aria-label="${ar(a.ok.length)} من ${ar(MASTER_DAYS)} قراءات صحيحة">${dots}</span></span></span>
-          <span class="rc-mic" data-rc-start="${ai}" aria-label="سمّع الآية">${MIC}</span></button>`;
+    html += `<nav class="rc-seg" role="tablist">${SEGS.map(([k, t]) => `<button role="tab" data-rc-seg="${k}" aria-selected="${k === seg}"${k === seg ? ' class="on"' : ''}>${t}${k === 'errs' && weak.length ? `<i>${ar(weak.length)}</i>` : ''}</button>`).join('')}</nav>`;
+    html += `<div class="rc-pane">${seg === 'memo' ? memoHTML() : seg === 'errs' ? errsHTML() : seg === 'log' ? logHTML() : setHTML()}</div>`;
+    return html;
+
+    // ---- حفظي: the whole so far, and each surah begun, to go on with
+    function memoHTML() {
+      const n = Object.keys(said).filter(k => R.ayas[+k]).length, total = R.ayas.length;
+      const full = Array.from({ length: 114 }, (_, i) => i + 1).filter(s => sizes[s] && got[s] >= sizes[s]).length;
+      const begun = Array.from({ length: 114 }, (_, i) => i + 1).filter(s => got[s]).sort((a, b) => lastIn[b] - lastIn[a]);
+      if (!n) return `<p class="rc-empty">ما تسمّعه كاملًا من الآيات يُعَدّ هنا، سورةً سورة، لتعود إليه وتتابع.</p>` + helpHTML();
+      const pct = n / total * 100;
+      let h = `<div class="rc-sum"><div><b>${ar(n)}</b><small>آية سمّعتها</small></div><div><b>${ar(full)}</b><small>سورة كاملة</small></div><div><b>${ar(pct < 1 ? pct.toFixed(1) : Math.round(pct))}٪</b><small>من القرآن</small></div></div>`;
+      h += '<div class="group">' + begun.map(s => {
+        const f = got[s] / sizes[s], nx = nextIn(s, said), doneS = got[s] >= sizes[s];
+        return `<div class="row rc-sura" data-rc-sura="${s}"><span class="num">${ar(s)}</span>
+          <span class="main"><span class="t">${suraName(s)}</span>
+          <span class="rc-bar${doneS ? ' full' : ''}"><i style="width:${Math.max(3, Math.round(f * 100))}%"></i></span>
+          <span class="s">${doneS ? 'كاملة' : `${ar(got[s])} من ${ar(sizes[s])} آية`} · ${ago(lastIn[s])}</span></span>
+          <button class="rc-cont" data-rc-from="${nx}" aria-label="تابع ${suraName(s)} من الآية ${ar(R.ayas[nx][1])}">${MIC}<span>${doneS ? 'أعدها' : `من ${ar(R.ayas[nx][1])}`}</span></button></div>`;
       }).join('') + '</div>';
-    } else {
-      html += '<p class="note">لا مواضع ضعف الآن، ما شاء الله.</p>';
-    }
-    if (Object.keys(l.said || {}).length) html += trackerHTML(l, weak);
-
-    if (mastered.length) {
-      html += '<div class="group-label">أتقنتها</div><div class="group">' + mastered.slice(0, 30).map(([ai, a]) =>
-        `<button class="row rc-row rc-mastered" data-rc-aya="${ai}"><span class="num">${ar(R.ayas[ai][1])}</span>
-          <span class="main"><span class="t">${ayaLabel(ai)}</span><span class="s">أتقنتها ${ago(a.at)}</span></span><span class="check">✓</span></button>`).join('') + '</div>';
+      return h + mapHTML(got, sizes, new Set(weak.map(([ai]) => R.ayas[ai][0])));
     }
 
-    if (l.sessions.length) {
-      html += '<div class="group-label">الجلسات</div><div class="group">' + l.sessions.slice(0, 20).map(s => {
+    // ---- الأخطاء: what to go over, and what was mastered
+    function errsHTML() {
+      let h = '';
+      if (weak.length) {
+        h += `<p class="rc-hint">كل آية تُتقَن بعد قراءتها صحيحة في ${ar(MASTER_DAYS)} أيام مختلفة. المس الآية لتراها في المصحف، أو الميكروفون لتسمّعها.</p>`;
+        h += '<div class="group">' + weak.map(([ai, a]) => {
+          const dots = [0, 1, 2].map(j => `<i${j < a.ok.length ? ' class="on"' : ''}></i>`).join('');
+          return `<button class="row rc-row" data-rc-aya="${ai}"><span class="num">${ar(R.ayas[ai][1])}</span>
+            <span class="main"><span class="verse rc-snip" style="font-family:${R.font}">${snippet(ai, a.words)}</span>
+            <span class="s">${suraName(R.ayas[ai][0])} · ${times(a.n)} · آخرها ${ago(a.last)}<span class="rc-dots" aria-label="${ar(a.ok.length)} من ${ar(MASTER_DAYS)} قراءات صحيحة">${dots}</span></span></span>
+            <span class="rc-mic" data-rc-start="${ai}" aria-label="سمّع الآية">${MIC}</span></button>`;
+        }).join('') + '</div>';
+      } else h += '<p class="rc-empty">لا مواضع ضعف الآن، ما شاء الله. ما تخطئ فيه يُجمَع هنا لتراجعه.</p>';
+      if (mastered.length) {
+        h += `<div class="group-label">أتقنتها · ${ayaCount(mastered.length)}</div><div class="group">` + mastered.slice(0, 30).map(([ai, a]) =>
+          `<button class="row rc-row rc-mastered" data-rc-aya="${ai}"><span class="num">${ar(R.ayas[ai][1])}</span>
+            <span class="main"><span class="t">${ayaLabel(ai)}</span><span class="s">أتقنتها ${ago(a.at)}</span></span><span class="check">✓</span></button>`).join('') + '</div>';
+      }
+      return h;
+    }
+
+    // ---- السجل: this week, against the one before, and each session
+    function logHTML() {
+      if (!l.sessions.length) return '<p class="rc-empty">جلساتك تُحفظ هنا: ما سمّعته، ومتى، وما أخطأت فيه.</p>';
+      const now = Date.now(), wk = now - 7 * 864e5, wk2 = now - 14 * 864e5;
+      const thisW = l.sessions.filter(s => s.t >= wk), lastW = l.sessions.filter(s => s.t >= wk2 && s.t < wk);
+      const sum = (list, f) => list.reduce((s, x) => s + (x[f] || 0), 0);
+      const e1 = sum(thisW, 'errs'), e0 = sum(lastW, 'errs'), mins = Math.round(sum(thisW, 'secs') / 60);
+      const trend = e0 ? (e1 <= e0 ? `الأخطاء أقل بـ ${ar(Math.round((1 - e1 / e0) * 100))}٪ من الأسبوع الماضي` : 'الأخطاء أكثر من الأسبوع الماضي') : '';
+      let h = `<div class="group-label">هذا الأسبوع</div><div class="rc-sum"><div><b>${ar(thisW.length)}</b><small>جلسة</small></div><div><b>${ar(sum(thisW, 'ayas'))}</b><small>آية</small></div>
+        <div><b>${ar(mins)}</b><small>دقيقة</small></div><div><b>${ar(e1)}</b><small>خطأ</small></div></div>${trend ? `<p class="rc-hint c">${trend}</p>` : ''}`;
+      h += '<div class="group-label">الجلسات</div><div class="group">' + l.sessions.slice(0, 20).map(s => {
         const items = (s.list || []).filter(([ai]) => R.ayas[ai]).map(([ai, wi, e]) => wi < 0
           ? `<div class="rc-sess-i"><span class="rc-mk rc-skip"></span><b>${ayaLabel(ai)}</b><small>تجاوزت الآية كلها</small></div>`
           : `<div class="rc-sess-i"><span class="rc-mk rc-${e}"></span><b style="font-family:${R.font}">${esc(ayaTokens(ai)[wi] || '')}</b><small>${ayaLabel(ai)} · ${TYPES[e]}</small></div>`).join('');
+        const again = !s.review && R.ayas[s.from] ? `<button class="rc-not" data-rc-from="${s.from}">أعد هذه الجلسة</button>` : '';
         return `<details class="rc-sess"><summary class="row"><span class="main"><span class="t">${sessionLabel(s)}</span>
           <span class="s">${ago(s.t)} · ${ayaCount(s.ayas || 1)} · ${s.errs ? errs(s.errs) : 'بلا أخطاء'}</span></span>
           <svg viewBox="0 0 24 24" class="go"><path d="M14.5 6l-6 6 6 6"/></svg></summary>
-          <div class="rc-sess-list">${items || '<p class="note">بلا أخطاء، ما شاء الله.</p>'}</div></details>`;
+          <div class="rc-sess-list">${items || '<p class="note">بلا أخطاء، ما شاء الله.</p>'}${again}</div></details>`;
       }).join('') + '</div>';
+      return h;
     }
-    return html + settings;
+
+    // ---- الإعدادات, and how it all works
+    function setHTML() {
+      return `<div class="group">
+        ${toggle('hide', 'ابدأ والكلمات مخفية', 'تظهر كل كلمة حين تقرؤها')}
+        ${toggle('weak', 'مواضع الضعف في المصحف', 'خط منقّط خفيف تحت كلمات أخطأت فيها')}
+        <div class="row rc-goal"><span class="main"><span class="t">هدف يومي</span><span class="s">عدد الآيات التي تسمّعها كل يوم</span></span>
+          <span class="rc-chips">${[0, 5, 10, 20].map(n => `<button data-rc-goal="${n}"${goal === n ? ' class="on"' : ''}>${n ? ar(n) : 'لا'}</button>`).join('')}</span></div>
+        ${MU() ? '' : `<div class="row rc-goal"><span class="main"><span class="t">سرعة التعرّف</span><span class="s">السريع أخفّ وأسرع بمرتين، والدقيق أثبت قليلًا</span></span>
+          <span class="rc-chips">${[['fast', 'سريع'], ['exact', 'دقيق']].map(([k, t]) => `<button data-rc-use="${k}"${Listen.which() === k ? ' class="on"' : ''}>${t}</button>`).join('')}</span></div>`}
+        <div class="row rc-model"><span class="main"><span class="t">نموذج التعرّف على التلاوة</span><span class="s" id="rcModelS">…</span></span><span id="rcModelB"></span></div>
+        ${MU() ? `<div class="rc-models" id="rcModels"></div>
+        <div class="row rc-model" id="rcDiag" hidden><span class="main"><span class="t">تسجيل آخر جلسة</span><span class="s">إن أخطأ التعرّف، شارك هذا التسجيل (آخر ٥ دقائق) لنحسّنه</span></span><button class="rc-not" data-rc-diag>مشاركة</button></div>` : ''}
+      </div>` + helpHTML();
+    }
+  }
+
+  // how it works, in a few lines
+  function helpHTML() {
+    const tips = [
+      [MIC, 'اضغط رقم أي آية في المصحف ثم «تسميع»، أو الميكروفون أعلى الصفحة واقرأ: نجد الآية ونتابعك منها.'],
+      ['<svg viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg>', '«إخفاء» يخفي ما بعد موضعك. إن توقفت، تظهر لك الكلمة التالية تلميحًا.'],
+      ['<svg viewBox="0 0 24 24"><path d="M4 18h16" stroke-dasharray="2 3"/><path d="M8 13l4-7 4 7"/></svg>', 'المس الكلمة المخطوءة لترى ما سُمِع، أو لتسمعها، أو لتلغي الخطأ إن لم تخطئ.'],
+      ['<svg viewBox="0 0 24 24"><path d="M12 3.5l2.4 5 5.4.6-4 3.7 1.1 5.4L12 15.5l-4.9 2.7 1.1-5.4-4-3.7 5.4-.6z"/></svg>', `تُتقَن الآية بقراءتها صحيحة في ${ar(MASTER_DAYS)} أيام مختلفة، فتخرج من مواضع الضعف.`],
+      ['<svg viewBox="0 0 24 24"><rect x="5.5" y="10.5" width="13" height="9.5" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 017 0v2.5"/></svg>', 'يعمل على جهازك دون إنترنت، وصوتك لا يغادره.'],
+    ];
+    return `<details class="rc-help"${store.get('recite.used', false) ? '' : ' open'}><summary class="row"><span class="main"><span class="t">كيف يعمل التسميع</span></span><svg viewBox="0 0 24 24" class="go"><path d="M14.5 6l-6 6 6 6"/></svg></summary>
+      <div class="rc-points">${tips.map(([i, t]) => `<div>${i}<span>${t}</span></div>`).join('')}</div></details>`;
   }
 
   // the model row in the settings, once the panel is on screen
@@ -1003,6 +1066,17 @@ const Recite = (() => {
     const one = e.target.closest('[data-rc-start]');
     if (one) { e.stopPropagation(); closeSheet(); start(null, [+one.dataset.rcStart]); return true; }
     if (e.target.closest('[data-rc-resume]')) { closeSheet(); start(resumeAya()); return true; }
+    const from = e.target.closest('[data-rc-from]');
+    if (from) { e.stopPropagation(); closeSheet(); start(+from.dataset.rcFrom); return true; }
+    if (e.target.closest('[data-rc-find]')) { closeSheet(); if (!G && !F) find(); return true; }
+    const sg = e.target.closest('[data-rc-seg]');
+    if (sg) {
+      store.set('recite.seg', sg.dataset.rcSeg);
+      const y = $('#sheetBody').scrollTop;
+      renderSheet();
+      $('#sheetBody').scrollTop = y;
+      return true;
+    }
     if (e.target.closest('[data-rc-review]')) { closeSheet(); start(null, weakAyas()); return true; }
     if (e.target.closest('[data-rc-test]')) { const t = testAyas(); if (t) { closeSheet(); start(null, t, { test: true }); } return true; }
     const pick = e.target.closest('[data-rc-pick]');
