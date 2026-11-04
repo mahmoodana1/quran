@@ -1407,16 +1407,36 @@ svg { fill: currentColor; }
 .rc-help .rc-points { border: none; padding: 4px 12px 14px; }
 .rc-help .rc-points svg { stroke: var(--p-gold); }
 
-/* the panels' tab for التسميع: the green layout — a green plate, gold-edged, cream words and a gold mic */
+/* the panels' tab for التسميع: the green layout — a small green plate, gold-edged
+   and patterned like the panel's own cards, cream words and a gold mic. Its column
+   takes what the plate needs and the other four share the rest. */
+.tabs { grid-template-columns: 1fr 1fr auto 1fr 1fr; column-gap: 2px; }
+.tabs button { white-space: nowrap; }
+.tabs button[data-tab="recite"] { padding: 6px 2px 9px; display: grid; place-items: center; }
 .tabs button[data-tab="recite"] span {
-  display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; border-radius: 3px; color: var(--p-on);
-  background: linear-gradient(160deg, var(--p-green), var(--p-green-2)); border: 1px solid var(--p-gold);
-  box-shadow: inset 0 0 0 1.5px var(--p-green), inset 0 0 0 2.5px color-mix(in srgb, var(--p-gold) 55%, transparent);
+  display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px 5px; border-radius: 4px;
+  font-size: 14px; font-weight: 700; line-height: 1.25; color: var(--p-on); letter-spacing: 0;
+  background: var(--p-pattern) 0 0 / 22px 22px, linear-gradient(160deg, var(--p-green), var(--p-green-2));
+  border: 1px solid color-mix(in srgb, var(--p-gold) 85%, transparent);
+  box-shadow: inset 0 0 0 1.5px var(--p-green-2), inset 0 0 0 2.5px color-mix(in srgb, var(--p-gold) 40%, transparent), 0 1px 3px rgba(30, 20, 5, .16);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, .25);
+  transition: box-shadow .2s ease, transform .15s ease, border-color .2s ease;
 }
 .tabs button[data-tab="recite"] span::before {
-  content: ""; width: 13px; height: 13px; flex: none; background: var(--p-gold);
+  content: ""; width: 12px; height: 12px; flex: none; background: var(--p-gold);
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3.5a3 3 0 00-3 3v5a3 3 0 006 0v-5a3 3 0 00-3-3zM6.5 11a5.5 5.5 0 0011 0M12 16.5v4' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3.5a3 3 0 00-3 3v5a3 3 0 006 0v-5a3 3 0 00-3-3zM6.5 11a5.5 5.5 0 0011 0M12 16.5v4' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
 }
-.tabs button[data-tab="recite"] { padding-top: 6px; padding-bottom: 9px; }
-.tabs button[data-tab="recite"].on span { font-weight: 800; box-shadow: inset 0 0 0 1.5px var(--p-green), inset 0 0 0 2.5px var(--p-gold), 0 2px 8px rgba(30, 20, 5, .22); }
+.tabs button[data-tab="recite"]:active span { transform: scale(.96); }
+.tabs button[data-tab="recite"].on span {
+  border-color: var(--p-gold);
+  box-shadow: inset 0 0 0 1.5px var(--p-green-2), inset 0 0 0 2.5px var(--p-gold), 0 0 0 2px var(--p-bg), 0 0 0 3px color-mix(in srgb, var(--p-gold) 55%, transparent), 0 3px 10px rgba(30, 20, 5, .22);
+}
+.tabs button[data-tab="recite"].on span::before { background: color-mix(in srgb, var(--p-gold) 65%, var(--p-on)); }
+/* narrow phones: smaller words, and the plate drops its mic so all five fit */
+@media (max-width: 350px) {
+  .tabs { margin-inline: 12px; }
+  .tabs button { font-size: 13.5px; }
+  .tabs button[data-tab="recite"] span { font-size: 13.5px; padding: 4px 8px 5px; }
+  .tabs button[data-tab="recite"] span::before { display: none; }
+}
