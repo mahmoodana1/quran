@@ -531,10 +531,9 @@ wordAudio.addEventListener('error', () => { sayEl?.classList.remove('say'); if (
     pressed = false;
     const w = e.target.closest('.w');
     clearTimeout(pressT);
-    // a long press on a word: hear it, and its card (not while reciting: the
-    // microphone would take the sound in)
+    // a long press on a word: its card (not while reciting)
     if (w && !w.classList.contains('end') && !Recite.active()) {
-      pressT = setTimeout(() => { pressed = true; speakWord(w); WordCard.open(w); }, 420);
+      pressT = setTimeout(() => { pressed = true; haptic(8); WordCard.open(w); }, 420);
     }
   });
   vp.addEventListener('pointermove', e => {

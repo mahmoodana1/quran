@@ -19,7 +19,7 @@ const WordCard = (() => {
   function open(el) {
     const ai = +el.dataset.a, wi = wordIndex(el);
     cur?.el?.classList.remove('w-card');
-    cur = { ai, wi, el, more: false, all: false };
+    cur = { ai, wi, el, more: false, all: false, deep: false };
     el.classList.add('w-card');
     closeActions();
     $('#wbWord').textContent = tokens(ai)[wi] || el.textContent;
@@ -28,13 +28,25 @@ const WordCard = (() => {
     paint();
     const bar = $('#wordBar');
     if (!bar.hidden && !bar.classList.contains('leaving')) { bar.classList.remove('swap'); void bar.offsetWidth; bar.classList.add('swap'); }
-    fit();
+    bar.style.maxHeight = '';
     show(bar);
     $('#wbBody').scrollTop = 0;
-    if (R.id === 'hafs') {
-      const [s, a] = META.hafs[R.ayas[ai][5]], me = cur;
+    $('#wordBar [data-wb=deep]').hidden = R.id !== 'hafs';
+    $('#wordBar [data-wb=deep]').classList.remove('on');
+  }
+
+  // the meaning and the rest, asked for with the book
+  function deepen() {
+    const c = cur;
+    c.deep = !c.deep;
+    $('#wordBar [data-wb=deep]').classList.toggle('on', c.deep);
+    if (c.deep) fit(); else $('#wordBar').style.maxHeight = '';
+    paint();
+    if (c.deep && !c.info && !c.loading) {
+      c.loading = true;
+      const [s, a] = META.hafs[R.ayas[c.ai][5]], me = c;
       Promise.all([surah(s), idx()]).then(([f, ix]) => { if (cur === me) { me.info = f[a]; me.ix = ix; paint(); } },
-        () => { if (cur === me) { me.failed = true; paint(); } });
+        () => { if (cur === me) { me.failed = true; me.loading = false; paint(); } });
     }
   }
 
@@ -58,9 +70,11 @@ const WordCard = (() => {
   function paint() {
     const c = cur;
     if (!c) return;
-    const hafs = R.id === 'hafs';
-    $('#wbBody').innerHTML = (hafs ? meaningHTML(c) + whatHTML(c) + whereHTML(c) : '') + recordHTML(c)
-      + (hafs && c.ix ? `<p class="wb-src">معاني الكلمات من <a href="https://quranpedia.net" target="_blank" rel="noopener">الموسوعة القرآنية</a> (نسخة ${esc(c.ix.source.quranpedia)})، والصرف من <a href="https://corpus.quran.com" target="_blank" rel="noopener">corpus.quran.com</a></p>` : '');
+    const hafs = R.id === 'hafs', deep = hafs && c.deep;
+    const html = recordHTML(c) + (deep ? meaningHTML(c) + whatHTML(c) + whereHTML(c)
+      + (c.ix ? `<p class="wb-src">المعاني: <a href="https://quranpedia.net" target="_blank" rel="noopener">الموسوعة القرآنية</a> · الصرف: <a href="https://corpus.quran.com" target="_blank" rel="noopener">corpus.quran.com</a></p>` : '') : '');
+    $('#wbBody').innerHTML = html;
+    $('#wbBody').hidden = !html;
     $('#wordBar [data-wb=play]').hidden = !hafs;
     keepClear(); // its height changed: still clear of the word, and on screen
   }
@@ -71,7 +85,7 @@ const WordCard = (() => {
     const toks = tokens(c.ai), books = c.ix.books;
     const mine = (c.info.g || []).filter(([a, b]) => a <= c.wi && c.wi <= b)
       .sort((x, y) => x[2] - y[2] || (x[1] - x[0]) - (y[1] - y[0]));
-    if (!mine.length) return `<section class="wb-sec"><h4>المعنى</h4><p class="wb-none">لم تُفرد كتب الغريب لهذه الكلمة شرحًا، فمعناها ظاهر. اقرأ تفسير الآية لسياقها.</p></section>`;
+    if (!mine.length) return `<section class="wb-sec"><h4>المعنى</h4><p class="wb-none">معناها ظاهر، لم تشرحها كتب الغريب.</p></section>`;
     const item = ([a, b, k, m], main) => `<div class="wb-m${main ? ' main' : ''}">${b > a ? `<b style="font-family:${R.font}">${esc(toks.slice(a, b + 1).join(' '))}:</b> ` : ''}<span>${esc(m)}</span>
       <small>${esc(books[k][0])} · ${esc(books[k][1])}</small></div>`;
     const [first, ...rest] = mine;
@@ -94,27 +108,27 @@ const WordCard = (() => {
   function whereHTML(c) {
     const slug = c.info?.w?.[c.wi]?.[3], locs = slug ? c.ix.lemmas[slug] || [] : [];
     const others = locs.map(x => [x >> 8, x & 255]).filter(([ai, wi]) => !(ai === c.ai && wi === c.wi) && R.ayas[ai]);
-    if (!others.length) return locs.length ? `<section class="wb-sec"><h4>مواضعها</h4><p class="wb-none">لم ترد بهذا الأصل في غير هذا الموضع.</p></section>` : '';
-    const shown = c.all ? others.slice(0, 60) : others.slice(0, 5);
+    if (!others.length) return '';
+    const shown = c.all ? others.slice(0, 60) : others.slice(0, 3);
     return `<section class="wb-sec"><h4>مواضعها <small>وردت في ${places(locs.length)}</small></h4><div class="wb-where">
       ${shown.map(([ai, wi]) => `<button data-wb-go="${ai}:${wi}"><span>${ayaLabel(ai)}</span><b style="font-family:${R.font}">${esc(tokens(ai)[wi] || '')}</b></button>`).join('')}
       </div>${others.length > shown.length && !c.all ? `<button class="wb-link" data-wb="all">عرض ${others.length > 60 ? 'أول ٦٠' : 'الكل'}</button>` : ''}</section>`;
   }
 
-  // ---- how it went in التسميع
+  // ---- how it went in التسميع: one line, like the aya's card (none when never recited)
   function recordHTML(c) {
     const st = Recite.wordStats(c.ai, c.wi);
-    if (!st.read && !st.hist.length) return `<section class="wb-sec"><h4>في التسميع</h4><p class="wb-none">لم تُسمِّع هذه الآية بعد.</p></section>`;
-    const hist = st.hist.slice(0, 6).map(([t, e]) => `<li><span>${Recite.ago(t)}</span><span>${e === 'skip' ? 'تجاوزت الآية أو الكلمة' : esc(st.types[e] || 'خطأ')}</span></li>`).join('');
-    return `<section class="wb-sec"><h4>في التسميع</h4>
-      <div class="rc-ab-top"><span class="rc-ab-n ok"><b>${ar(st.right)}</b>صحيحة</span><span class="rc-ab-n bad"><b>${ar(st.wrong)}</b>خطأ</span>
+    if (!st.read && !st.hist.length) return '';
+    const last = st.hist.find(([, e]) => e !== 'skip');
+    return `<div class="rc-ab"><div class="rc-ab-top">
+        <span class="rc-ab-n ok"><b>${ar(st.right)}</b>صحيحة</span><span class="rc-ab-n bad"><b>${ar(st.wrong)}</b>خطأ</span>
         ${st.now ? `<span class="wb-now">${esc(st.types[st.now] || '')}</span>` : ''}</div>
-      ${hist ? `<ul class="wb-hist">${hist}</ul>` : ''}
-      ${st.wrong || st.now || st.hist.length ? `<div class="wb-reset">${c.confirm ? `
-        <p>سيُمحى كل سجل أخطاء هذه الكلمة: عددها، وعلامتها، وتاريخها. لا يمكن التراجع عن هذا.</p>
-        <div class="wb-reset-row"><button class="wb-hold" data-wb-hold><i></i><span>اضغط مطولًا للمحو</span></button><button class="wb-link" data-wb="keep">إلغاء</button></div>`
-        : `<button class="wb-link danger" data-wb="reset">محو سجل هذه الكلمة…</button>`}</div>` : ''}
-    </section>`;
+      ${last ? `<small class="rc-ab-last">آخر خطأ ${Recite.ago(last[0])} · ${esc(st.types[last[1]] || '')}</small>` : ''}
+      ${st.wrong || st.now || st.hist.length ? (c.confirm ? `<div class="wb-reset">
+        <p>يُمحى عدد أخطاء هذه الكلمة وعلامتها وتاريخها، ولا يمكن التراجع.</p>
+        <div class="wb-reset-row"><button class="wb-hold" data-wb-hold><i></i><span>اضغط مطولًا للمحو</span></button><button class="wb-link" data-wb="keep">إلغاء</button></div></div>`
+        : `<button class="wb-link danger" data-wb="reset">محو سجل الكلمة…</button>`) : ''}
+    </div>`;
   }
 
   // ---- taps
@@ -128,10 +142,8 @@ const WordCard = (() => {
     const a = b.dataset.wb;
     if (a === 'close') close();
     if (a === 'play' && c.el?.isConnected) speakWord(c.el);
+    if (a === 'deep') deepen();
     if (a === 'tafsir') { const ai = c.ai; close(); openTafsir(ai); }
-    if (a === 'copy') {
-      navigator.clipboard.writeText(tokens(c.ai)[c.wi] || '').then(() => toast('تم النسخ'), () => toast('تعذر النسخ'));
-    }
     if (a === 'more') { c.more = true; paint(); }
     if (a === 'all') { c.all = true; paint(); }
     if (a === 'reset') { c.confirm = true; paint(); haptic(8); }
