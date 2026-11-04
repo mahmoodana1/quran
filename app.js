@@ -1999,17 +1999,24 @@ $('#doneLater').onclick = () => hide($('#done'));
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     // reload once when an updated service worker takes over, so updates show up;
     // on the first visit too, as its headers are what let recitation use several cores.
-    // Never in the middle of something: right after opening, or else once the app
-    // is out of sight (switched away from, or the phone locked) with no recitation going
-    const hadController = !!navigator.serviceWorker.controller, opened = Date.now();
+    // Never in the middle of something: at once if the app wasn't touched yet, or
+    // else as it leaves the screen or comes back to it, with no recitation going.
+    // An app brought back from the background looks for an update then too (phones
+    // keep it open for days)
+    const hadController = !!navigator.serviceWorker.controller;
     const busy = () => document.body.classList.contains('rc-on') || document.body.classList.contains('rc-find');
-    let stale = false;
-    const reloadIfIdle = () => { if (stale && document.hidden && !busy()) location.reload(); };
-    document.addEventListener('visibilitychange', reloadIfIdle);
+    let stale = false, touched = false;
+    addEventListener('pointerdown', () => { touched = true; }, { capture: true, once: true });
+    const reloadIfIdle = () => { if (stale && !busy()) location.reload(); };
+    document.addEventListener('visibilitychange', () => {
+      reloadIfIdle();
+      if (!document.hidden) navigator.serviceWorker.getRegistration().then(r => r?.update()).catch(() => {});
+    });
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (!hadController && self.crossOriginIsolated) return;
-      if (Date.now() - opened < 4000 && !busy()) location.reload();
-      else { stale = true; reloadIfIdle(); }
+      stale = true;
+      if (!touched || document.hidden) reloadIfIdle();
+      else if (!busy()) toast('تحديث جديد — يُطبَّق حين تعود إلى التطبيق');
     });
     navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
   }
