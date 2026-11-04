@@ -2023,6 +2023,7 @@ $('#doneLater').onclick = () => hide($('#done'));
     normalizeBookmarks();
     renderAll();
     hide($('#loading'));
+    Recite.restore(); // a session cut off by a reload
   } catch (err) {
     $('#loading').textContent = 'تعذر التحميل — تحقق من الاتصال';
     console.error(err);

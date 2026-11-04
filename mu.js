@@ -222,18 +222,29 @@ const Mu = (() => {
     m.timer = setInterval(async () => {
       if (!m.on || busy || document.hidden) return;
       if (shared) { const w = Atomics.load(shared.meta, 0); if (w !== seen) { seen = w; m.fed = Date.now(); } }
+      // held by the phone (a call, another app): only a tap brings it back; no new engine
+      if (actx.state === 'suspended' || actx.state === 'interrupted') {
+        kick(); m.fed = Date.now();
+        m.held ||= Date.now();
+        if (Date.now() - m.held > 2500 && !m.told) { m.told = true; toast('اضغط على الشاشة ليعود الميكروفون'); }
+        return;
+      }
+      m.held = 0; m.told = false;
       const dead = m.stream?.getAudioTracks().some(t => t.readyState === 'ended');
       if (!dead && actx.state === 'running' && Date.now() - m.fed < 1500) return;
+      // a few times a minute at most: past that, something else is wrong and taking
+      // the microphone again and again would only make it worse
+      m.tries = (m.tries || []).filter(t => Date.now() - t < 60000);
+      if (m.tries.length >= 3) return;
+      m.tries.push(Date.now());
       busy = true;
       try {
-        kick();
         await new Promise(r => setTimeout(r, 300));
         if (!m.on) return;
         if (!dead && shared && Atomics.load(shared.meta, 0) !== seen) return; // it came back by itself
         release(m);
-        if (actx.state !== 'running') { try { actx.close(); } catch {} context(); actx.resume(); }
+        if (actx.state === 'closed') { context(); actx.resume(); }
         await capture(m);
-        if (actx.state !== 'running') toast('اضغط على الشاشة ليعود الميكروفون');
       } catch { /* tried again next time */ } finally { busy = false; m.fed = Date.now(); }
     }, 1000);
   }

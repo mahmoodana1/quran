@@ -157,6 +157,17 @@ const Recite = (() => {
       G.pos = G.tent = G.mu.w0; // found by reciting from inside the aya: from that word
       G.heard = {}; // k -> { got, want }: what was heard for a word marked, and how it should sound
     }
+    // brought back after the page reloaded: where it was, paused
+    const back = opts.restore;
+    if (back) {
+      Object.assign(G, { pos: back.pos, tent: back.pos, errs: back.errs, gone: new Set(back.gone), secs: back.secs, hide: back.hide, review: back.review });
+      if (G.mu) {
+        const m = G.mu;
+        m.c = Math.max(0, m.starts.findLastIndex(k => k <= G.pos));
+        m.w0 = G.pos - m.starts[m.c];
+        G.heard = back.heard || {};
+      }
+    }
     // found by reciting: what was already said counts as said
     if (opts.seed) { const r = align(opts.seed, 0, words[0].of); if (r) G.pos = Math.min(r.end, words.length - 1); }
     dirty = true;
@@ -166,7 +177,24 @@ const Recite = (() => {
     paintBar();
     show($('#recBar'));
     syncBubble();
+    if (back) { toast('استُعيدت جلستك — اضغط الميكروفون لتتابع'); return; }
     resume();
+  }
+
+  // ---- the session, kept as it goes: if the page reloads (an update, or the
+  // phone short of memory), it comes back where it was
+  const LIVE = () => 'recite.live.' + R.id;
+  let keptAt = 0;
+  function keep(now = false) {
+    if (!G || G.done || (!now && Date.now() - keptAt < 3000)) return;
+    keptAt = Date.now();
+    store.set(LIVE(), { t: Date.now(), ayas: G.ayas, pos: G.pos, errs: G.errs, gone: [...G.gone], heard: G.heard,
+      secs: G.secs + (G.run ? (Date.now() - G.t) / 1000 : 0), hide: G.hide, review: G.review, test: G.test });
+  }
+  function restore() {
+    const s = store.get(LIVE(), null);
+    if (!s || Date.now() - s.t > 3 * 3600e3 || !s.pos || !s.ayas?.every(ai => R.ayas[ai])) return;
+    start(null, s.ayas, { test: s.test, restore: s });
   }
 
   function resume() {
@@ -187,6 +215,7 @@ const Recite = (() => {
   }
   function pause() {
     if (!G?.run) return;
+    keep(true);
     G.run = false; G.voice = false; G.secs += (Date.now() - G.t) / 1000;
     clearInterval(timer);
     if (MU()) {
@@ -208,6 +237,7 @@ const Recite = (() => {
 
   // drop the session without keeping anything
   function cancel() {
+    store.set(LIVE(), null);
     if (!G) return;
     clearInterval(timer);
     if (G.mu) Mu.stop(); else Listen.stop();
@@ -496,6 +526,7 @@ const Recite = (() => {
   // every half second: the clock, and a hidden word that has kept the reader silent
   function tick() {
     if (!G?.run) return;
+    keep();
     if (G.hide && !G.peek && !G.voice && !G.busy && Date.now() - G.lastAct > HINT_AFTER) {
       G.peek = true;
       G.errs[Math.max(G.pos, G.tent)] ||= 'hint';
@@ -1412,5 +1443,5 @@ const Recite = (() => {
 
   syncBubble();
 
-  return { start, cancel, paint, onTap, card, showWord, wordStats, resetWord, ago, syncBubble, mic, panelHTML, mounted, onSheetClick, active: () => !!G };
+  return { start, cancel, paint, onTap, card, showWord, wordStats, resetWord, ago, restore, syncBubble, mic, panelHTML, mounted, onSheetClick, active: () => !!G };
 })();
