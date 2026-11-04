@@ -688,7 +688,8 @@ function ripple(el) {
 
 $('#ayaBar').addEventListener('click', async e => {
   const wd = e.target.closest('[data-rc-word]');
-  if (wd) { const [ai, wi] = wd.dataset.rcWord.split(':').map(Number); Recite.showWord(ai, wi); return; }
+  // a word got wrong, in the aya's card: its own card instead
+  if (wd) { const [ai, wi] = wd.dataset.rcWord.split(':').map(Number); Recite.showWord(ai, wi, el => WordCard.open(el)); return; }
   const b = e.target.closest('[data-act]');
   if (!b || S.act == null) return;
   const i = S.act;

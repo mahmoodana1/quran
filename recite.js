@@ -156,11 +156,14 @@ const Recite = (() => {
       G.mu = { c: 0, w0: opts.w0 || 0, cut: 0, final: '', tent: '', starts, lead: true, open: true, stream: !!opts.stream };
       G.pos = G.tent = G.mu.w0; // found by reciting from inside the aya: from that word
       G.heard = {}; // k -> { got, want }: what was heard for a word marked, and how it should sound
+      if (opts.carry) Object.assign(G.mu, opts.carry, { lead: true, open: true }); // the reading of the surah before goes on
     }
+    // begun from an aya: on into the next surahs until the reader stops
+    G.chain = !review && !opts.test;
     // brought back after the page reloaded: where it was, paused
     const back = opts.restore;
     if (back) {
-      Object.assign(G, { pos: back.pos, tent: back.pos, errs: back.errs, gone: new Set(back.gone), secs: back.secs, hide: back.hide, review: back.review });
+      Object.assign(G, { pos: back.pos, tent: back.pos, errs: back.errs, gone: new Set(back.gone), secs: back.secs, hide: back.hide, review: back.review, chain: !back.review && !back.test });
       if (G.mu) {
         const m = G.mu;
         m.c = Math.max(0, m.starts.findLastIndex(k => k <= G.pos));
@@ -240,7 +243,7 @@ const Recite = (() => {
     store.set(LIVE(), null);
     if (!G) return;
     clearInterval(timer);
-    if (G.mu) Mu.stop(); else Listen.stop();
+    if (!G.keepMic) { if (G.mu) Mu.stop(); else Listen.stop(); }
     G = null; S.focus = null;
     ['#recBar', '#recWord', '#recDone'].forEach(s => hide($(s)));
     paintMarks();
@@ -289,20 +292,44 @@ const Recite = (() => {
       if (o?.cut) m.cut += o.cut;
     }
     for (let guard = 0; guard < 40 && m.c < G.ayas.length; guard++) {
-      const ai = G.ayas[m.c], nx = done ? null : G.ayas[m.c + 1];
-      const cur = Mu.expect(ai, m.w0), ex = nx != null ? Mu.expect2(cur, Mu.expect(nx)) : cur;
+      const ai = G.ayas[m.c];
+      let nx = done ? null : G.ayas[m.c + 1], after = nx != null ? Mu.expect(nx) : null;
+      // the surah's last aya, the session going on: what comes after is the next
+      // surah's basmala and first aya (at-Tawbah: its first aya), so the last aya
+      // is closed when they begin
+      if (nx == null && !done && G.chain && m.c === G.ayas.length - 1 && R.ayas[ai + 1]) {
+        nx = ai + 1;
+        after = R.ayas[nx][0] === 9 ? Mu.expect(nx) : Mu.expect2(Mu.expect(0), Mu.expect(nx));
+      }
+      const cur = Mu.expect(ai, m.w0), ex = after ? Mu.expect2(cur, after) : cur;
       const sub = Match.text(U.slice(m.cut)), fin = Match.text(U.slice(m.cut, Math.max(m.cut, uf))).length;
       const st = Match.words(ex, sub, fin, done, { freeLead: m.lead, conf: Uc.slice(m.cut), alts: Ua.slice(m.cut) });
       const n0 = cur.spans.length;
       const begun = nx != null && st.slice(n0, n0 + 2).some(x => x.state === 'ok' || x.state === 'err');
       muApply(st.slice(0, n0), begun, cur);
+      const end = st[n0 - 1]?.state === 'ok' || st[n0 - 1]?.state === 'err' ? st[n0 - 1].at?.[1] : null;
+      if (end != null) m.endAt = m.cut + end; // where the aya's last word ended in what was heard
       if (!begun) { if (!done && muRelocate(st.slice(0, n0), sub, fin, Uc.slice(m.cut), Ua.slice(m.cut))) continue; break; }
       m.cut += st[n0].at[0]; m.c++; m.w0 = 0; m.lead = false;
     }
-    if (G.pos >= G.words.length) return finish();
+    if (G.pos >= G.words.length) return G.chain ? chain() : finish();
     follow();
     paint();
     paintBar();
+  }
+  // the surah read to its end, in a session begun from an aya: kept, and the next
+  // surah goes on at once, on the same reading (its basmala set aside), until the
+  // reader stops
+  function chain() {
+    const g = G, next = g.ayas[g.ayas.length - 1] + 1;
+    if (!R.ayas[next] || !g.run) return finish();
+    save();
+    // the next surah's reading starts where it was heard beginning (its basmala then set aside)
+    const m = g.mu, carry = m && { final: m.final, tent: m.tent, conf: m.conf, alts: m.alts,
+      cut: m.c >= g.ayas.length ? m.cut : m.endAt ?? Match.units(m.final + m.tent).length };
+    g.keepMic = !!m;
+    start(next, null, { stream: !!m, carry });
+    toast(`سورة ${suraName(R.ayas[next][0])}`);
   }
   // the session is over: the words of the aya being said that were begun are
   // judged as they were said (the reading's end is their end); the rest stay unsaid
@@ -978,12 +1005,14 @@ const Recite = (() => {
   }
 
   // a word from the card, shown on the page
-  function showWord(ai, wi) {
+  // (then(el): instead of pointing at it, something else done with it)
+  function showWord(ai, wi, then) {
     const w = ayaWords(ai)[wi];
     if (!w) return;
     const go = () => {
       const el = [...document.querySelectorAll(`.page[data-page="${w.p}"] .w:not(.end)`)][w.n];
       if (!el) return;
+      if (then) return then(el);
       el.classList.remove('rc-pointed'); void el.offsetWidth; el.classList.add('rc-pointed');
       setTimeout(() => el.classList.remove('rc-pointed'), 1600);
     };
@@ -1272,7 +1301,7 @@ const Recite = (() => {
 
   function onSheetClick(e) {
     const one = e.target.closest('[data-rc-start]');
-    if (one) { e.stopPropagation(); closeSheet(); start(null, [+one.dataset.rcStart]); return true; }
+    if (one) { e.stopPropagation(); closeSheet(); start(+one.dataset.rcStart); return true; }
     if (e.target.closest('[data-rc-resume]')) { closeSheet(); start(resumeAya()); return true; }
     const from = e.target.closest('[data-rc-from]');
     if (from) { e.stopPropagation(); closeSheet(); start(+from.dataset.rcFrom); return true; }
@@ -1353,13 +1382,8 @@ const Recite = (() => {
       return true;
     }
     const row = e.target.closest('[data-rc-aya]');
-    if (row) {
-      const ai = +row.dataset.rcAya;
-      closeSheet();
-      goTo(R.ayas[ai][2]);
-      setTimeout(() => flashAya(ai), 250);
-      return true;
-    }
+    // an aya in the panel: a session from it, on until the reader stops
+    if (row) { closeSheet(); start(+row.dataset.rcAya); return true; }
     return false;
   }
 
