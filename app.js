@@ -568,8 +568,9 @@ wordAudio.addEventListener('error', () => { sayEl?.classList.remove('say'); if (
       return;
     }
     if (typeof Recite !== 'undefined' && Recite.onTap(e.target)) return;
-    // only the aya number marks; tapping anywhere else just closes the actions
-    const w = e.target.closest('.w.end');
+    // a tap on an aya (any of its words, or its number) marks it and opens its
+    // actions; a second tap, or one off the text, closes them
+    const w = e.target.closest('.w[data-a]');
     if (w) {
       const i = +w.dataset.a;
       if (!$('#tafsir').hidden) { ripple(w); openTafsir(i); }
