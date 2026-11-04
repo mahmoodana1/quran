@@ -310,7 +310,7 @@ const Recite = (() => {
     });
     if (pos > G.pos) G.peek = false;
     G.pos = pos; G.tent = tent;
-    if (fresh) { navigator.vibrate?.(12); chime(); }
+    if (fresh) chime();
     warnSkipped(skips);
   }
   // the aya being said doesn't fit what is heard (nothing of it, or mistakes
@@ -386,7 +386,7 @@ const Recite = (() => {
     let marked = false;
     for (const [k, e] of r.marks) if (!G.errs[k]) { G.errs[k] = e; marked = true; }
     warnSkipped(r.marks);
-    if (marked && navigator.vibrate) navigator.vibrate(12);
+    if (marked) chime();
     if (r.end > G.pos || r.end < G.pos) { G.pos = r.end; G.peek = false; }
     if (G.pos >= G.words.length) return finish();
     follow();
@@ -428,7 +428,7 @@ const Recite = (() => {
     const n = a => ar(R.ayas[a][1]);
     toast(ayas.length === 1 ? `تنبيه: تجاوزت الآية ${n(ayas[0])}` : `تنبيه: تجاوزت الآيات ${n(ayas[0])}–${n(ayas[ayas.length - 1])}`);
     $('#recBar').classList.remove('warn'); void $('#recBar').offsetWidth; $('#recBar').classList.add('warn');
-    if (navigator.vibrate) navigator.vibrate([40, 60, 40]);
+    haptic([40, 60, 40]);
   }
 
   // How well a spoken word fits the expected one. One letter apart counts as
@@ -822,7 +822,7 @@ const Recite = (() => {
       void el.offsetWidth; // the flash again, on a second tap
       el.classList.add(back ? 'rc-unclear' : 'rc-cleared');
       setTimeout(() => el.classList.remove('rc-cleared', 'rc-unclear'), 700);
-      navigator.vibrate?.(back ? [10, 40, 10] : 8);
+      haptic(back ? [10, 40, 10] : 8);
       return true;
     }
     if (k == null || k >= G.pos || !G.errs[k] || G.gone.has(k)) return true;
@@ -841,9 +841,9 @@ const Recite = (() => {
     return true;
   }
 
-  // ---- a mistake, heard: two soft falling notes, like wood struck lightly.
-  // Played at the reader's next breath: over the voice, the microphone takes
-  // them in and the model writes them as sounds said
+  // ---- a mistake, heard: two soft falling notes, like wood struck lightly, and
+  // a buzz with them. At the reader's next breath: over the voice, the
+  // microphone takes the notes in and the model writes them as sounds said
   let chimeT = null;
   function chime(test = false) {
     if (test) return ring();
@@ -855,7 +855,8 @@ const Recite = (() => {
     }, 100);
   }
   function ring() {
-    const ctx = Mu.sound();
+    haptic(14);
+    const ctx = MU() && Mu.sound();
     if (!ctx || ctx.state === 'closed') return;
     if (ctx.state !== 'running') { ctx.resume().then(() => ctx.state === 'running' && play(ctx), () => {}); return; }
     play(ctx);
@@ -1135,7 +1136,7 @@ const Recite = (() => {
     function setHTML() {
       return `<div class="group">
         ${toggle('hide', 'ابدأ والكلمات مخفية', 'تظهر كل كلمة حين تقرؤها')}
-        ${toggle('sound', 'صوت عند الخطأ', 'نغمة خفيفة حين تُعلَّم كلمة')}
+        ${toggle('sound', 'صوت واهتزاز عند الخطأ', 'نغمة خفيفة واهتزاز حين تُعلَّم كلمة')}
         ${toggle('blind', 'تسميع أعمى', 'مع الإخفاء: لا أثر لما بعدك، فلا عدد للكلمات ولا أرقام للآيات')}
         ${toggle('weak', 'مواضع الضعف في المصحف', 'خط منقّط خفيف تحت كلمات أخطأت فيها')}
         <div class="row rc-goal"><span class="main"><span class="t">هدف يومي</span><span class="s">عدد الآيات التي تسمّعها كل يوم</span></span>
@@ -1289,7 +1290,7 @@ const Recite = (() => {
     if (set) {
       const id = set.dataset.rcSet;
       store.set('recite.' + id, !setting(id));
-      if (id === 'sound' && setting(id) && MU()) { Mu.prime(); chime(true); }
+      if (id === 'sound' && setting(id)) { if (MU()) Mu.prime(); chime(true); }
       weakMap = null;
       const y = $('#sheetBody').scrollTop;
       renderSheet();

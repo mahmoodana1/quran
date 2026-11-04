@@ -510,7 +510,7 @@ function speakWord(el) {
   el.classList.add('say');
   wordAudio.src = `${WORD_AUDIO}${id(s)}_${id(a)}_${id(pos)}.mp3`;
   wordAudio.play().catch(() => { el.classList.remove('say'); toast('تعذر تشغيل الكلمة'); });
-  if (navigator.vibrate) navigator.vibrate(8);
+  haptic(8);
 }
 wordAudio.addEventListener('ended', () => sayEl?.classList.remove('say'));
 wordAudio.addEventListener('error', () => { sayEl?.classList.remove('say'); if (wordAudio.src) toast('تعذر تشغيل الكلمة'); });
@@ -695,6 +695,27 @@ $('#ayaBar').addEventListener('click', async e => {
   if (b.dataset.act === 'tafsir') openTafsir(i);
   if (b.dataset.act === 'close') closeActions();
 });
+
+// a short buzz: the Vibration API where there is one; iPhones have none, but
+// Safari gives a tick when a switch is flipped, so a hidden one is flipped
+let hapticSw = null;
+function haptic(pattern = 10) {
+  if (navigator.vibrate) { navigator.vibrate(pattern); return; }
+  if (!hapticSw) {
+    hapticSw = document.createElement('label');
+    hapticSw.setAttribute('aria-hidden', 'true');
+    hapticSw.style.cssText = 'position:fixed;left:-20px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none';
+    hapticSw.innerHTML = '<input type="checkbox" switch tabindex="-1">';
+    hapticSw.addEventListener('click', e => e.stopPropagation());
+    document.body.append(hapticSw);
+  }
+  const ticks = Array.isArray(pattern) ? Math.ceil(pattern.length / 2) : 1;
+  for (let k = 0; k < ticks; k++) setTimeout(() => {
+    const was = document.activeElement;
+    hapticSw.click();
+    if (document.activeElement !== was) { document.activeElement?.blur(); was?.focus?.({ preventScroll: true }); }
+  }, k * 110);
+}
 
 let toastT;
 function toast(msg) {
