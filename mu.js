@@ -142,7 +142,7 @@ const Mu = (() => {
       worker.onmessage = ({ data: d }) => {
         if (d.type === 'progress') progress?.(d.loaded / d.total);
         if (d.type === 'ready') { ready = true; info = d; resolve(); }
-        if (d.type === 'text') { fails = 0; onText?.(d); }
+        if (d.type === 'text') { fails = 0; trackPace(d); onText?.(d); }
         if (d.type === 'flushed') { const f = onFlushed; onFlushed = null; f?.(); }
         if (d.type === 'recording') { const f = onRecording; onRecording = null; f?.(d.samples); }
         if (d.type === 'error') {
@@ -187,6 +187,7 @@ const Mu = (() => {
     prime();
     mic = { on: true };
     try { await capture(mic); } catch (e) { mic = null; throw e; }
+    paceLog = [];
     worker.postMessage({ type: 'start' });
     watch(mic);
   }
@@ -276,14 +277,38 @@ const Mu = (() => {
     });
   }
 
+  // ---- the reader's pace: sounds per second over the last PACE_WIN s read (a
+  // pause counts little), followed as it changes; the references heard from the
+  // PACE_N reciters nearest it are the ones that count (all, until it is known)
+  const PACE_WIN = 12, PACE_N = 3;
+  let paceLog = [], pace = 0, paceMask = 0;
+  function trackPace(d) {
+    if (!refs || d.end == null) return;
+    const u = Match.units(d.final).length;
+    if (paceLog.length && d.end < paceLog[paceLog.length - 1][0]) paceLog = [];
+    paceLog.push([d.end, u]);
+    while (d.end - paceLog[0][0] > PACE_WIN) paceLog.shift();
+    let du = 0, act = 0;
+    for (let i = 1; i < paceLog.length; i++) {
+      const dt = paceLog[i][0] - paceLog[i - 1][0], dd = paceLog[i][1] - paceLog[i - 1][1];
+      if (dd > 0) { du += dd; act += dt; } else act += Math.min(dt, 0.25);
+    }
+    if (act < 4 || du < 15) return;
+    pace = du / act;
+    const near = refs.r.map(([, p], i) => [Math.abs(p - pace), i]).sort((a, b) => a[0] - b[0]).slice(0, PACE_N);
+    const mask = near.reduce((m, [, i]) => m | 1 << i, 0);
+    if (mask !== paceMask) { paceMask = mask; cache.clear(); }
+  }
+
   // ---- how each aya sounds: [phonetic script, word ranges, words starting with ٱ]
   // and, per aya, how real reciters reading it right were heard where the rules
-  // alone would mark them: { ai: { wi: [heard, …] } } (data/refs-hafs.json; optional)
+  // alone would mark them, and who said it: { r: [[reciter, pace]], a: { ai: { wi: { heard: reciters (bits) } } } }
+  // (data/refs-hafs.json; optional). Only the reciters nearest the reader's pace count.
   let phon = null, phonLoading = null, refs = null;
   function sounds() {
     return phonLoading ||= Promise.all([
       fetch(`data/phon-hafs.json?v=${DATA_VERSION}`).then(r => r.json()).then(d => { phon = d; }),
-      fetch(`data/refs-hafs.json?v=${DATA_VERSION}`).then(r => r.ok ? r.json() : null).then(d => { refs = d; }, () => {}),
+      fetch(`data/refs-hafs.json?v=${DATA_VERSION}p`).then(r => r.ok ? r.json() : null).then(d => { refs = d?.a ? d : null; }, () => {}),
     ]);
   }
   const cache = new Map();
@@ -295,8 +320,14 @@ const Mu = (() => {
     const spans = [];
     for (let i = w0 * 2; i < sp.length; i += 2) spans.push([sp[i] - o, sp[i + 1] - o]);
     const e = { ph: ph.slice(o), spans, wasl: wasl.filter(k => k >= w0).map(k => k - w0) };
-    const r = refs?.[ai];
-    if (r) { e.refs = []; for (const wi in r) if (wi >= w0) e.refs[wi - w0] = r[wi]; }
+    const r = refs?.a[ai];
+    if (r) {
+      e.refs = [];
+      for (const wi in r) if (wi >= w0) {
+        const vs = Object.keys(r[wi]).filter(v => !paceMask || r[wi][v] & paceMask);
+        if (vs.length) e.refs[wi - w0] = vs;
+      }
+    }
     if (cache.size > 400) cache.clear();
     cache.set(key, e);
     return e;
@@ -467,7 +498,7 @@ const Mu = (() => {
 
   return {
     CANDS, BASE_IDS, choice, mb, probe, saved, savedVariants, use, bench: () => store.get('mu.bench', null), remove, load, prime, start, listen, stop, sounds, expect, expect2, locate, opening,
-    ready: () => ready, listening: () => !!mic, lost: f => { onLost = f; }, sound: () => actx, info: () => info, recording,
+    ready: () => ready, listening: () => !!mic, pace: () => ({ pace, near: refs ? refs.r.filter((_, i) => paceMask & 1 << i).map(([r]) => r) : [] }), lost: f => { onLost = f; }, sound: () => actx, info: () => info, recording,
     reprobe: () => { store.set('mu.choice', null); reset(); },
   };
 })();
