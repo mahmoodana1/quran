@@ -187,7 +187,7 @@ const Recite = (() => {
         const m = g.mu;
         m.w0 = Math.max(0, Math.min(G.pos - m.starts[m.c], G.words[m.starts[m.c]].of));
         if (m.w0 >= G.words[m.starts[m.c]].of && m.c + 1 < G.ayas.length) { m.c++; m.w0 = 0; }
-        m.cut = 0; m.final = ''; m.conf = null; m.lead = false;
+        m.cut = 0; m.final = ''; m.conf = null; m.alts = null; m.lead = false;
       });
     } else Listen.stop();
     paintBar();
@@ -223,9 +223,9 @@ const Recite = (() => {
   const MU_TYPE = { haraka: 'haraka', letter: 'wrong', extra: 'wrong', skipped: 'skip' };
   function onMu(g, d) {
     if (G !== g) return;
-    if (g.done) { g.mu.final = d.final; g.mu.tent = d.tent; g.mu.conf = d.conf; return; } // the last of it, read after «finish»: pause() applies it
+    if (g.done) { g.mu.final = d.final; g.mu.tent = d.tent; g.mu.conf = d.conf; g.mu.alts = d.alts; return; } // the last of it, read after «finish»: pause() applies it
     const m = g.mu, grew = d.final.length + d.tent.length !== m.final.length + m.tent.length;
-    m.final = d.final; m.tent = d.tent; m.conf = d.conf;
+    m.final = d.final; m.tent = d.tent; m.conf = d.conf; m.alts = d.alts;
     if (grew && g.run) {
       g.lastAct = Date.now();
       if (!g.voice) { g.voice = true; paintBar(); }
@@ -235,16 +235,17 @@ const Recite = (() => {
     muFollow(false);
   }
   function muFollow(done) {
-    const m = G.mu, U = Match.units(m.final + m.tent), uf = Match.units(m.final).length, Uc = Match.unitConf(m.final + m.tent, m.conf);
+    const m = G.mu, U = Match.units(m.final + m.tent), uf = Match.units(m.final).length;
+    const Uc = Match.unitConf(m.final + m.tent, m.conf), Ua = Match.unitAlts(m.final + m.tent, m.alts);
     for (let guard = 0; guard < 40 && m.c < G.ayas.length; guard++) {
       const ai = G.ayas[m.c], nx = done ? null : G.ayas[m.c + 1];
       const cur = Mu.expect(ai, m.w0), ex = nx != null ? Mu.expect2(cur, Mu.expect(nx)) : cur;
       const sub = Match.text(U.slice(m.cut)), fin = Match.text(U.slice(m.cut, Math.max(m.cut, uf))).length;
-      const st = Match.words(ex, sub, fin, done, { freeLead: m.lead, conf: Uc.slice(m.cut) });
+      const st = Match.words(ex, sub, fin, done, { freeLead: m.lead, conf: Uc.slice(m.cut), alts: Ua.slice(m.cut) });
       const n0 = cur.spans.length;
       const begun = nx != null && st.slice(n0, n0 + 2).some(x => x.state === 'ok' || x.state === 'err');
       muApply(st.slice(0, n0), begun, cur);
-      if (!begun) { if (!done && muRelocate(st.slice(0, n0), sub, fin, Uc.slice(m.cut))) continue; break; }
+      if (!begun) { if (!done && muRelocate(st.slice(0, n0), sub, fin, Uc.slice(m.cut), Ua.slice(m.cut))) continue; break; }
       m.cut += st[n0].at[0]; m.c++; m.w0 = 0; m.lead = false;
     }
     if (G.pos >= G.words.length) return finish();
@@ -257,13 +258,13 @@ const Recite = (() => {
   function muSettle() {
     const m = G.mu;
     if (m.c >= G.ayas.length) return;
-    const U = Match.units(m.final), sub = Match.text(U.slice(m.cut)), conf = Match.unitConf(m.final, m.conf).slice(m.cut);
+    const U = Match.units(m.final), sub = Match.text(U.slice(m.cut)), conf = Match.unitConf(m.final, m.conf).slice(m.cut), alts = Match.unitAlts(m.final, m.alts).slice(m.cut);
     const cur = Mu.expect(G.ayas[m.c], m.w0);
-    const st = Match.words(cur, sub, sub.length, false, { freeLead: m.lead, conf });
+    const st = Match.words(cur, sub, sub.length, false, { freeLead: m.lead, conf, alts });
     const t = st.findLastIndex(x => x.state !== 'todo');
     if (t < 0) return;
     const part = { ph: cur.ph.slice(0, cur.spans[t][1]), spans: cur.spans.slice(0, t + 1), wasl: cur.wasl.filter(k => k <= t) };
-    const fin = Match.words(part, sub, sub.length, true, { freeLead: m.lead, conf });
+    const fin = Match.words(part, sub, sub.length, true, { freeLead: m.lead, conf, alts });
     muApply(fin.concat(st.slice(t + 1)), false, cur);
   }
 
@@ -294,7 +295,7 @@ const Recite = (() => {
   // the aya being said doesn't fit what is heard (nothing of it, or mistakes
   // piling up), but another aya of the session clearly does: a skip ahead (even
   // to an aya that opens like the one skipped, as al-Mulk 2 and 3), or a step back
-  function muRelocate(states, sub, fin, conf) {
+  function muRelocate(states, sub, fin, conf, alts) {
     const m = G.mu;
     const ok0 = states.filter(x => x.state === 'ok').length, bad0 = states.filter(x => x.state === 'err').length;
     if (Date.now() - (m.relocAt || 0) < 800 || (ok0 && bad0 < 2)) return false;
@@ -303,7 +304,7 @@ const Recite = (() => {
     let best = null;
     for (let j = Math.max(0, m.c - 3); j < Math.min(G.ayas.length, m.c + 9); j++) {
       if (j === m.c) continue;
-      const st = Match.words(Mu.expect(G.ayas[j]), sub, fin, false, { freeLead: true, conf });
+      const st = Match.words(Mu.expect(G.ayas[j]), sub, fin, false, { freeLead: true, conf, alts });
       const ok = st.filter(x => x.state === 'ok').length, bad = st.filter(x => x.state === 'err').length;
       if (ok >= Math.max(3, ok0 + 2) && ok / (ok + bad) >= 0.7 && (!best || ok > best.ok)) best = { j, ok };
     }
@@ -544,7 +545,7 @@ const Recite = (() => {
         // many ayas open alike: go only once one fits clearly better than any
         // other, and has stayed the best for a second; ayas said the same way
         // (as in ar-Rahman) are told apart, after a while, by the page open
-        const r = locateMu(h, d.conf);
+        const r = locateMu(h, d.conf, d.alts);
         f.same = r && r.ai === f.last ? (f.same || 0) + 1 : 0;
         f.last = r?.ai;
         const sure = r && f.same >= 2 && (r.ok - r.next >= 2 || (n > 150 && f.same >= 4));
@@ -559,10 +560,10 @@ const Recite = (() => {
   }
   // the aya the reading fits best: { ai, ok (words right), next (the runner-up's) },
   // equal fits going to the one nearest the page open
-  function locateMu(h, conf) {
+  function locateMu(h, conf, alts) {
     const fits = [];
     for (const { ai } of Mu.candidates(h, 12)) {
-      const st = Match.words(Mu.expect(ai), h, h.length, false, { freeLead: true, conf });
+      const st = Match.words(Mu.expect(ai), h, h.length, false, { freeLead: true, conf, alts });
       const ok = st.filter(x => x.state === 'ok').length, bad = st.filter(x => x.state === 'err').length;
       if (ok >= 4 && ok / (ok + bad) >= 0.75) fits.push({ ai, ok, far: Math.abs(R.ayas[ai][2] - S.page) });
     }
