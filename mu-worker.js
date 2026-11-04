@@ -148,8 +148,24 @@ async function step(final) {
 }
 
 // keep reading while the recitation goes on
+// the last REC_MAX s of what was heard (across pauses and sessions), for a
+// recording the reader can share when the recognition goes wrong
+const REC_MAX = 300;
+let rec = [], recLen = 0, recUpTo = 0; // blocks of samples, how many, and how far into the ring
+function record() {
+  const w = written(), from = Math.max(recUpTo, w - ring.length + 1);
+  if (w > from) {
+    const b = new Float32Array(w - from);
+    for (let i = from; i < w; i++) b[i - from] = ring[i % ring.length];
+    rec.push(b); recLen += b.length;
+    while (recLen - rec[0].length > REC_MAX * RATE) recLen -= rec.shift().length;
+  }
+  recUpTo = w;
+}
+
 async function loop() {
   while (live) {
+    record();
     if ((written() - base) / RATE - readUpTo >= MIN_NEW) {
       try { await step(false); } catch (e) { postMessage({ type: 'error', message: String(e.stack || e) }); await new Promise(r => setTimeout(r, 200)); }
     }
@@ -188,8 +204,16 @@ onmessage = async ({ data }) => {
   try {
     if (data.type === 'probe') await probe(data);
     if (data.type === 'load') await load(data);
+    if (data.type === 'recording') {
+      record();
+      const out = new Float32Array(recLen);
+      let at = 0;
+      for (const b of rec) { out.set(b, at); at += b.length; }
+      postMessage({ type: 'recording', samples: out }, [out.buffer]);
+    }
     if (data.type === 'start') {
       live = false; await looping;
+      recUpTo = Math.max(recUpTo, written()); // what came in while not listening isn't kept
       base = written(); kept = []; keptP = []; keptA = []; readUpTo = 0;
       live = true; looping = loop();
     }
@@ -200,6 +224,7 @@ onmessage = async ({ data }) => {
     }
     if (data.type === 'flush') {
       live = false; await looping;
+      record();
       if (written() - base > 0) await step(true);
       postMessage({ type: 'flushed' });
     }

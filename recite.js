@@ -879,7 +879,8 @@ const Recite = (() => {
       ${MU() ? '' : `<div class="row rc-goal"><span class="main"><span class="t">سرعة التعرّف</span><span class="s">السريع أخفّ وأسرع بمرتين، والدقيق أثبت قليلًا</span></span>
         <span class="rc-chips">${[['fast', 'سريع'], ['exact', 'دقيق']].map(([k, t]) => `<button data-rc-use="${k}"${Listen.which() === k ? ' class="on"' : ''}>${t}</button>`).join('')}</span></div>`}
       ${MU() ? `<div class="row rc-model"><span class="main"><span class="t">نموذج التعرّف على التلاوة</span><span class="s" id="rcModelS">…</span></span><span id="rcModelB"></span></div>
-      <div class="rc-models" id="rcModels"></div>`
+      <div class="rc-models" id="rcModels"></div>
+      <div class="row rc-model" id="rcDiag" hidden><span class="main"><span class="t">تسجيل آخر جلسة</span><span class="s">إن أخطأ التعرّف، شارك هذا التسجيل (آخر ٥ دقائق) لنحسّنه</span></span><button class="rc-not" data-rc-diag>مشاركة</button></div>`
       : `<div class="row rc-model"><span class="main"><span class="t">نموذج التعرّف على التلاوة</span><span class="s" id="rcModelS">…</span></span><span id="rcModelB"></span></div>`}
       <div class="row rc-goal"><span class="main"><span class="t">هدف يومي</span><span class="s">عدد الآيات التي تسمّعها كل يوم</span></span>
         <span class="rc-chips">${[0, 5, 10, 20].map(n => `<button data-rc-goal="${n}"${goal === n ? ' class="on"' : ''}>${n ? ar(n) : 'لا'}</button>`).join('')}</span></div></div>`;
@@ -968,6 +969,8 @@ const Recite = (() => {
       : bench ? `اختبرناها على جهازك ${ago(bench.at)}: الأسرع يكتب ما تقرؤه أسرع، وكلها بالدقة نفسها تقريبًا`
       : 'لم نختبرها على جهازك بعد';
     b.innerHTML = `<button class="rc-not" data-rc-model="probe"${testing ? ' disabled' : ''}>${bench ? 'اختبر من جديد' : 'اختبر جهازك'}</button>`;
+    const diag = $('#rcDiag');
+    if (diag) diag.hidden = !Mu.ready();
     const times = bench?.times || {}, ok = Object.values(times).filter(x => x != null), fastest = ok.length ? Math.min(...ok) : null;
     box.innerHTML = Mu.CANDS.map(x => {
       const t = times[x.id], on = c?.id === x.id, got = have[x.variant];
@@ -998,6 +1001,21 @@ const Recite = (() => {
       Mu.use(pick.dataset.rcPick);
       paintModels();
       Mu.saved().then(have => { if (have) toast(`سيُستعمل ${MU_NAMES[pick.dataset.rcPick]}`); else withModel(() => paintModels()); });
+      return true;
+    }
+    if (e.target.closest('[data-rc-diag]')) {
+      Mu.recording().then(async blob => {
+        if (!blob) return toast('لا تسجيل بعد — سمّع أولًا');
+        const c = Mu.choice(), name = `tasmee-${c ? c.id : 'model'}-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.wav`;
+        const file = new File([blob], name, { type: 'audio/wav' });
+        const text = `${c ? MU_NAMES[c.id] : ''} · ${navigator.userAgent}`;
+        try {
+          if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: 'تسجيل التسميع', text }); return; }
+        } catch (err) { if (err?.name === 'AbortError') return; }
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob); a.download = name; a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      });
       return true;
     }
     const dv = e.target.closest('[data-rc-delv]');

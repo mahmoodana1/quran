@@ -101,7 +101,7 @@ const Mu = (() => {
     } catch {}
   }
 
-  let worker = null, ready = false, loading = null, onText = null, onFlushed = null, shared = null, info = null;
+  let worker = null, ready = false, loading = null, onText = null, onFlushed = null, onRecording = null, shared = null, info = null;
   function reset() {
     worker?.terminate();
     worker = null; ready = false; loading = null;
@@ -122,6 +122,7 @@ const Mu = (() => {
         if (d.type === 'ready') { ready = true; info = d; resolve(); }
         if (d.type === 'text') onText?.(d);
         if (d.type === 'flushed') { const f = onFlushed; onFlushed = null; f?.(); }
+        if (d.type === 'recording') { const f = onRecording; onRecording = null; f?.(d.samples); }
         if (d.type === 'error') { if (!ready) { reset(); reject(new Error(d.message)); } else console.warn('Muaalem:', d.message); }
       };
       worker.onerror = e => { if (!ready) { reset(); reject(new Error(e.message || 'worker failed')); } };
@@ -164,6 +165,22 @@ const Mu = (() => {
     if (!m) return Promise.resolve();
     m.node.port.postMessage('stop'); m.src.disconnect(); m.node.disconnect(); m.stream.getTracks().forEach(t => t.stop());
     return new Promise(r => { onFlushed = r; worker.postMessage({ type: 'flush' }); });
+  }
+
+  // ---- the last minutes heard, as a WAV file (16 kHz, 16-bit), to share when
+  // the recognition goes wrong; null when nothing was heard yet
+  function recording() {
+    if (!worker || !ready) return Promise.resolve(null);
+    return new Promise(r => { onRecording = r; worker.postMessage({ type: 'recording' }); }).then(x => {
+      if (!x || !x.length) return null;
+      const buf = new ArrayBuffer(44 + x.length * 2), v = new DataView(buf);
+      const str = (o, t) => [...t].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+      str(0, 'RIFF'); v.setUint32(4, 36 + x.length * 2, true); str(8, 'WAVE'); str(12, 'fmt ');
+      v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, 16000, true);
+      v.setUint32(28, 32000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); str(36, 'data'); v.setUint32(40, x.length * 2, true);
+      for (let i = 0; i < x.length; i++) v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, x[i])) * 0x7fff, true);
+      return new Blob([buf], { type: 'audio/wav' });
+    });
   }
 
   // ---- how each aya sounds: [phonetic script, word ranges, words starting with ٱ]
@@ -233,7 +250,7 @@ const Mu = (() => {
 
   return {
     CANDS, choice, mb, probe, saved, savedVariants, use, bench: () => store.get('mu.bench', null), remove, load, prime, start, listen, stop, sounds, expect, expect2, candidates,
-    ready: () => ready, listening: () => !!mic, info: () => info,
+    ready: () => ready, listening: () => !!mic, info: () => info, recording,
     reprobe: () => { store.set('mu.choice', null); reset(); },
   };
 })();
