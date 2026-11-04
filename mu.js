@@ -23,12 +23,24 @@ const Mu = (() => {
     { id: 'q4-cpu', variant: 'q4', ep: 'wasm', mb: 86 },
     { id: 'q4-gpu', variant: 'q4', ep: 'webgpu', mb: 86 },
   ];
+  // every device starts on 4-bit, on whichever of the CPU or the GPU runs it faster;
+  // the bigger ones (a little more exact, two or three times the download) are
+  // there to choose in the settings
+  const BASE_IDS = ['q4-cpu', 'q4-gpu'];
   const PROBE_X = 12; // a full update takes about this many times the stand-in
   const threads = () => Math.min(4, navigator.hardwareConcurrency || 4);
   const now = () => performance.timeOrigin + performance.now();
 
   // the candidate chosen for this device: { id, ms } (ms: expected per update)
-  const choice = () => { const c = store.get('mu.choice', null); return c && CANDS.find(x => x.id === c.id) ? c : null; };
+  const choice = () => {
+    let c = store.get('mu.choice', null);
+    // a bigger model chosen for the device before 4-bit was the start (not by hand): its 4-bit
+    if (c && !BASE_IDS.includes(c.id) && !store.get('mu.big', false)) {
+      const id = c.id.endsWith('gpu') ? 'q4-gpu' : 'q4-cpu';
+      store.set('mu.choice', c = { id, ms: store.get('mu.bench', null)?.times?.[id] ?? null, at: Date.now() });
+    }
+    return c && CANDS.find(x => x.id === c.id) ? c : null;
+  };
   const cand = () => CANDS.find(x => x.id === choice()?.id);
   const mb = () => cand()?.mb ?? 126;
 
@@ -36,11 +48,11 @@ const Mu = (() => {
   async function gpuInfo() {
     try { const a = navigator.gpu && await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }); return a ? { f16: a.features.has('shader-f16') } : null; } catch { return null; }
   }
-  // onStep(done, total); resolves with the fastest candidate, which becomes the
-  // choice unless keep (a choice made by hand stays)
-  async function probe(onStep, keep = false) {
+  // onStep(done, total); resolves with the fastest 4-bit candidate, which becomes
+  // the choice unless keep (a choice made by hand stays); all: the bigger ones too
+  async function probe(onStep, keep = false, all = false) {
     const gpu = await gpuInfo();
-    const list = CANDS.filter(c => !(c.ep === 'webgpu' && (!gpu || (c.f16 && !gpu.f16))));
+    const list = CANDS.filter(c => (all || BASE_IDS.includes(c.id)) && !(c.ep === 'webgpu' && (!gpu || (c.f16 && !gpu.f16))));
     const res = {};
     await new Promise(resolve => {
       const w = new Worker('mu-worker.js', { type: 'module' });
@@ -51,16 +63,18 @@ const Mu = (() => {
       w.onerror = () => { w.terminate(); resolve(); };
       w.postMessage({ type: 'probe', list: list.map(({ id, variant, ep }) => ({ id, variant, ep })), threads: threads() });
     });
-    const ok = list.filter(c => res[c.id] && !res[c.id].error);
+    const runs = list.filter(c => res[c.id] && !res[c.id].error), base = runs.filter(c => BASE_IDS.includes(c.id));
+    const ok = base.length ? base : runs;
     if (!ok.length) throw new Error('no model runs on this device');
-    const fastest = Math.min(...ok.map(c => res[c.id].ms));
-    // the fastest; within 10% of it, the smaller download
-    const best = ok.filter(c => res[c.id].ms <= fastest * 1.1).sort((a, b) => a.mb - b.mb || res[a.id].ms - res[b.id].ms)[0];
-    // every candidate's time, for choosing by hand in the settings: ms per update, or null (doesn't run here)
-    const times = {};
-    for (const c of CANDS) times[c.id] = res[c.id] && !res[c.id].error ? Math.round(res[c.id].ms * PROBE_X) : null;
+    // the fastest 4-bit (the CPU when the GPU is no faster)
+    const best = ok.sort((a, b) => res[a.id].ms - res[b.id].ms)[0];
+    // each candidate's time, for choosing by hand in the settings: ms per update, null (doesn't
+    // run here), or none yet (not tested); times from an earlier test are kept
+    const times = { ...store.get('mu.bench', null)?.times };
+    for (const c of CANDS) if (list.includes(c) || !gpu && c.ep === 'webgpu') times[c.id] = res[c.id] && !res[c.id].error ? Math.round(res[c.id].ms * PROBE_X) : null;
     store.set('mu.bench', { at: Date.now(), times, best: best.id });
     if (!choice() || !keep) store.set('mu.choice', { id: best.id, ms: times[best.id], at: Date.now() });
+    else if (times[choice().id] != null) store.set('mu.choice', { ...choice(), ms: times[choice().id] }); // its time, fresh
     return best;
   }
 
@@ -93,6 +107,7 @@ const Mu = (() => {
   // use this candidate from now on (its time from the last test, if any)
   function use(id) {
     if (!CANDS.some(c => c.id === id) || choice()?.id === id) return;
+    store.set('mu.big', !BASE_IDS.includes(id));
     store.set('mu.choice', { id, ms: store.get('mu.bench', null)?.times?.[id] ?? null, at: Date.now() });
     reset();
   }
@@ -440,8 +455,8 @@ const Mu = (() => {
   }
 
   return {
-    CANDS, choice, mb, probe, saved, savedVariants, use, bench: () => store.get('mu.bench', null), remove, load, prime, start, listen, stop, sounds, expect, expect2, locate, opening,
-    ready: () => ready, listening: () => !!mic, lost: f => { onLost = f; }, info: () => info, recording,
+    CANDS, BASE_IDS, choice, mb, probe, saved, savedVariants, use, bench: () => store.get('mu.bench', null), remove, load, prime, start, listen, stop, sounds, expect, expect2, locate, opening,
+    ready: () => ready, listening: () => !!mic, lost: f => { onLost = f; }, sound: () => actx, info: () => info, recording,
     reprobe: () => { store.set('mu.choice', null); reset(); },
   };
 })();

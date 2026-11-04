@@ -278,6 +278,43 @@ svg { fill: currentColor; }
 .acts-title .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--sel); }
 .bar.swap .acts-title { animation: swapIn .3s ease; }
 @keyframes swapIn { from { opacity: 0; transform: translateY(4px); } }
+/* the aya bar: how this aya went in التسميع */
+#ayaBarRc:not([hidden]) { animation: swapIn .3s ease; }
+.rc-ab {
+  padding: 10px 12px; border-radius: 14px; background: var(--tint);
+  display: flex; flex-direction: column; gap: 9px;
+}
+.rc-ab-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.rc-ab-n { display: flex; align-items: baseline; gap: 4px; font-size: 12px; color: var(--muted); }
+.rc-ab-n b { font-size: 17px; font-weight: 600; }
+.rc-ab-n.ok b { color: var(--ok); }
+.rc-ab-n.bad b { color: var(--c-marks); }
+/* the last readings, oldest first: a small bar each */
+.rc-ab-h { display: flex; align-items: flex-end; gap: 3px; height: 16px; margin-inline-start: auto; }
+.rc-ab-m { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--muted); }
+.rc-ab-m .rc-dots { margin: 0; }
+.rc-ab-h i { width: 5px; border-radius: 2px; }
+.rc-ab-h i.ok { height: 16px; background: color-mix(in srgb, var(--ok) 75%, transparent); }
+.rc-ab-h i.bad { height: 9px; background: var(--c-marks); }
+.rc-ab-h i.skip { height: 5px; background: var(--faint, var(--muted)); }
+.rc-ab-done { font-size: 12px; padding: 2px 9px; border-radius: 99px; color: var(--ok); background: color-mix(in srgb, var(--ok) 13%, transparent); }
+.rc-ab-w { display: flex; flex-wrap: wrap; gap: 6px; }
+.rc-ab-w button {
+  display: flex; align-items: center; gap: 4px; padding: 3px 10px 4px; border-radius: 99px;
+  background: var(--card); box-shadow: inset 0 0 0 1px var(--line); color: var(--ink); font-size: 19px; line-height: 1.5;
+  transition: transform .15s ease;
+}
+.rc-ab-w button:active { transform: scale(.95); }
+.rc-ab-w button.now { box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--c-marks) 60%, transparent); }
+.rc-ab-w small { font-size: 11px; color: var(--c-marks); }
+.rc-ab-last { font-size: 11.5px; color: var(--muted); }
+/* a word shown from the card */
+.w.rc-pointed { animation: rcPointed 1.6s ease-out; border-radius: .2em; }
+@keyframes rcPointed {
+  0%, 40% { background: color-mix(in srgb, var(--c-marks) 30%, transparent); }
+  100% { background: color-mix(in srgb, var(--c-marks) 0%, transparent); }
+}
+
 .acts-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
 .acts-row button { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; color: var(--ink); }
 .acts-row i {
@@ -1074,6 +1111,16 @@ svg { fill: currentColor; }
 }
 .w.rc-now.rc-hid::before { background: color-mix(in srgb, var(--accent) 40%, transparent); }
 .w.rc-peek { color: color-mix(in srgb, var(--ink) 26%, transparent); }
+/* blind: nothing of the words ahead shows, not even their length; where you
+   are is a small dot at the word's start; the aya numbers ahead are hidden too */
+.w.rc-blind::before { content: none; }
+.w.rc-now.rc-blind::before {
+  content: ""; left: auto; right: 0; top: 42%; width: .22em; height: .22em; border-radius: 50%;
+  background: var(--accent); animation: rcDot 1.6s ease-in-out infinite;
+}
+@keyframes rcDot { 50% { opacity: .35; } }
+.w.end.rc-blind { visibility: hidden; }
+body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it goes */
 .w.rc-wrong::after, .w.rc-haraka::after, .w.rc-skip::after, .w.rc-hint::after {
   content: ""; position: absolute; left: 4%; right: 4%; bottom: .1em;
   border-bottom: .08em solid var(--c-marks);
@@ -1084,6 +1131,19 @@ svg { fill: currentColor; }
 /* a haraka said wrong: the word is right, so it keeps its colour; a wavy mark */
 .w.rc-haraka::after { border-bottom: none; height: .22em; bottom: .02em;
   background: radial-gradient(circle at 50% 100%, transparent .09em, var(--c-marks) .1em, var(--c-marks) .15em, transparent .16em) 0 0 / .32em .22em repeat-x; }
+/* a mark taken away with a tap while reading (or put back) */
+.w.rc-cleared { animation: rcCleared .7s cubic-bezier(.2,.8,.3,1); border-radius: .2em; }
+.w.rc-unclear { animation: rcUnclear .5s ease-out; border-radius: .2em; }
+@keyframes rcCleared {
+  0% { background: color-mix(in srgb, var(--ok) 0%, transparent); transform: scale(1); }
+  30% { background: color-mix(in srgb, var(--ok) 28%, transparent); transform: scale(1.08); }
+  100% { background: color-mix(in srgb, var(--ok) 0%, transparent); transform: scale(1); }
+}
+@keyframes rcUnclear {
+  0% { background: color-mix(in srgb, var(--c-marks) 26%, transparent); }
+  100% { background: color-mix(in srgb, var(--c-marks) 0%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) { .w.rc-cleared, .w.rc-unclear { transform: none; } }
 
 /* the reciting bar */
 #recBar .pl-main { order: -1; }
@@ -1323,6 +1383,17 @@ svg { fill: currentColor; }
 .rc-tag { font-size: .75em; padding: 1px 8px; border-radius: 99px; background: var(--tint-2); color: var(--muted); }
 .rc-tag.on { background: var(--accent); color: var(--on-accent); }
 .rc-mfoot { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-start; padding-top: 4px; }
+/* the bigger models, folded away under the 4-bit ones */
+.rc-big { border-radius: 12px; border: 1px dashed var(--line); padding: 0 10px; }
+.rc-big[open] { padding-bottom: 10px; display: grid; gap: 6px; }
+.rc-big summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 10px 2px; }
+.rc-big summary::-webkit-details-marker { display: none; }
+.rc-big summary .main { flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.rc-big summary .t { font-size: 15px; font-weight: 600; }
+.rc-big summary .s { font-size: 12px; color: var(--muted); line-height: 1.45; }
+.rc-big summary .go { width: 18px; height: 18px; flex: none; fill: none; stroke: var(--muted); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s ease; }
+.rc-big[open] summary .go { transform: rotate(-90deg); }
+.rc-bigtest { justify-self: start; }
 
 /* ---- the «التسميع» panel: go on from where you were, then quick ways in, then sub-tabs */
 .rc-go {

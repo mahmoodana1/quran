@@ -642,9 +642,9 @@ function openActions(i) {
   $('#ayaBarTitle').textContent = ayaLabel(i);
   $('#ayaBar [data-act=bookmark] span').textContent = isSaved(i) ? 'محفوظة' : 'علامة';
   $('#ayaBar [data-act=bookmark]').classList.toggle('on', isSaved(i));
-  const note = typeof Recite !== 'undefined' ? Recite.note(i) : '';
-  $('#ayaBarNote').textContent = note;
-  $('#ayaBarNote').hidden = !note;
+  const card = typeof Recite !== 'undefined' ? Recite.card(i) : '';
+  $('#ayaBarRc').innerHTML = card;
+  $('#ayaBarRc').hidden = !card;
   if (P.ai == null) hide($('#player'));
   const bar = $('#ayaBar');
   if (!bar.hidden && !bar.classList.contains('leaving')) { bar.classList.remove('swap'); void bar.offsetWidth; bar.classList.add('swap'); }
@@ -677,6 +677,8 @@ function ripple(el) {
 }
 
 $('#ayaBar').addEventListener('click', async e => {
+  const wd = e.target.closest('[data-rc-word]');
+  if (wd) { const [ai, wi] = wd.dataset.rcWord.split(':').map(Number); Recite.showWord(ai, wi); return; }
   const b = e.target.closest('[data-act]');
   if (!b || S.act == null) return;
   const i = S.act;

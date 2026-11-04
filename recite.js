@@ -27,7 +27,9 @@ const Recite = (() => {
   const TYPES = { wrong: 'قرأتها بكلمة أخرى', haraka: 'أخطأت في حركتها', skip: 'تجاوزتها', hint: 'احتجت تلميحًا' };
   const MASTER_DAYS = 3;
   const HINT_AFTER = 7000; // ms of silence on a hidden word before it shows
-  const CLS = ['rc-weak', 'rc-done', 'rc-now', 'rc-hid', 'rc-peek', 'rc-wrong', 'rc-haraka', 'rc-skip', 'rc-hint'];
+  const CLS = ['rc-weak', 'rc-done', 'rc-now', 'rc-hid', 'rc-blind', 'rc-peek', 'rc-wrong', 'rc-haraka', 'rc-skip', 'rc-hint'];
+  // hidden, and blind (a setting): no trace of the words ahead, their number or their ayas'
+  const blind = () => !!G?.hide && !G.done && store.get('recite.blind', false);
   // Muaalem listens in Hafs (its phonetic script is Hafs's)
   const MU = () => R.id === 'hafs' && typeof Mu !== 'undefined';
   const MU_NAMES = { 'q8-cpu': '٨ بت · المعالج', 'q8-gpu': '٨ بت · المعالج الرسومي', 'fp16-gpu': '١٦ بت · المعالج الرسومي', 'q4-cpu': '٤ بت · المعالج', 'q4-gpu': '٤ بت · المعالج الرسومي' };
@@ -37,7 +39,9 @@ const Recite = (() => {
   // idx 'page:n' -> word, pos = next word to say, errs[k] = type, gone = mistakes taken back
   let G = null, dirty = false, timer = 0;
 
-  // ---- mistakes, per riwaya: { ayas: { ai: { n, last, words: { wi: type }, ok: [day], done } }, sessions }
+  // ---- mistakes, per riwaya: { ayas: { ai: { n, last, words: { wi: type }, ok: [day], done } }, sessions,
+  // stats: { ai: { r: times read right, w: times with mistakes, h: [[time, mistakes (-1: skipped)]] (the last
+  // 12), wc: { wi: times wrong } } } }
   const key = () => 'recite.' + R.id;
   const log = () => store.get(key(), { ayas: {}, sessions: [] });
   const day = (t = Date.now()) => { const d = new Date(t); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
@@ -306,7 +310,7 @@ const Recite = (() => {
     });
     if (pos > G.pos) G.peek = false;
     G.pos = pos; G.tent = tent;
-    if (fresh && navigator.vibrate) navigator.vibrate(12);
+    if (fresh) { navigator.vibrate?.(12); chime(); }
     warnSkipped(skips);
   }
   // the aya being said doesn't fit what is heard (nothing of it, or mistakes
@@ -658,12 +662,15 @@ const Recite = (() => {
   }
 
   function paint(root = document) {
+    document.body.classList.toggle('rc-blind', blind());
     const weak = !G && store.get('recite.weak', false) ? weakWords() : null;
     if (!G && !dirty && !weak) return;
     if (!G && root === document) dirty = !!weak;
     const pages = root.classList?.contains('page') ? [root] : root.querySelectorAll('.page');
+    const bl = blind(), ahead = bl ? new Set(G.words.slice(G.pos).map(w => w.ai)) : null;
     for (const pg of pages) {
       const p = +pg.dataset.page;
+      pg.querySelectorAll('.w.end').forEach(el => el.classList.toggle('rc-blind', !!ahead?.has(+el.dataset.a)));
       pg.querySelectorAll('.w:not(.end)').forEach((el, n) => {
         el.classList.remove(...CLS);
         if (weak) { if (weak.has(p + ':' + n)) el.classList.add('rc-weak'); return; }
@@ -674,8 +681,8 @@ const Recite = (() => {
         if (k < G.pos) el.classList.add(e ? 'rc-' + e : 'rc-done');
         else if (k < cur) el.classList.add('rc-done'); // heard, the phrase not yet finished
         else if (G.done) return;
-        else if (k === cur) { el.classList.add('rc-now'); if (G.hide) el.classList.add(G.peek ? 'rc-peek' : 'rc-hid'); }
-        else if (G.hide) el.classList.add('rc-hid');
+        else if (k === cur) { el.classList.add('rc-now'); if (G.hide) el.classList.add(G.peek ? 'rc-peek' : 'rc-hid'); if (bl && !G.peek) el.classList.add('rc-blind'); }
+        else if (G.hide) el.classList.add('rc-hid', ...(bl ? ['rc-blind'] : []));
       });
     }
   }
@@ -686,7 +693,8 @@ const Recite = (() => {
     const n = mistakes().length;
     $('#recTitle').textContent = !G.run ? (G.pos ? 'متوقف مؤقتًا' : 'اضغط وابدأ القراءة')
       : G.busy ? 'يتعرّف على ما قرأت…' : G.voice ? 'يستمع…' : G.peek ? 'هذه الكلمة التالية' : 'اقرأ، أنا أستمع';
-    $('#recSub').textContent = `${ayaLabel(w.ai)}${n ? ' · ' + errs(n) : ''}`;
+    const bl = blind();
+    $('#recSub').textContent = bl ? (n ? errs(n) : 'تسميع أعمى') : `${ayaLabel(w.ai)}${n ? ' · ' + errs(n) : ''}`;
     $('#recToggle').classList.toggle('voice', !!G.voice);
     $('#recBar').classList.toggle('paused', !G.run);
     $('#recToggle').classList.toggle('live', G.run);
@@ -694,7 +702,7 @@ const Recite = (() => {
     $('#recHide').classList.toggle('on', G.hide);
     $('#recHide').setAttribute('aria-pressed', G.hide);
     // this aya's share of the bar, like the player
-    $('#recProg').style.transform = `scaleX(${G.pos >= G.words.length ? 1 : w.wi / w.of})`;
+    $('#recProg').style.transform = `scaleX(${bl ? 0 : G.pos >= G.words.length ? 1 : w.wi / w.of})`;
   }
 
   // ---- the end of a session
@@ -742,6 +750,17 @@ const Recite = (() => {
       if (!byAya.has(w.ai)) byAya.set(w.ai, []);
       byAya.get(w.ai).push([w, G.gone.has(k) ? null : G.errs[k]]);
     });
+    l.stats ||= {};
+    for (const [ai, list] of byAya) {
+      const bad = list.filter(x => x[1]), full = list.length === list[0][0].of;
+      if (!full && !bad.length) continue; // begun and left: not a reading of it
+      const st = l.stats[ai] ||= statsFrom(l, ai);
+      const skipped = full && bad.length === list.length && bad.every(x => x[1] === 'skip');
+      if (bad.length) st.w++; else st.r++;
+      if (!skipped) bad.forEach(([w]) => { st.wc[w.wi] = (st.wc[w.wi] || 0) + 1; });
+      st.h.push([Date.now(), skipped ? -1 : bad.length]);
+      if (st.h.length > 12) st.h.splice(0, st.h.length - 12);
+    }
     for (const [ai, list] of byAya) {
       const bad = list.filter(x => x[1]);
       const a = l.ayas[ai];
@@ -793,6 +812,19 @@ const Recite = (() => {
       paint(); paintBar();
       return true;
     }
+    // while reading: a tap on a word marked takes the mark away (again: puts it
+    // back), and the reading goes on
+    if (G.run && k != null && G.errs[k] && G.errs[k] !== 'hint') {
+      const back = G.gone.has(k);
+      if (back) G.gone.delete(k); else G.gone.add(k);
+      paint(); paintBar();
+      el.classList.remove('rc-cleared', 'rc-unclear');
+      void el.offsetWidth; // the flash again, on a second tap
+      el.classList.add(back ? 'rc-unclear' : 'rc-cleared');
+      setTimeout(() => el.classList.remove('rc-cleared', 'rc-unclear'), 700);
+      navigator.vibrate?.(back ? [10, 40, 10] : 8);
+      return true;
+    }
     if (k == null || k >= G.pos || !G.errs[k] || G.gone.has(k)) return true;
     pause();
     G.tap = { k, el };
@@ -809,11 +841,98 @@ const Recite = (() => {
     return true;
   }
 
-  // ---- the aya bar's note, the dock button
+  // ---- a mistake, heard: two soft falling notes, like wood struck lightly.
+  // Played at the reader's next breath: over the voice, the microphone takes
+  // them in and the model writes them as sounds said
+  let chimeT = null;
+  function chime(test = false) {
+    if (test) return ring();
+    if (!setting('sound') || chimeT) return;
+    chimeT = setInterval(() => {
+      if (G?.run && Date.now() - G.lastAct < 450) return;
+      clearInterval(chimeT); chimeT = null;
+      if (G?.run) ring();
+    }, 100);
+  }
+  function ring() {
+    const ctx = Mu.sound();
+    if (!ctx || ctx.state === 'closed') return;
+    if (ctx.state !== 'running') { ctx.resume().then(() => ctx.state === 'running' && play(ctx), () => {}); return; }
+    play(ctx);
+  }
+  function play(ctx) {
+    const t = ctx.currentTime + 0.01, out = ctx.createGain();
+    out.gain.value = 0.16;
+    out.connect(ctx.destination);
+    [[1046.5, 0], [784, 0.085]].forEach(([f, at]) => {
+      // a marimba-ish bar: the note and its fourth partial, which dies first
+      [[1, 1, 0.22], [4, 0.18, 0.05]].forEach(([mul, amp, len]) => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = f * mul;
+        g.gain.setValueAtTime(0, t + at);
+        g.gain.linearRampToValueAtTime(amp, t + at + 0.004);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + at + len);
+        o.connect(g); g.connect(out);
+        o.start(t + at); o.stop(t + at + len + 0.02);
+      });
+    });
+  }
 
-  function note(ai) {
-    const a = log().ayas[ai];
-    return a && !a.done ? `أخطأت هنا ${times(a.n)} · آخرها ${ago(a.last)}` : '';
+  // ---- the aya bar: how this aya went in التسميع
+
+  // an aya's counts from before they were kept: its mistakes from the sessions
+  // still in the log, its clean days towards «mastered»
+  function statsFrom(l, ai) {
+    const st = { r: 0, w: 0, h: [], wc: {} };
+    for (const s of [...l.sessions].reverse()) {
+      const mine = (s.list || []).filter(x => x[0] === ai);
+      if (!mine.length) continue;
+      st.w++;
+      const skip = mine.some(x => x[1] < 0);
+      if (!skip) mine.forEach(([, wi]) => { st.wc[wi] = (st.wc[wi] || 0) + 1; });
+      st.h.push([s.t, skip ? -1 : mine.length]);
+    }
+    const a = l.ayas[ai];
+    if (a) {
+      st.r = a.ok.length;
+      for (const wi of Object.keys(a.words)) st.wc[wi] ||= 1;
+      if (!st.w) st.w = 1;
+    }
+    st.h = st.h.slice(-12);
+    return st;
+  }
+  // the card in the aya bar: right and wrong, the last readings, the words got wrong
+  function card(ai) {
+    const l = log(), a = l.ayas[ai], st = l.stats?.[ai] || (a ? statsFrom(l, ai) : null);
+    if (!st || !(st.r + st.w)) return '';
+    const toks = ayaTokens(ai), last = st.h.length ? st.h[st.h.length - 1][0] : a?.last;
+    const words = Object.entries(st.wc).map(([wi, n]) => [+wi, n]).filter(([wi]) => toks[wi])
+      .sort((x, y) => y[1] - x[1] || x[0] - y[0]).slice(0, 8);
+    const kind = wi => a && !a.done ? a.words[wi] : null;
+    const state = a?.done ? `<span class="rc-ab-done">متقنة</span>`
+      : a ? `<span class="rc-ab-m"><span class="rc-dots" aria-label="${ar(a.ok.length)} من ${ar(MASTER_DAYS)} قراءات صحيحة">${[0, 1, 2].map(j => `<i${j < a.ok.length ? ' class="on"' : ''}></i>`).join('')}</span>للإتقان</span>` : '';
+    return `<div class="rc-ab">
+      <div class="rc-ab-top">
+        <span class="rc-ab-n ok"><b>${ar(st.r)}</b>صحيحة</span>
+        <span class="rc-ab-n bad"><b>${ar(st.w)}</b>بأخطاء</span>
+        ${st.h.length ? `<span class="rc-ab-h" aria-label="آخر القراءات">${st.h.map(([, e]) => `<i class="${e === 0 ? 'ok' : e < 0 ? 'skip' : 'bad'}"></i>`).join('')}</span>` : ''}
+        ${state}
+      </div>
+      ${words.length ? `<div class="rc-ab-w">${words.map(([wi, n]) => `<button data-rc-word="${ai}:${wi}" class="${kind(wi) ? 'now ' + kind(wi) : ''}"><span style="font-family:${R.font}">${esc(toks[wi])}</span>${n > 1 ? `<small>×${ar(n)}</small>` : ''}</button>`).join('')}</div>` : ''}
+      ${last ? `<small class="rc-ab-last">آخر تسميع ${ago(last)}</small>` : ''}
+    </div>`;
+  }
+  // a word from the card, shown on the page
+  function showWord(ai, wi) {
+    const w = ayaWords(ai)[wi];
+    if (!w) return;
+    const go = () => {
+      const el = [...document.querySelectorAll(`.page[data-page="${w.p}"] .w:not(.end)`)][w.n];
+      if (!el) return;
+      el.classList.remove('rc-pointed'); void el.offsetWidth; el.classList.add('rc-pointed');
+      setTimeout(() => el.classList.remove('rc-pointed'), 1600);
+    };
+    if (w.p !== S.page) { goTo(w.p); setTimeout(go, 350); } else go();
   }
 
   // ---- the «التسميع» panel: progress, weak spots, sessions and settings
@@ -835,8 +954,10 @@ const Recite = (() => {
     return last != null && R.ayas[last] ? last : pageInfo(S.page).first;
   }
 
+  const SET_ON = { sound: true }; // settings on unless turned off
+  const setting = id => !!store.get('recite.' + id, SET_ON[id] ?? false);
   const toggle = (id, label, sub) => {
-    const on = !!store.get('recite.' + id, false);
+    const on = setting(id);
     return `<button class="row rc-set" data-rc-set="${id}" role="switch" aria-checked="${on}">
       <span class="main"><span class="t">${label}</span><span class="s">${sub}</span></span><span class="tog${on ? ' on' : ''}"><i></i></span></button>`;
   };
@@ -1014,6 +1135,8 @@ const Recite = (() => {
     function setHTML() {
       return `<div class="group">
         ${toggle('hide', 'ابدأ والكلمات مخفية', 'تظهر كل كلمة حين تقرؤها')}
+        ${toggle('sound', 'صوت عند الخطأ', 'نغمة خفيفة حين تُعلَّم كلمة')}
+        ${toggle('blind', 'تسميع أعمى', 'مع الإخفاء: لا أثر لما بعدك، فلا عدد للكلمات ولا أرقام للآيات')}
         ${toggle('weak', 'مواضع الضعف في المصحف', 'خط منقّط خفيف تحت كلمات أخطأت فيها')}
         <div class="row rc-goal"><span class="main"><span class="t">هدف يومي</span><span class="s">عدد الآيات التي تسمّعها كل يوم</span></span>
           <span class="rc-chips">${[0, 5, 10, 20].map(n => `<button data-rc-goal="${n}"${goal === n ? ' class="on"' : ''}>${n ? ar(n) : 'لا'}</button>`).join('')}</span></div>
@@ -1059,22 +1182,32 @@ const Recite = (() => {
     const have = await Mu.savedVariants(), bench = Mu.bench(), c = Mu.choice();
     if (!$('#rcModels')) return;
     s.textContent = testing ? `نختبر النماذج على جهازك… ${testing}`
-      : bench ? `اختبرناها على جهازك ${ago(bench.at)}: الأسرع يكتب ما تقرؤه أسرع، وكلها بالدقة نفسها تقريبًا`
+      : bench ? `الأساسي ٤ بت، على الأسرع في جهازك (اختبرناه ${ago(bench.at)}). يكتب ما تقرؤه أسرع، ويكفي لكشف الأخطاء`
       : 'لم نختبرها على جهازك بعد';
     b.innerHTML = `<button class="rc-not" data-rc-model="probe"${testing ? ' disabled' : ''}>${bench ? 'اختبر من جديد' : 'اختبر جهازك'}</button>`;
     const diag = $('#rcDiag');
     if (diag) diag.hidden = !Mu.ready();
     const times = bench?.times || {}, ok = Object.values(times).filter(x => x != null), fastest = ok.length ? Math.min(...ok) : null;
-    box.innerHTML = Mu.CANDS.map(x => {
+    const row = x => {
       const t = times[x.id], on = c?.id === x.id, got = have[x.variant];
-      const speed = !bench ? '<span class="rc-mt">لم يُختبر</span>'
-        : t == null ? '<span class="rc-mt na">لا يعمل على جهازك</span>'
+      const speed = t === undefined ? '<span class="rc-mt">لم يُختبر</span>'
+        : t === null ? '<span class="rc-mt na">لا يعمل على جهازك</span>'
         : `<span class="rc-mt">نحو ${ar(t)} م.ث</span><span class="rc-mbar"><i style="width:${Math.max(6, Math.round(fastest / t * 100))}%"></i></span>`;
-      const tags = (bench && t == null ? [] : [x.id === bench?.best ? 'الأسرع' : '', on ? 'المستعمل' : '', got ? 'على جهازك' : '']).filter(Boolean)
+      const tags = (t === null ? [] : [x.id === bench?.best ? 'الأسرع' : '', on ? 'المستعمل' : '', got ? 'على جهازك' : '']).filter(Boolean)
         .map(k => `<span class="rc-tag${k === 'المستعمل' ? ' on' : ''}">${k}</span>`).join('');
-      return `<button class="rc-m${on ? ' on' : ''}" data-rc-pick="${x.id}"${bench && t == null ? ' disabled' : ''}>
+      return `<button class="rc-m${on ? ' on' : ''}" data-rc-pick="${x.id}"${t === null ? ' disabled' : ''}>
         <span class="rc-mn">${MU_NAMES[x.id]}<small>${ar(x.mb)} م.ب</small></span>${speed}<span class="rc-tags">${tags}</span></button>`;
-    }).join('') + (Object.values(have).some(Boolean) ? `<div class="rc-mfoot">${Object.entries(have).filter(([, v]) => v).map(([k]) =>
+    };
+    const base = Mu.CANDS.filter(x => Mu.BASE_IDS.includes(x.id)), big = Mu.CANDS.filter(x => !Mu.BASE_IDS.includes(x.id));
+    const onBig = big.some(x => x.id === c?.id), bigTested = big.some(x => times[x.id] !== undefined);
+    box.innerHTML = base.map(row).join('')
+      + `<details class="rc-big"${onBig || box.querySelector('.rc-big[open]') ? ' open' : ''}><summary><span class="main"><span class="t">النموذج الكبير · اختياري</span>
+          <span class="s">أدق قليلًا في الحركات والمدود، وتنزيله أكبر وأبطأ على أكثر الأجهزة. يُنزَّل حين تختاره.</span></span><svg viewBox="0 0 24 24" class="go"><path d="M14.5 6l-6 6 6 6"/></svg></summary>
+        ${big.map(row).join('')}
+        ${bigTested ? '' : `<button class="rc-not rc-bigtest" data-rc-model="probe"${testing ? ' disabled' : ''}>اختبرها على جهازك</button>`}
+        ${onBig ? `<button class="rc-not rc-bigtest" data-rc-pick="${times['q4-gpu'] != null && times['q4-gpu'] < (times['q4-cpu'] ?? Infinity) ? 'q4-gpu' : 'q4-cpu'}">العودة إلى النموذج الأساسي (٤ بت)</button>` : ''}
+      </details>`
+      + (Object.values(have).some(Boolean) ? `<div class="rc-mfoot">${Object.entries(have).filter(([, v]) => v).map(([k]) =>
       `<button class="rc-not" data-rc-delv="${k}">حذف ${k === 'q8' ? '٨ بت' : k === 'q4' ? '٤ بت' : '١٦ بت'} من جهازك</button>`).join('')}</div>` : '');
   }
 
@@ -1129,7 +1262,7 @@ const Recite = (() => {
       if (md.dataset.rcModel === 'get') withModel(() => mounted());
       else if (md.dataset.rcModel === 'probe' && MU()) {
         paintModels('');
-        Mu.probe((n, all) => paintModels(`${ar(n)} من ${ar(all)}`), true).then(() => { paintModels(); toast('انتهى الاختبار'); }, () => { paintModels(); toast('تعذر الاختبار على هذا الجهاز'); });
+        Mu.probe((n, all) => paintModels(`${ar(n)} من ${ar(all)}`), true, true).then(() => { paintModels(); toast('انتهى الاختبار'); }, () => { paintModels(); toast('تعذر الاختبار على هذا الجهاز'); });
       }
       else (MU() ? Mu.remove() : Listen.remove()).then(() => { toast('حُذف النموذج من جهازك'); mounted(); });
       return true;
@@ -1154,8 +1287,9 @@ const Recite = (() => {
     if (su) { closeSheet(); goTo(R.ayas[R.suraStart[+su.dataset.rcSura]][2]); return true; }
     const set = e.target.closest('[data-rc-set]');
     if (set) {
-      const k = 'recite.' + set.dataset.rcSet;
-      store.set(k, !store.get(k, false));
+      const id = set.dataset.rcSet;
+      store.set('recite.' + id, !setting(id));
+      if (id === 'sound' && setting(id) && MU()) { Mu.prime(); chime(true); }
       weakMap = null;
       const y = $('#sheetBody').scrollTop;
       renderSheet();
@@ -1254,5 +1388,5 @@ const Recite = (() => {
 
   syncBubble();
 
-  return { start, cancel, paint, onTap, note, syncBubble, mic, panelHTML, mounted, onSheetClick, active: () => !!G };
+  return { start, cancel, paint, onTap, card, showWord, syncBubble, mic, panelHTML, mounted, onSheetClick, active: () => !!G };
 })();
