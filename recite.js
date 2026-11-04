@@ -96,6 +96,14 @@ const Recite = (() => {
     });
   }
 
+  // the model was loaded again while listening (see Mu.recover): the reading
+  // goes on from where it was, or the search starts over
+  Mu.lost(err => {
+    if (err) { if (F) stopFind(); if (G?.run) pause(); toast('تعذر تحضير التسميع — أعد فتح التطبيق'); return; }
+    if (F) { stopFind(); findMu(); return; }
+    if (G?.run && G.mu) { pause(); setTimeout(() => { if (G && !G.run && !G.done) resume(); }, 100); }
+  });
+
   // p: 0..1 while downloading, 'probe' while timing the models on this device
   function paintDl(p) {
     const busy = p != null;
@@ -141,7 +149,7 @@ const Recite = (() => {
     if (MU()) {
       const starts = [];
       words.forEach((w, k) => { if (w.wi === 0) starts.push(k); });
-      G.mu = { c: 0, w0: opts.w0 || 0, cut: 0, final: '', tent: '', starts, lead: true, stream: !!opts.stream };
+      G.mu = { c: 0, w0: opts.w0 || 0, cut: 0, final: '', tent: '', starts, lead: true, open: true, stream: !!opts.stream };
       G.pos = G.tent = G.mu.w0; // found by reciting from inside the aya: from that word
       G.heard = {}; // k -> { got, want }: what was heard for a word marked, and how it should sound
     }
@@ -188,7 +196,7 @@ const Recite = (() => {
         const m = g.mu;
         m.w0 = Math.max(0, Math.min(G.pos - m.starts[m.c], G.words[m.starts[m.c]].of));
         if (m.w0 >= G.words[m.starts[m.c]].of && m.c + 1 < G.ayas.length) { m.c++; m.w0 = 0; }
-        m.cut = 0; m.final = ''; m.conf = null; m.alts = null; m.lead = false;
+        m.cut = 0; m.final = ''; m.conf = null; m.alts = null; m.lead = false; m.open = true;
       });
     } else Listen.stop();
     paintBar();
@@ -238,6 +246,14 @@ const Recite = (() => {
   function muFollow(done) {
     const m = G.mu, U = Match.units(m.final + m.tent), uf = Match.units(m.final).length;
     const Uc = Match.unitConf(m.final + m.tent, m.conf), Ua = Match.unitAlts(m.final + m.tent, m.alts);
+    // each stretch read (the first, and after every pause) may open with an
+    // isti'adha or a basmala: set aside, and nothing marked while it is said
+    if (m.open && m.c < G.ayas.length && U.length - m.cut >= 6) {
+      const ai = G.ayas[m.c], o = Mu.opening(Match.text(U.slice(m.cut)), m.w0 === 0 && Mu.expect(ai).ph.startsWith('بِسمِ'));
+      if (o === null && !done) { paintBar(); return; }
+      m.open = false;
+      if (o?.cut) m.cut += o.cut;
+    }
     for (let guard = 0; guard < 40 && m.c < G.ayas.length; guard++) {
       const ai = G.ayas[m.c], nx = done ? null : G.ayas[m.c + 1];
       const cur = Mu.expect(ai, m.w0), ex = nx != null ? Mu.expect2(cur, Mu.expect(nx)) : cur;
@@ -559,8 +575,12 @@ const Recite = (() => {
     const quiet = Date.now() - f.grew > QUIET;
     if (n < 24) return;
     if (quiet && f.quietAt === n) return; // nothing new since the last quiet check
+    // a look takes longer as the reading grows (most of a second on a slow
+    // phone): keep the page free between looks at least as long as a look took
+    if (Date.now() < (f.nextAt || 0)) return;
     if (quiet) f.quietAt = n;
-    const r = locateMu(h, d.conf, d.alts);
+    const t0 = Date.now(), r = locateMu(h, d.conf, d.alts);
+    f.nextAt = Date.now() + (Date.now() - t0);
     f.same = r && f.last != null && Math.abs(r.g - f.last) <= 1 ? f.same + 1 : 0;
     f.last = r ? r.g : null;
     if (r && !f.found) { f.found = true; syncBubble(); }

@@ -107,6 +107,7 @@ const Mu = (() => {
   }
 
   let worker = null, ready = false, loading = null, onText = null, onFlushed = null, onRecording = null, shared = null, info = null;
+  let fails = 0, onLost = null;
   function reset() {
     worker?.terminate();
     worker = null; ready = false; loading = null;
@@ -117,7 +118,8 @@ const Mu = (() => {
     if (loading) return loading;
     const c = cand();
     if (!c) return Promise.reject(new Error('no model chosen'));
-    shared = self.crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined'
+    // (kept across a reload of the model, as the microphone writes into it)
+    if (!shared) shared = self.crossOriginIsolated && typeof SharedArrayBuffer !== 'undefined'
       ? { ring: new Float32Array(new SharedArrayBuffer(4 * 16000 * 30)), meta: new Int32Array(new SharedArrayBuffer(4)), time: new Float64Array(new SharedArrayBuffer(8)) }
       : null;
     return loading = new Promise((resolve, reject) => {
@@ -125,24 +127,42 @@ const Mu = (() => {
       worker.onmessage = ({ data: d }) => {
         if (d.type === 'progress') progress?.(d.loaded / d.total);
         if (d.type === 'ready') { ready = true; info = d; resolve(); }
-        if (d.type === 'text') onText?.(d);
+        if (d.type === 'text') { fails = 0; onText?.(d); }
         if (d.type === 'flushed') { const f = onFlushed; onFlushed = null; f?.(); }
         if (d.type === 'recording') { const f = onRecording; onRecording = null; f?.(d.samples); }
-        if (d.type === 'error') { if (!ready) { reset(); reject(new Error(d.message)); } else console.warn('Muaalem:', d.message); }
+        if (d.type === 'error') {
+          if (!ready) { reset(); reject(new Error(d.message)); return; }
+          console.warn('Muaalem:', d.message);
+          if (++fails >= 3) recover();
+        }
       };
       worker.onerror = e => { if (!ready) { reset(); reject(new Error(e.message || 'worker failed')); } };
       worker.postMessage({ type: 'load', variant: c.variant, ep: c.ep, threads: threads(), shared });
     });
   }
 
+  // the model stopped working while listening (on phones, the GPU is sometimes
+  // taken back): load it again, from the cache, and tell the page (onLost), which
+  // goes on from where the reading was
+  function recover() {
+    fails = 0;
+    const m = mic;
+    mic = null;
+    if (m) { m.on = false; m.unwatch?.(); release(m); }
+    const f = onFlushed; onFlushed = null; f?.();
+    reset();
+    load().then(() => onLost?.(), () => onLost?.(new Error('model lost')));
+  }
+
   // ---- the microphone, captured on the audio thread (capture.js)
   let actx = null, tapReady = null, mic = null;
+  function context() {
+    actx = new (window.AudioContext || window.webkitAudioContext)();
+    tapReady = actx.audioWorklet.addModule('capture.js');
+  }
   // inside the tap that starts listening (phones only allow sound from a tap)
   function prime() {
-    if (!actx) {
-      actx = new (window.AudioContext || window.webkitAudioContext)();
-      tapReady = actx.audioWorklet.addModule('capture.js');
-    }
+    if (!actx || actx.state === 'closed') context();
     actx.resume();
   }
   // handler({ final, tent, ms, lag }) as the reading grows
@@ -150,16 +170,57 @@ const Mu = (() => {
     onText = handler;
     if (mic) return;
     prime();
+    mic = { on: true };
+    try { await capture(mic); } catch (e) { mic = null; throw e; }
+    worker.postMessage({ type: 'start' });
+    watch(mic);
+  }
+  // the microphone into the tap; m: the listening it is for
+  async function capture(m) {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: RAW_MIC });
+    if (!m.on) { stream.getTracks().forEach(t => t.stop()); return; }
     await tapReady;
     const clock0 = now() - actx.currentTime * 1000;
     const node = new AudioWorkletNode(actx, 'tap', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], processorOptions: { shared, clock0 } });
-    if (!shared) node.port.onmessage = e => worker?.postMessage({ type: 'audio', samples: e.data.samples, at: e.data.at });
+    m.fed = Date.now();
+    node.port.onmessage = e => { m.fed = Date.now(); if (!shared) worker?.postMessage({ type: 'audio', samples: e.data.samples, at: e.data.at }); };
     node.connect(actx.destination); // silent
     const src = actx.createMediaStreamSource(stream);
     src.connect(node);
-    mic = { stream, src, node };
-    worker.postMessage({ type: 'start' });
+    Object.assign(m, { stream, src, node });
+  }
+  function release(m) {
+    m.node?.port.postMessage('stop'); m.src?.disconnect(); m.node?.disconnect(); m.stream?.getTracks().forEach(t => t.stop());
+    m.node = m.src = m.stream = null;
+  }
+  // phones stop the microphone or the sound behind the page's back (a call,
+  // another app, the screen locked, a recitation played): when nothing comes in
+  // while listening, take the microphone again, on a new audio engine if needed
+  function watch(m) {
+    let seen = shared ? Atomics.load(shared.meta, 0) : 0, busy = false;
+    const kick = () => { if (actx && actx.state !== 'running' && actx.state !== 'closed') actx.resume(); };
+    const tap = () => kick();
+    const vis = () => { if (!document.hidden) kick(); };
+    document.addEventListener('pointerdown', tap, true);
+    document.addEventListener('visibilitychange', vis);
+    m.unwatch = () => { clearInterval(m.timer); document.removeEventListener('pointerdown', tap, true); document.removeEventListener('visibilitychange', vis); };
+    m.timer = setInterval(async () => {
+      if (!m.on || busy || document.hidden) return;
+      if (shared) { const w = Atomics.load(shared.meta, 0); if (w !== seen) { seen = w; m.fed = Date.now(); } }
+      const dead = m.stream?.getAudioTracks().some(t => t.readyState === 'ended');
+      if (!dead && actx.state === 'running' && Date.now() - m.fed < 1500) return;
+      busy = true;
+      try {
+        kick();
+        await new Promise(r => setTimeout(r, 300));
+        if (!m.on) return;
+        if (!dead && shared && Atomics.load(shared.meta, 0) !== seen) return; // it came back by itself
+        release(m);
+        if (actx.state !== 'running') { try { actx.close(); } catch {} context(); actx.resume(); }
+        await capture(m);
+        if (actx.state !== 'running') toast('اضغط على الشاشة ليعود الميكروفون');
+      } catch { /* tried again next time */ } finally { busy = false; m.fed = Date.now(); }
+    }, 1000);
   }
   // the handler only (the same reading goes on: the found aya takes it over)
   const listen = handler => { onText = handler; };
@@ -168,7 +229,8 @@ const Mu = (() => {
     const m = mic;
     mic = null;
     if (!m) return Promise.resolve();
-    m.node.port.postMessage('stop'); m.src.disconnect(); m.node.disconnect(); m.stream.getTracks().forEach(t => t.stop());
+    m.on = false; m.unwatch?.();
+    release(m);
     return new Promise(r => { onFlushed = r; worker.postMessage({ type: 'flush' }); });
   }
 
@@ -189,9 +251,14 @@ const Mu = (() => {
   }
 
   // ---- how each aya sounds: [phonetic script, word ranges, words starting with ٱ]
-  let phon = null, phonLoading = null;
+  // and, per aya, how real reciters reading it right were heard where the rules
+  // alone would mark them: { ai: { wi: [heard, …] } } (data/refs-hafs.json; optional)
+  let phon = null, phonLoading = null, refs = null;
   function sounds() {
-    return phonLoading ||= fetch(`data/phon-hafs.json?v=${DATA_VERSION}`).then(r => r.json()).then(d => { phon = d; });
+    return phonLoading ||= Promise.all([
+      fetch(`data/phon-hafs.json?v=${DATA_VERSION}`).then(r => r.json()).then(d => { phon = d; }),
+      fetch(`data/refs-hafs.json?v=${DATA_VERSION}`).then(r => r.ok ? r.json() : null).then(d => { refs = d; }, () => {}),
+    ]);
   }
   const cache = new Map();
   // what aya ai should sound like from its word w0 on (as match.js takes it)
@@ -202,6 +269,8 @@ const Mu = (() => {
     const spans = [];
     for (let i = w0 * 2; i < sp.length; i += 2) spans.push([sp[i] - o, sp[i + 1] - o]);
     const e = { ph: ph.slice(o), spans, wasl: wasl.filter(k => k >= w0).map(k => k - w0) };
+    const r = refs?.[ai];
+    if (r) { e.refs = []; for (const wi in r) if (wi >= w0) e.refs[wi - w0] = r[wi]; }
     if (cache.size > 400) cache.clear();
     cache.set(key, e);
     return e;
@@ -211,6 +280,7 @@ const Mu = (() => {
     const k = a.ph + '|' + b.ph;
     if (cache.has(k)) return cache.get(k);
     const n = a.ph.length, e = { ph: a.ph + b.ph, spans: a.spans.concat(b.spans.map(([x, y]) => [x + n, y + n])), wasl: a.wasl.concat(b.wasl.map(k => k + a.spans.length)) };
+    if (a.refs || b.refs) { e.refs = []; a.refs?.forEach((v, i) => { e.refs[i] = v; }); b.refs?.forEach((v, i) => { e.refs[i + a.spans.length] = v; }); }
     cache.set(k, e);
     return e;
   }
@@ -262,31 +332,54 @@ const Mu = (() => {
     const where = g => { let lo = 0, hi = phon.length - 1; while (lo < hi) { const mid = (lo + hi + 1) >> 1; if (word0[mid] <= g) lo = mid; else hi = mid - 1; } return [lo, g - word0[lo]]; };
     return quran = { s, at: Int32Array.from(at), word0, grams, where };
   }
-  // what readers say before the aya: the isti'adha and the basmala, both or one
-  const LEAD_WORDS = ['ءَعُۥۥذُ', 'بِللَااهِ', 'مِنَ', 'ششَيطَاانِ', 'ررَجِۦۦۦۦم', 'بِسمِ', 'للَااهِ', 'ررَحمَاانِ', 'ررَحِۦۦۦۦم'];
-  const OPENINGS = [[0, 9], [0, 5], [5, 9]].map(([a, b]) => {
-    const e = { ph: '', spans: [], wasl: [] };
-    for (const w of LEAD_WORDS.slice(a, b)) { e.spans.push([e.ph.length, e.ph.length + w.length]); e.ph += w; }
+  // what readers say before the aya: an isti'adha (in any of its usual forms)
+  // and the basmala, both or one; the isti'adha's last word as said joined on too
+  const ISTIADHA = [
+    ['ءَعُۥۥذُ', 'بِللَااهِ', 'سسَمِۦۦعِ', 'لعَلِۦۦمِ', 'مِنَ', 'ششَيطَاانِ', 'ررَجِۦۦمِ', 'مِن', 'هَمزِهِۦۦ', 'وَنَفخِهِۦۦ', 'وَنَفثِه'],
+    ['ءَعُۥۥذُ', 'بِللَااهِ', 'سسَمِۦۦعِ', 'لعَلِۦۦمِ', 'مِنَ', 'ششَيطَاانِ', 'ررَجِۦۦۦۦم'],
+    ['ءَعُۥۥذُ', 'بِللَااهِ', 'لعَظِۦۦمِ', 'مِنَ', 'ششَيطَاانِ', 'ررَجِۦۦۦۦم'],
+    ['ءَستَعِۦۦذُ', 'بِللَااهِ', 'مِنَ', 'ششَيطَاانِ', 'ررَجِۦۦۦۦم'],
+    ['ءَعُۥۥذُ', 'بِللَااهِ', 'مِنَ', 'ششَيطَاانِ', 'ررَجِۦۦۦۦم'],
+  ];
+  const BASMALA = ['بِسمِ', 'للَااهِ', 'ررَحمَاانِ', 'ررَحِۦۦۦۦم'];
+  const joined = f => f[f.length - 1] === 'ررَجِۦۦۦۦم' ? [...f.slice(0, -1), 'ررَجِۦۦمِ'] : f;
+  // longest first: an isti'adha and a basmala are found as both, not as the isti'adha alone
+  const OPENINGS = [
+    ...ISTIADHA.flatMap(f => [[...f, ...BASMALA], [...joined(f), ...BASMALA]].map(w => [w, true])),
+    ...ISTIADHA.flatMap(f => [f, joined(f)].map(w => [w, false])),
+    [BASMALA, true],
+  ].filter(([w], i, all) => all.findIndex(([v]) => v.join() === w.join()) === i).map(([words, basmala]) => {
+    const e = { ph: '', spans: [], wasl: [], basmala };
+    for (const w of words) { e.spans.push([e.ph.length, e.ph.length + w.length]); e.ph += w; }
+    e.m = Match.units(e.ph).length; e.first = Match.text(Match.units(e.ph).slice(0, 1));
     return e;
   });
-  // how many heard units an isti'adha or basmala said first takes (0: none;
-  // null: one is being said, so wait for the rest)
-  function opening(heard) {
+  // what an isti'adha or basmala said first takes: { cut: heard units (0: none),
+  // basmala: it ends with one }, or null: one is being said, so wait for the rest;
+  // noBasmala: the aya read is al-Fatiha's first, the basmala itself
+  const HARAKA = /^[\u064B-\u0652\u06E5\u06E6]+$/;
+  function opening(heard, noBasmala = false) {
     const U = Match.units(heard);
     for (const e of OPENINGS) {
-      const m = Match.units(e.ph).length;
-      if (U.length < m + 3) {
-        const st = Match.words(e, heard, heard.length, false);
-        if (st[0].state !== 'todo' && st.every(x => x.state !== 'err')) return null;
+      if (noBasmala && e.basmala) continue;
+      if (U.length && Match.text(U.slice(0, 1)) !== e.first) continue; // its first sound, as itself (not فَ for its ءَ)
+      if (U.length < e.m + 3) {
+        // all that was heard is its beginning, said right
+        const st = Match.words(e, heard, heard.length, false), said = st.filter(x => x.state !== 'todo');
+        if (said.length && st[0].state !== 'todo' && st[0].at?.[0] <= 1 && said.every(x => x.state !== 'err') && said[said.length - 1].at?.[1] >= U.length - 3) return null;
         continue;
       }
       // the shortest start of the reading that is all of it, said right
       for (let x = -3; x <= 3; x++) {
-        const pre = Match.text(U.slice(0, m + x)), st = Match.words(e, pre, pre.length, true);
-        if (st.filter(y => y.state !== 'ok').length <= (st.length >= 4 ? 1 : 0) && st[st.length - 1].state === 'ok') return st[st.length - 1].at[1];
+        const pre = Match.text(U.slice(0, e.m + x)), st = Match.words(e, pre, pre.length, true);
+        if (st.filter(y => y.state !== 'ok').length > (st.length >= 4 ? 1 : 0) || st[0].state !== 'ok' || st[st.length - 1].state !== 'ok') continue;
+        // the last word's haraka, when it was joined on to the aya, goes with it
+        let cut = st[st.length - 1].at[1];
+        while (cut < U.length && HARAKA.test(Match.text(U.slice(cut, cut + 1)))) cut++;
+        return { cut, basmala: e.basmala };
       }
     }
-    return 0;
+    return { cut: 0, basmala: false };
   }
   const BUCKET = 8;    // letters: starts this close vote together
   const COMMON = 4000; // a run found in more places than this says little
@@ -299,11 +392,11 @@ const Mu = (() => {
     // first aya here, which would be found instead of the aya read after it)
     const lead = opening(heard);
     if (lead === null) return [];
-    if (lead > 0) {
-      const U = Match.units(heard), rest = Match.text(U.slice(lead));
-      const found = locate(rest, conf && Match.unitConf(heard, conf).slice(lead), alts && Match.unitAlts(heard, alts).slice(lead), n);
-      // al-Fatiha read from its start: from its basmala
-      for (const x of found) if (x.ai === 1 && x.w === 0) Object.assign(x, { ai: 0, g: 0 });
+    if (lead.cut > 0) {
+      const U = Match.units(heard), rest = Match.text(U.slice(lead.cut));
+      const found = locate(rest, conf && Match.unitConf(heard, conf).slice(lead.cut), alts && Match.unitAlts(heard, alts).slice(lead.cut), n);
+      // al-Fatiha read from its start, its basmala and all: from its basmala
+      if (lead.basmala) for (const x of found) if (x.ai === 1 && x.w === 0) Object.assign(x, { ai: 0, g: 0 });
       return found;
     }
     const q = whole(), h = skeleton(heard).slice(0, 160), votes = new Map();
@@ -347,8 +440,8 @@ const Mu = (() => {
   }
 
   return {
-    CANDS, choice, mb, probe, saved, savedVariants, use, bench: () => store.get('mu.bench', null), remove, load, prime, start, listen, stop, sounds, expect, expect2, locate,
-    ready: () => ready, listening: () => !!mic, info: () => info, recording,
+    CANDS, choice, mb, probe, saved, savedVariants, use, bench: () => store.get('mu.bench', null), remove, load, prime, start, listen, stop, sounds, expect, expect2, locate, opening,
+    ready: () => ready, listening: () => !!mic, lost: f => { onLost = f; }, info: () => info, recording,
     reprobe: () => { store.set('mu.choice', null); reset(); },
   };
 })();

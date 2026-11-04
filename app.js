@@ -1995,9 +1995,19 @@ $('#doneLater').onclick = () => hide($('#done'));
   }
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
     // reload once when an updated service worker takes over, so updates show up;
-    // on the first visit too, as its headers are what let recitation use several cores
-    const hadController = !!navigator.serviceWorker.controller;
-    navigator.serviceWorker.addEventListener('controllerchange', () => { if (hadController || !self.crossOriginIsolated) location.reload(); });
+    // on the first visit too, as its headers are what let recitation use several cores.
+    // Never in the middle of something: right after opening, or else once the app
+    // is out of sight (switched away from, or the phone locked) with no recitation going
+    const hadController = !!navigator.serviceWorker.controller, opened = Date.now();
+    const busy = () => document.body.classList.contains('rc-on') || document.body.classList.contains('rc-find');
+    let stale = false;
+    const reloadIfIdle = () => { if (stale && document.hidden && !busy()) location.reload(); };
+    document.addEventListener('visibilitychange', reloadIfIdle);
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!hadController && self.crossOriginIsolated) return;
+      if (Date.now() - opened < 4000 && !busy()) location.reload();
+      else { stale = true; reloadIfIdle(); }
+    });
     navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
   }
 })();
