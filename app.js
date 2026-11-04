@@ -360,7 +360,7 @@ function paintMarks(root = document) {
 // would be under one, the bar slides up under the page header instead (or to
 // wherever it covers less), so the aya is always in full view; in landscape,
 // where the page scrolls, the aya is scrolled into view as well.
-const BARS = ['#ayaBar', '#player', '#recBar'];
+const BARS = ['#ayaBar', '#player', '#recBar', '#recWord'];
 let clearRaf = 0;
 function keepClear() {
   cancelAnimationFrame(clearRaf);

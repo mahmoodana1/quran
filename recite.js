@@ -142,6 +142,7 @@ const Recite = (() => {
       const starts = [];
       words.forEach((w, k) => { if (w.wi === 0) starts.push(k); });
       G.mu = { c: 0, w0: 0, cut: 0, final: '', tent: '', starts, lead: true, stream: !!opts.stream };
+      G.heard = {}; // k -> { got, want }: what was heard for a word marked, and how it should sound
     }
     // found by reciting: what was already said counts as said
     if (opts.seed) { const r = align(opts.seed, 0, words[0].of); if (r) G.pos = Math.min(r.end, words.length - 1); }
@@ -242,7 +243,7 @@ const Recite = (() => {
       const st = Match.words(ex, sub, fin, done, { freeLead: m.lead, conf: Uc.slice(m.cut) });
       const n0 = cur.spans.length;
       const begun = nx != null && st.slice(n0, n0 + 2).some(x => x.state === 'ok' || x.state === 'err');
-      muApply(st.slice(0, n0), begun);
+      muApply(st.slice(0, n0), begun, cur);
       if (!begun) { if (!done && muRelocate(st.slice(0, n0), sub, fin, Uc.slice(m.cut))) continue; break; }
       m.cut += st[n0].at[0]; m.c++; m.w0 = 0; m.lead = false;
     }
@@ -263,11 +264,12 @@ const Recite = (() => {
     if (t < 0) return;
     const part = { ph: cur.ph.slice(0, cur.spans[t][1]), spans: cur.spans.slice(0, t + 1), wasl: cur.wasl.filter(k => k <= t) };
     const fin = Match.words(part, sub, sub.length, true, { freeLead: m.lead, conf });
-    muApply(fin.concat(st.slice(t + 1)), false);
+    muApply(fin.concat(st.slice(t + 1)), false, cur);
   }
 
-  // the words of the aya being said, from w0: what each turned out to be
-  function muApply(states, closing) {
+  // the words of the aya being said, from w0 (cur: how they should sound):
+  // what each turned out to be, and what was heard for the ones marked
+  function muApply(states, closing, cur) {
     const m = G.mu, base = m.starts[m.c] + m.w0, skips = [];
     let pos = base, tent = base, fresh = false;
     states.forEach((x, i) => {
@@ -279,6 +281,7 @@ const Recite = (() => {
         pos = tent = k + 1;
         if (e) {
           if (G.errs[k] !== e && G.errs[k] !== 'hint') { G.errs[k] = e; fresh = true; }
+          if (cur?.spans[i]) G.heard[k] = { got: x.heard || '', want: cur.ph.slice(...cur.spans[i]) };
           if (e === 'skip') skips.push([k, 'skip']);
         } else if (G.errs[k] && G.errs[k] !== 'hint') delete G.errs[k];
       } else if (x.state === 'hear') tent = k + 1;
@@ -288,30 +291,38 @@ const Recite = (() => {
     if (fresh && navigator.vibrate) navigator.vibrate(12);
     warnSkipped(skips);
   }
-  // nothing of the aya being said is heard, but plenty is: another aya of the
-  // session it fits clearly (a skip ahead, or a step back)
+  // the aya being said doesn't fit what is heard (nothing of it, or mistakes
+  // piling up), but another aya of the session clearly does: a skip ahead (even
+  // to an aya that opens like the one skipped, as al-Mulk 2 and 3), or a step back
   function muRelocate(states, sub, fin, conf) {
     const m = G.mu;
-    if (Date.now() - (m.relocAt || 0) < 800 || states.some(x => x.state === 'ok')) return false;
+    const ok0 = states.filter(x => x.state === 'ok').length, bad0 = states.filter(x => x.state === 'err').length;
+    if (Date.now() - (m.relocAt || 0) < 800 || (ok0 && bad0 < 2)) return false;
     if (Match.units(sub).length < 25) return false;
     m.relocAt = Date.now();
     let best = null;
     for (let j = Math.max(0, m.c - 3); j < Math.min(G.ayas.length, m.c + 9); j++) {
-      if (j === m.c || j === m.c + 1) continue;
+      if (j === m.c) continue;
       const st = Match.words(Mu.expect(G.ayas[j]), sub, fin, false, { freeLead: true, conf });
       const ok = st.filter(x => x.state === 'ok').length, bad = st.filter(x => x.state === 'err').length;
-      if (ok >= 3 && ok / (ok + bad) >= 0.7 && (!best || ok > best.ok)) best = { j, ok };
+      if (ok >= Math.max(3, ok0 + 2) && ok / (ok + bad) >= 0.7 && (!best || ok > best.ok)) best = { j, ok };
     }
     if (!best) return false;
+    const from = m.starts[m.c] + m.w0;
     if (best.j > m.c) {
+      // what was heard for the aya left was the later one's: all of it is skipped
       const marks = [];
-      for (let k = G.pos; k < m.starts[best.j]; k++) { if (G.errs[k] !== 'hint') G.errs[k] = 'skip'; marks.push([k, 'skip']); }
+      for (let k = from; k < m.starts[best.j]; k++) { if (G.errs[k] !== 'hint') G.errs[k] = 'skip'; delete G.heard[k]; marks.push([k, 'skip']); }
       warnSkipped(marks);
-    } else toast(`رجعت إلى الآية ${ar(R.ayas[G.ayas[best.j]][1])}`);
+    } else {
+      for (let k = from; k < G.words.length && k < from + G.words[from].of; k++) { if (G.errs[k] !== 'hint') delete G.errs[k]; delete G.heard[k]; }
+      toast(`رجعت إلى الآية ${ar(R.ayas[G.ayas[best.j]][1])}`);
+    }
     m.c = best.j; m.w0 = 0; m.lead = true;
     G.pos = G.tent = m.starts[best.j];
     return true;
   }
+
 
   // a phrase from the microphone: recognised in order, then lined up
   function onPhrase(g, audio) {
@@ -757,6 +768,12 @@ const Recite = (() => {
     $('#rwWord').textContent = wordText(G.words[k]);
     $('#rwWord').style.fontFamily = R.font;
     $('#rwType').textContent = TYPES[G.errs[k]];
+    // what the model heard there, beside how the word should sound
+    const h = G.heard?.[k];
+    $('#rwHeard').hidden = !h;
+    $('#rwCopy').hidden = !h;
+    if (h) $('#rwHeard').innerHTML = `<span><small>سُمِع</small>${esc(h.got) || '—'}</span><span><small>المتوقَّع</small>${esc(h.want)}</span>`;
+    $('#recWord').classList.toggle('three', !!h);
     if (!G.done) show($('#recWord'));
     return true;
   }
@@ -1052,6 +1069,12 @@ const Recite = (() => {
     if (b.dataset.rw === 'say') speakWord(el);
     if (b.dataset.rw === 'gone') { G.gone.add(k); hide($('#recWord')); paint(); paintBar(); toast('أُزيلت من الأخطاء'); }
     if (b.dataset.rw === 'close') hide($('#recWord'));
+    if (b.dataset.rw === 'copy') {
+      // for reporting a wrong mark: where, the word, what was heard and expected
+      const w = G.words[k], h = G.heard?.[k] || {};
+      const text = `${ayaLabel(w.ai)} · ${wordText(w)} · ${TYPES[G.errs[k]]} · سُمِع: ${h.got || '—'} · المتوقَّع: ${h.want || ''} · ${MU() && Mu.choice() ? MU_NAMES[Mu.choice().id] : ''}`;
+      navigator.clipboard?.writeText(text).then(() => toast('نُسخ — أرسله لنحسّن التعرّف'), () => toast('تعذر النسخ'));
+    }
   });
 
   $('#riGo').onclick = async () => {

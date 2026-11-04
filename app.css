@@ -1108,6 +1108,12 @@ svg { fill: currentColor; }
 #recWord .acts-title b { font-size: 21px; font-weight: 400; line-height: 1.5; }
 #recWord .acts-title small { font-size: 12.5px; color: var(--gold-ink); }
 .rw-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#recWord.three .rw-row { grid-template-columns: 1.3fr 1.3fr 1fr; }
+/* what the model heard for the word, beside how it should sound */
+.rw-heard { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.rw-heard span { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 8px; border-radius: 12px;
+  background: var(--tint); font: 19px/1.6 rw-hafs, amiri, serif; word-break: break-all; text-align: center; }
+.rw-heard small { font: 11.5px/1.2 system-ui, sans-serif; color: var(--muted); }
 .rw-row button {
   height: 42px; border-radius: 14px; display: flex; align-items: center; justify-content: center; gap: 6px;
   font-size: 14px; font-weight: 600; background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--accent);
