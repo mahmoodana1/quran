@@ -1,5 +1,10 @@
 'use strict';
 
+// the microphone as it is: the browser's echo cancellation, noise suppression and
+// gain control are made for calls, and take recitation's long held sounds (madd,
+// ghunna) and echo for noise to remove; the model evens out loudness itself
+const RAW_MIC = { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+
 // التسميع for Hafs: Muaalem, a Quran recitation model that writes what the
 // reader actually said, harakat and all (mu-worker.js runs it, match.js lines
 // it up with the aya). The model files live in mahmoodana1/quran-models; the
@@ -145,7 +150,7 @@ const Mu = (() => {
     onText = handler;
     if (mic) return;
     prime();
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: RAW_MIC });
     await tapReady;
     const clock0 = now() - actx.currentTime * 1000;
     const node = new AudioWorkletNode(actx, 'tap', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], processorOptions: { shared, clock0 } });
