@@ -360,7 +360,7 @@ function paintMarks(root = document) {
 // would be under one, the bar slides up under the page header instead (or to
 // wherever it covers less), so the aya is always in full view; in landscape,
 // where the page scrolls, the aya is scrolled into view as well.
-const BARS = ['#ayaBar', '#player', '#recBar', '#recWord'];
+const BARS = ['#ayaBar', '#wordBar', '#player', '#recBar', '#recWord'];
 let clearRaf = 0;
 function keepClear() {
   cancelAnimationFrame(clearRaf);
@@ -370,7 +370,9 @@ function clearNow() {
   const bars = BARS.map(sel => $(sel)).filter(b => !b.hidden && !b.classList.contains('leaving'));
   const pg = slots[1]?.firstElementChild, ai = S.act ?? S.focus ?? S.play;
   let box = null;
-  if (ai != null && pg) for (const w of pg.querySelectorAll(`.w[data-a="${ai}"]`)) {
+  const wel = typeof WordCard !== 'undefined' && WordCard.el();
+  if (wel?.isConnected) { const r = wel.getBoundingClientRect(); box = { top: r.top, bottom: r.bottom }; }
+  else if (ai != null && pg) for (const w of pg.querySelectorAll(`.w[data-a="${ai}"]`)) {
     const r = w.getBoundingClientRect();
     if (!r.height) continue;
     box = box ? { top: Math.min(box.top, r.top), bottom: Math.max(box.bottom, r.bottom) } : { top: r.top, bottom: r.bottom };
@@ -495,13 +497,17 @@ function wordsOnPage(p, ai) {
   return n;
 }
 
+// a word on the page: its place in its aya (from 0)
+function wordIndex(el) {
+  const ai = +el.dataset.a, page = +el.closest('.page').dataset.page;
+  let wi = 0;
+  for (let p = R.ayas[ai][2]; p < page; p++) wi += wordsOnPage(p, ai);
+  return wi + [...el.closest('.page').querySelectorAll(`.w:not(.end)[data-a="${ai}"]`)].indexOf(el);
+}
+
 function speakWord(el) {
   if (R.id !== 'hafs') { toast('نطق الكلمة متاح في رواية حفص'); return; }
-  const ai = +el.dataset.a, page = +el.closest('.page').dataset.page;
-  let pos = 1;
-  for (let p = R.ayas[ai][2]; p < page; p++) pos += wordsOnPage(p, ai);
-  const words = [...el.closest('.page').querySelectorAll(`.w:not(.end)[data-a="${ai}"]`)];
-  pos += words.indexOf(el);
+  const ai = +el.dataset.a, pos = wordIndex(el) + 1;
   const [s, a] = META.hafs[R.ayas[ai][5]];
   const id = n => String(n).padStart(3, '0');
   if (!audio.paused) audio.pause();
@@ -525,8 +531,10 @@ wordAudio.addEventListener('error', () => { sayEl?.classList.remove('say'); if (
     pressed = false;
     const w = e.target.closest('.w');
     clearTimeout(pressT);
-    if (w && !w.classList.contains('end')) {
-      pressT = setTimeout(() => { pressed = true; speakWord(w); }, 420);
+    // a long press on a word: hear it, and its card (not while reciting: the
+    // microphone would take the sound in)
+    if (w && !w.classList.contains('end') && !Recite.active()) {
+      pressT = setTimeout(() => { pressed = true; speakWord(w); WordCard.open(w); }, 420);
     }
   });
   vp.addEventListener('pointermove', e => {
@@ -578,6 +586,7 @@ wordAudio.addEventListener('error', () => { sayEl?.classList.remove('say'); if (
       else { ripple(w); openActions(i); }
     }
     else closeActions();
+    if (!w) WordCard.close();
   });
   vp.addEventListener('contextmenu', e => e.preventDefault());
 })();
@@ -637,6 +646,7 @@ function toggleSave(i, el) {
 }
 
 function openActions(i) {
+  WordCard.close();
   S.act = i;
   S.focus = i;
   paintMarks();

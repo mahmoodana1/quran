@@ -923,6 +923,29 @@ const Recite = (() => {
       ${last ? `<small class="rc-ab-last">آخر تسميع ${ago(last)}</small>` : ''}
     </div>`;
   }
+  // a word's record: { read: readings of its aya, wrong, right, now: its mark
+  // (none once mastered), hist: [[time, type]] newest first, the aya's skips too }
+  function wordStats(ai, wi) {
+    const l = log(), a = l.ayas[ai], st = l.stats?.[ai] || (a ? statsFrom(l, ai) : null);
+    const hist = [];
+    for (const s of l.sessions) for (const x of s.list || []) if (x[0] === ai && (x[1] === wi || x[1] < 0)) hist.push([s.t, x[1] < 0 ? 'skip' : x[2]]);
+    const wrong = st?.wc[wi] || 0, read = st ? st.r + st.w : 0;
+    return { read, wrong, right: Math.max(0, read - wrong), now: a && !a.done ? a.words[wi] || null : null, hist, types: TYPES };
+  }
+  // forget every mistake on a word: its count, its mark, and its lines in the
+  // sessions kept (the aya leaves the weak spots when it was the last word marked)
+  function resetWord(ai, wi) {
+    const l = log();
+    const st = l.stats?.[ai] || (l.ayas[ai] ? statsFrom(l, ai) : null);
+    if (st) { delete st.wc[wi]; (l.stats ||= {})[ai] = st; }
+    const a = l.ayas[ai];
+    if (a) { delete a.words[wi]; if (!Object.keys(a.words).length) delete l.ayas[ai]; }
+    for (const s of l.sessions) if (s.list) s.list = s.list.filter(x => !(x[0] === ai && x[1] === wi));
+    store.set(key(), l);
+    weakMap = null; dirty = true;
+    paintMarks();
+  }
+
   // a word from the card, shown on the page
   function showWord(ai, wi) {
     const w = ayaWords(ai)[wi];
@@ -1389,5 +1412,5 @@ const Recite = (() => {
 
   syncBubble();
 
-  return { start, cancel, paint, onTap, card, showWord, syncBubble, mic, panelHTML, mounted, onSheetClick, active: () => !!G };
+  return { start, cancel, paint, onTap, card, showWord, wordStats, resetWord, ago, syncBubble, mic, panelHTML, mounted, onSheetClick, active: () => !!G };
 })();

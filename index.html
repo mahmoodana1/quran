@@ -55,6 +55,19 @@
   </div>
 </div>
 
+<div id="wordBar" class="bar acts wbar" hidden>
+  <div class="acts-head">
+    <div class="acts-title"><span class="dot"></span><b id="wbWord"></b><small id="wbWhere"></small></div>
+    <button data-wb="close" class="x-btn" aria-label="إغلاق"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round"/></svg></button>
+  </div>
+  <div id="wbBody" class="wb-body"></div>
+  <div class="acts-row wb-row">
+    <button data-wb="play"><i><svg viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4zM15.5 9a4 4 0 010 6M18 6.5a7.5 7.5 0 010 11" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round"/></svg></i><span>استماع</span></button>
+    <button data-wb="tafsir"><i><svg viewBox="0 0 24 24"><path d="M12 6.5C10 5 7 4.5 3.5 5v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5zM12 6.5v13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></i><span>تفسير الآية</span></button>
+    <button data-wb="copy"><i><svg viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M15.5 8.5V6a2.5 2.5 0 00-2.5-2.5H7A2.5 2.5 0 004.5 6v7A2.5 2.5 0 007 15.5h1.5" fill="none" stroke="currentColor" stroke-width="1.7"/></svg></i><span>نسخ</span></button>
+  </div>
+</div>
+
 <!-- audio player -->
 <div id="player" class="bar mini" hidden>
   <div class="pl-track"><i id="plProg"></i></div>
@@ -281,6 +294,7 @@
 <script src="match.js"></script>
 <script src="mu.js"></script>
 <script src="recite.js"></script>
+<script src="word.js"></script>
 <script src="install.js"></script>
 </body>
 </html>
