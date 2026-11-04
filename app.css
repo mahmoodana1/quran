@@ -1407,16 +1407,16 @@ svg { fill: currentColor; }
 .rc-help .rc-points { border: none; padding: 4px 12px 14px; }
 .rc-help .rc-points svg { stroke: var(--p-gold); }
 
-/* the panels' tab for التسميع: a small gold mic, and a faint gold wash */
-.tabs button[data-tab="recite"] span { display: inline-flex; align-items: center; gap: 4px; }
+/* the panels' tab for التسميع: the green layout — a green plate, gold-edged, cream words and a gold mic */
+.tabs button[data-tab="recite"] span {
+  display: inline-flex; align-items: center; gap: 4px; padding: 4px 9px; border-radius: 3px; color: var(--p-on);
+  background: linear-gradient(160deg, var(--p-green), var(--p-green-2)); border: 1px solid var(--p-gold);
+  box-shadow: inset 0 0 0 1.5px var(--p-green), inset 0 0 0 2.5px color-mix(in srgb, var(--p-gold) 55%, transparent);
+}
 .tabs button[data-tab="recite"] span::before {
   content: ""; width: 13px; height: 13px; flex: none; background: var(--p-gold);
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3.5a3 3 0 00-3 3v5a3 3 0 006 0v-5a3 3 0 00-3-3zM6.5 11a5.5 5.5 0 0011 0M12 16.5v4' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
   mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 3.5a3 3 0 00-3 3v5a3 3 0 006 0v-5a3 3 0 00-3-3zM6.5 11a5.5 5.5 0 0011 0M12 16.5v4' fill='none' stroke='black' stroke-width='2.4' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
 }
-.tabs button[data-tab="recite"] { color: color-mix(in srgb, var(--p-gold) 70%, var(--muted)); }
-.tabs button[data-tab="recite"]::before {
-  content: ""; position: absolute; inset: 6px 2px 9px; border-radius: 14px; z-index: -1;
-  background: color-mix(in srgb, var(--p-gold) 11%, transparent);
-}
-.tabs button[data-tab="recite"].on { color: var(--ink); }
+.tabs button[data-tab="recite"] { padding-top: 6px; padding-bottom: 9px; }
+.tabs button[data-tab="recite"].on span { font-weight: 800; box-shadow: inset 0 0 0 1.5px var(--p-green), inset 0 0 0 2.5px var(--p-gold), 0 2px 8px rgba(30, 20, 5, .22); }
