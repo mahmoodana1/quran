@@ -1,8 +1,10 @@
 'use strict';
 
 // Install the app on the phone (or computer), whatever the browser.
-// Where the browser offers its own install prompt (Chrome, Edge, Samsung Internet
-// on Android and computers) one button installs it. Everywhere else, the steps for
+// Where the browser has its own install dialog (Chrome, Edge, Samsung Internet on
+// Android and computers), that is what opens: on a tap after a little reading, and
+// from the row in settings. Browsers have none (Safari and every iPhone browser,
+// Firefox), and there a card shows the steps for
 // that very browser: Safari, Chrome, Edge and Firefox on iPhone/iPad; Chrome,
 // Samsung Internet and Firefox on Android; Safari on Mac. Inside the Google app or a
 // social app's browser, which can't install, the link is copied to open elsewhere.
@@ -26,7 +28,9 @@ const Install = (() => {
     : 'other';
 
   const installed = () => matchMedia('(display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui)').matches || navigator.standalone === true;
-  let deferred = null;   // the browser's own install prompt, once it offers one
+  let deferred = null;   // the browser's own install dialog, once it offers one
+  // browsers that have one (it comes as beforeinstallprompt once the app qualifies)
+  const NATIVE = (ANDROID && ['chrome', 'edge', 'samsung'].includes(BROWSER)) || (OS === 'desktop' && ['chrome', 'edge'].includes(BROWSER));
   let view = OS;         // which device's steps are shown
   let auto = false;      // offered on its own (only those count towards asking again)
 
@@ -146,8 +150,20 @@ const Install = (() => {
     go.dataset.do = oneTap ? 'install' : 'copy';
   }
 
-  function open(byItself = false) {
+  // the browser's own dialog; browsers open it only from a tap
+  async function nativeAsk(byItself) {
+    const p = deferred;
+    deferred = null;
+    try { await p.prompt(); } catch { deferred = p; return false; }
+    const { outcome } = await p.userChoice.catch(() => ({}));
+    if (outcome === 'accepted') store.set('install.done', true);
+    else if (byItself) { store.set('install.later', Date.now()); store.set('install.asked', store.get('install.asked', 0) + 1); }
+    return true;
+  }
+
+  async function open(byItself = false) {
     if (installed()) { toast('التطبيق مثبّت على جهازك'); return; }
+    if (deferred && !byItself && await nativeAsk(false)) return;
     auto = byItself;
     view = OS;
     paint();
@@ -164,12 +180,8 @@ const Install = (() => {
   async function act() {
     const go = $('#inGo');
     if (go.dataset.do === 'install' && deferred) {
-      const p = deferred; deferred = null;
-      p.prompt();
-      const { outcome } = await p.userChoice.catch(() => ({}));
       hide($('#install'));
-      if (outcome === 'accepted') store.set('install.done', true);
-      else store.set('install.later', Date.now());
+      await nativeAsk(auto);
       return;
     }
     const url = location.origin + location.pathname;
@@ -188,11 +200,31 @@ const Install = (() => {
     return [...document.querySelectorAll('.modal')].some(m => !m.hidden)
       || !$('#recBar').hidden || !$('#loading').hidden || !$('#sheet').hidden || !$('#adhkar').hidden || !$('#library').hidden;
   }
+  // with a browser dialog: it opens on the reader's next tap (the tap still does what
+  // it does), not in the middle of reciting or over another card
+  let ripe = false, armed = false;
+  function armTap() {
+    if (armed || !deferred || !due()) return;
+    armed = true;
+    const onTap = () => {
+      if (!deferred || !due()) { armed = false; return; }
+      if ([...document.querySelectorAll('.modal')].some(m => !m.hidden) || !$('#recBar').hidden) {
+        document.addEventListener('click', onTap, { capture: true, once: true });
+        return;
+      }
+      armed = false;
+      nativeAsk(true);
+    };
+    document.addEventListener('click', onTap, { capture: true, once: true });
+  }
   function offerSoon(ms) {
     if (!due()) return;
     let tries = 0;
     const t = () => {
       if (!due()) return;
+      ripe = true;
+      if (deferred) { armTap(); return; }
+      if (NATIVE) return;  // its dialog isn't offered (yet): armed when it is
       if (busy() && ++tries < 20) { setTimeout(t, 15000); return; }
       if (!busy()) open(true);
     };
@@ -214,6 +246,7 @@ const Install = (() => {
     e.preventDefault();
     deferred = e;
     if (!$('#install').hidden) paint();
+    if (ripe) armTap();
   });
   window.addEventListener('appinstalled', () => {
     deferred = null;
