@@ -141,7 +141,8 @@ const Recite = (() => {
     if (MU()) {
       const starts = [];
       words.forEach((w, k) => { if (w.wi === 0) starts.push(k); });
-      G.mu = { c: 0, w0: 0, cut: 0, final: '', tent: '', starts, lead: true, stream: !!opts.stream };
+      G.mu = { c: 0, w0: opts.w0 || 0, cut: 0, final: '', tent: '', starts, lead: true, stream: !!opts.stream };
+      G.pos = G.tent = G.mu.w0; // found by reciting from inside the aya: from that word
       G.heard = {}; // k -> { got, want }: what was heard for a word marked, and how it should sound
     }
     // found by reciting: what was already said counts as said
@@ -516,60 +517,69 @@ const Recite = (() => {
           start(ai, null, { seed: text });
           toast(ayaLabel(ai));
         });
-      }, on => { if (F === f) { f.voice = on; syncBubble(); } })
+      }, on => { if (F === f) { f.voice = on; f.ever ||= on; syncBubble(); } })
         .catch(() => { stopFind(); toast('لا يمكن الوصول إلى الميكروفون — اسمح به من إعدادات المتصفح'); });
     });
   }
   function stopFind() {
     if (!F) return;
+    clearInterval(F.timer);
     F = null;
     if (MU()) Mu.stop(); else Listen.stop();
     syncBubble();
   }
-  // Muaalem: the reading so far, looked up among all ayas by its consonants,
-  // the likeliest checked word by word; the session then goes on with it
+  // Muaalem: the reading so far, looked up in the whole Quran (begun at any
+  // word); the session then goes on with it, from that word
+  const FIND_EVERY = 500, QUIET = 1500;
+  const FIND_MARGIN = 12; // heard sounds the best place must explain beyond any other
   function findMu() {
     withModel(() => {
       if (G) return;
-      F = { tries: 0, busy: false, voice: false };
+      F = { voice: false, d: null, n: 0, grew: 0, same: 0, last: null };
       syncBubble();
       const f = F;
       Mu.start(d => {
         if (F !== f) return;
+        f.d = d;
         if (!f.voice) { f.voice = true; syncBubble(); }
-        clearTimeout(f.vt);
-        f.vt = setTimeout(() => { if (F === f) { f.voice = false; syncBubble(); } }, 900);
-        const h = d.final + d.tent, n = Match.units(h).length;
-        if (n < 24 || Date.now() - (f.at || 0) < 500) return;
-        f.at = Date.now();
-        // many ayas open alike: go only once one fits clearly better than any
-        // other, and has stayed the best for a second; ayas said the same way
-        // (as in ar-Rahman) are told apart, after a while, by the page open
-        const r = locateMu(h, d.conf, d.alts);
-        f.same = r && r.ai === f.last ? (f.same || 0) + 1 : 0;
-        f.last = r?.ai;
-        const sure = r && f.same >= 2 && (r.ok - r.next >= 2 || (n > 150 && f.same >= 4));
-        if (!sure) { if (n > 320) { stopFind(); toast('لم أجد الآية — جرّب من بداية آية'); } return; }
-        const ai = r.ai;
-        F = null; // the reading goes on, now as the session's
-        syncBubble();
-        start(ai, null, { stream: true });
-        toast(ayaLabel(ai));
-      }).catch(() => { stopFind(); toast('لا يمكن الوصول إلى الميكروفون — اسمح به من إعدادات المتصفح'); });
+      }).then(() => {
+        if (F === f) f.timer = setInterval(() => { if (F !== f) clearInterval(f.timer); else checkFind(f); }, FIND_EVERY);
+      }, () => { stopFind(); toast('لا يمكن الوصول إلى الميكروفون — اسمح به من إعدادات المتصفح'); });
     });
   }
-  // the aya the reading fits best: { ai, ok (words right), next (the runner-up's) },
+  // many places in the Quran read alike: go only once one fits clearly better
+  // than any other, and has stayed the best for a second; when the reader has
+  // stopped, a smaller lead is enough, and places said the same way are told
+  // apart by the page open
+  function checkFind(f) {
+    const d = f.d;
+    if (!d) return;
+    const h = d.final + d.tent, n = Match.units(h).length;
+    if (n !== f.n) { f.n = n; f.grew = Date.now(); }
+    const quiet = Date.now() - f.grew > QUIET;
+    if (n < 24) return;
+    if (quiet && f.quietAt === n) return; // nothing new since the last quiet check
+    if (quiet) f.quietAt = n;
+    const r = locateMu(h, d.conf, d.alts);
+    f.same = r && f.last != null && Math.abs(r.g - f.last) <= 1 ? f.same + 1 : 0;
+    f.last = r ? r.g : null;
+    if (r && !f.found) { f.found = true; syncBubble(); }
+    const sure = r && f.same >= 2 && (r.fit - r.next >= FIND_MARGIN || (n > 150 && f.same >= 4) || (quiet && (r.fit - r.next >= 3 || f.same >= 3)));
+    if (!sure) { if (n > 320 || (quiet && Date.now() - f.grew > 6000)) { stopFind(); toast('لم أجد الآية — اقرأ أكثر من آية'); } return; }
+    clearInterval(f.timer);
+    F = null; // the reading goes on, now as the session's
+    syncBubble();
+    start(r.ai, null, { stream: true, w0: r.w });
+    toast(r.w ? `${ayaLabel(r.ai)} · من كلمة ${ayaTokens(r.ai)[r.w] || ''}` : ayaLabel(r.ai));
+  }
+  // where the reading fits best: { ai, w, g, fit, next (the runner-up's fit) },
   // equal fits going to the one nearest the page open
   function locateMu(h, conf, alts) {
-    const fits = [];
-    for (const { ai } of Mu.candidates(h, 12)) {
-      const st = Match.words(Mu.expect(ai), h, h.length, false, { freeLead: true, conf, alts });
-      const ok = st.filter(x => x.state === 'ok').length, bad = st.filter(x => x.state === 'err').length;
-      if (ok >= 4 && ok / (ok + bad) >= 0.75) fits.push({ ai, ok, far: Math.abs(R.ayas[ai][2] - S.page) });
-    }
+    const fits = Mu.locate(h, conf, alts, 6).filter(x => x.ok >= 4 && x.ok / (x.ok + x.err) >= 0.75);
     if (!fits.length) return null;
-    fits.sort((a, b) => b.ok - a.ok || a.far - b.far);
-    return { ai: fits[0].ai, ok: fits[0].ok, next: fits[1]?.ok ?? 0 };
+    fits.forEach(x => { x.far = Math.abs(R.ayas[x.ai][2] - S.page); });
+    fits.sort((a, b) => b.fit - a.fit || a.far - b.far);
+    return { ...fits[0], next: fits[1]?.fit ?? 0 };
   }
   function locate(text) {
     if (norm(text).trim().split(/\s+/).length < 2) return null;
@@ -586,7 +596,7 @@ const Recite = (() => {
     const pill = $('#micPill');
     pill.hidden = !F;
     pill.classList.toggle('voice', !!F?.voice);
-    $('#micPillTxt').textContent = !F ? '' : F.busy ? 'أبحث عن الآية…' : F.voice ? 'أستمع…' : 'اقرأ آيةً، وأجدها لك';
+    $('#micPillTxt').textContent = !F ? '' : F.busy || F.found ? 'أبحث عن الآية…' : F.voice || F.ever ? 'أستمع…' : 'اقرأ آيةً، وأجدها لك';
     document.body.classList.toggle('rc-on', !!G);
     document.body.classList.toggle('rc-find', !!F);
   }
