@@ -1217,6 +1217,7 @@ function settingsHTML() {
       <span class="main"><span class="t">${r.name}</span><span class="s">${ar(r.ayas)} آية</span></span>${r.id === R.id ? '<span class="check">✓</span>' : ''}</button>`;
   }).join('');
   return `
+    ${typeof Install !== 'undefined' ? Install.settingsHTML() : ''}
     ${allCardHTML()}
     <div class="group-label">المظهر</div>
     <div class="themes">${themes}</div>
