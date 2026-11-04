@@ -3,7 +3,7 @@
 // requests data with ?v=N, so bumping DATA_VERSION there fetches new copies.
 // Hafs page fonts (verses.quran.foundation) are cached as pages are opened.
 // Recitation audio: see audioResponse below.
-const VERSION = 'quran-v54';
+const VERSION = 'quran-v60';
 const TAFSIR = 'tafsir-saadi';
 // recitation files saved by the app (or while listening); kept across versions
 const AUDIO = 'audio-yasser-128';
@@ -20,7 +20,7 @@ const MUSHAF = 'mushaf-data';
 // mu-worker.js keeps Muaalem in 'muaalem-lab' (shared with the lab in
 // quran-models, on the same site); they must outlive app updates too
 const MODELS = ['transformers-cache', 'muaalem-lab'];
-const SHELL = ['./', 'index.html', 'app.css', 'app.js', 'prayer.js', 'adhkar.js', 'listen.js', 'recite.js', 'asr-worker.js', 'match.js', 'mu.js', 'mu-worker.js', 'capture.js', 'manifest.webmanifest', 'icons/icon-180.png'];
+const SHELL = ['./', 'index.html', 'app.css', 'app.js', 'prayer.js', 'adhkar.js', 'listen.js', 'recite.js', 'asr-worker.js', 'match.js', 'mu.js', 'mu-worker.js', 'capture.js', 'install.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION)
