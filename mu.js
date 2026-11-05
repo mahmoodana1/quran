@@ -27,7 +27,7 @@ const Mu = (() => {
   // the bigger ones (a little more exact, two or three times the download) are
   // there to choose in the settings
   const BASE_IDS = ['q4-cpu', 'q4-gpu'];
-  const PROBE_X = 12; // a full update takes about this many times the stand-in
+  const PROBE_X = 19; // a full update (a WIN s window) takes about this many times the stand-in (2.5 s)
   const threads = () => Math.min(4, navigator.hardwareConcurrency || 4);
   const now = () => performance.timeOrigin + performance.now();
 

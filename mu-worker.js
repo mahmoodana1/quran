@@ -13,7 +13,7 @@
 const ORT = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/';
 const TJS = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.5';
 const BASE = 'https://mahmoodana1.github.io/quran-models/'; // where the models live (mahmoodana1/quran-models)
-const WIN = 2.5, RIGHT = 0.5, MIN_NEW = 0.25, RATE = 16000;
+const WIN = 4, RIGHT = 1, MIN_NEW = 0.5, RATE = 16000; // (the study, 480 readings: half the words wrongly marked of 2.5 / 0.5 / 0.25, a fifth less work)
 const FRAME = 640;   // samples per output frame (40 ms); windows start on this grid so frames line up
 const MIN_WIN = 1.5; // s heard before anything is final (the very start needs context)
 const MAX_WIN = 8;   // s: the longest window read when catching up
