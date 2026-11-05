@@ -587,6 +587,49 @@ function speakWord(el) {
 wordAudio.addEventListener('ended', () => sayEl?.classList.remove('say'));
 wordAudio.addEventListener('error', () => { sayEl?.classList.remove('say'); if (wordAudio.src) toast('تعذر تشغيل الكلمة'); });
 
+// popup cards: a tap outside the card, or the card pulled down by its top (the grip line),
+// closes it as its own close button does; never while that button is hidden or disabled
+// (the model downloading, say). The install card has its own outside tap (install.js).
+(() => {
+  const CLOSE = { khEdit: '#khCancel', done: '#doneLater', recIntro: '#riLater', recPrep: '#rpCancel', recDone: '#rdOk', install: '#inLater' };
+  const closer = m => { const b = $(CLOSE[m.id]); return b && !b.hidden && !b.disabled && b.offsetParent !== null ? b : null; };
+  for (const id of Object.keys(CLOSE)) {
+    const m = $('#' + id), card = m?.querySelector('.card');
+    if (!card) continue;
+    if (id !== 'install') m.addEventListener('click', e => { if (e.target === m) closer(m)?.click(); });
+    let y0 = null, t0 = 0, dy = 0;
+    const start = (y, e) => {
+      // the grip: the card's top, while it is scrolled to its top
+      if (y - card.getBoundingClientRect().top > 44 || card.scrollTop > 0 || !closer(m) || e.target.closest('button, input, select, textarea')) return;
+      y0 = y; t0 = performance.now(); dy = 0;
+      card.style.transition = 'none';
+    };
+    const move = (y, e) => {
+      if (y0 == null) return;
+      dy = Math.max(0, y - y0);
+      card.style.transform = `translateY(${dy}px)`;
+      if (dy > 4 && e.cancelable) e.preventDefault(); // the card follows the finger, the page doesn't scroll
+    };
+    const end = () => {
+      if (y0 == null) return;
+      y0 = null;
+      const v = dy / Math.max(1, performance.now() - t0), b = closer(m);
+      card.style.transition = 'transform .25s cubic-bezier(.2,.9,.3,1)';
+      if (b && (dy > 90 || (dy > 24 && v > 0.5))) {
+        b.click();
+        setTimeout(() => { card.style.transform = ''; card.style.transition = ''; }, 320);
+      } else { card.style.transform = ''; setTimeout(() => { card.style.transition = ''; }, 260); }
+    };
+    card.addEventListener('touchstart', e => start(e.touches[0].clientY, e), { passive: true });
+    card.addEventListener('touchmove', e => move(e.touches[0].clientY, e), { passive: false });
+    card.addEventListener('touchend', end);
+    card.addEventListener('touchcancel', end);
+    card.addEventListener('pointerdown', e => { if (e.pointerType === 'mouse') start(e.clientY, e); });
+    addEventListener('pointermove', e => { if (e.pointerType === 'mouse') move(e.clientY, e); });
+    addEventListener('pointerup', e => { if (e.pointerType === 'mouse') end(); });
+  }
+})();
+
 // swipe handling
 (() => {
   const vp = $('#viewport');
