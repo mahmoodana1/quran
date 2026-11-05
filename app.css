@@ -1178,7 +1178,8 @@ svg { fill: currentColor; }
 @keyframes rcDot { 50% { opacity: .35; } }
 .w.end.rc-blind { visibility: hidden; }
 body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it goes */
-.w.rc-wrong::after, .w.rc-haraka::after, .w.rc-skip::after, .w.rc-hint::after, .w.rc-madd::after, .w.rc-ghunna::after, .w.rc-order::after {
+.w.rc-wrong::after, .w.rc-haraka::after, .w.rc-skip::after, .w.rc-hint::after, .w.rc-madd::after, .w.rc-ghunna::after, .w.rc-order::after,
+.w.rc-heavy::after, .w.rc-near::after, .w.rc-maddlong::after, .w.rc-maddnone::after {
   content: ""; position: absolute; left: 4%; right: 4%; bottom: .1em;
   border-bottom: .08em solid var(--c-marks);
 }
@@ -1189,7 +1190,9 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 .w.rc-haraka::after { border-bottom: none; height: .22em; bottom: .02em;
   background: radial-gradient(circle at 50% 100%, transparent .09em, var(--c-marks) .1em, var(--c-marks) .15em, transparent .16em) 0 0 / .32em .22em repeat-x; }
 /* tajweed (a madd or a ghunna not given its length): the word is right; a thin double line */
-.w.rc-madd::after, .w.rc-ghunna::after { border-bottom: .045em solid var(--c-marks); box-shadow: 0 .09em 0 -.01em var(--c-marks); }
+.w.rc-madd::after, .w.rc-ghunna::after, .w.rc-maddlong::after, .w.rc-maddnone::after { border-bottom: .045em solid var(--c-marks); box-shadow: 0 .09em 0 -.01em var(--c-marks); }
+/* a letter said as its like (heavy for light, or near in sound): a shorter line, under the middle */
+.w.rc-heavy::after, .w.rc-near::after { left: 18%; right: 18%; }
 /* two words said in the other order: each under a bracket */
 .w.rc-order::after { border: .08em solid var(--c-marks); border-top: 0; height: .2em; border-radius: 0 0 .08em .08em; }
 /* a mark taken away with a tap while reading (or put back) */
@@ -1282,7 +1285,8 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 .rc-mk.rc-haraka { border-bottom-style: double; border-bottom-width: 4px; }
 .rc-mk.rc-skip { border-bottom-style: dashed; }
 .rc-mk.rc-hint { border-bottom-style: dotted; border-bottom-width: 3px; }
-.rc-mk.rc-madd, .rc-mk.rc-ghunna { border-bottom-width: 1.5px; box-shadow: 0 3px 0 -1px var(--c-marks); }
+.rc-mk.rc-madd, .rc-mk.rc-ghunna, .rc-mk.rc-maddlong, .rc-mk.rc-maddnone { border-bottom-width: 1.5px; box-shadow: 0 3px 0 -1px var(--c-marks); }
+.rc-mk.rc-heavy, .rc-mk.rc-near { width: 10px; }
 .rc-mk.rc-order { height: 6px; border: 2px solid var(--c-marks); border-top: 0; }
 .rc-row .t { font-size: 21px; font-weight: 400; line-height: 1.6; }
 .rc-row.gone { opacity: .45; }

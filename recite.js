@@ -24,10 +24,11 @@
 // stopAudio, speakWord, suraName, ayaLabel, openRecite, renderSheet,
 // closeSheet and flashAya from app.js at call time.
 const Recite = (() => {
-  const TYPES = { wrong: 'قرأتها بكلمة أخرى', haraka: 'أخطأت في حركتها', skip: 'تجاوزتها', hint: 'احتجت تلميحًا', madd: 'لم تعطِ المدّ حقّه', ghunna: 'أخطأت في الغنّة أو الإدغام', order: 'قدّمتها أو أخّرتها عن جارتها' };
+  const TYPES = { wrong: 'قرأتها بكلمة أخرى', haraka: 'أخطأت في حركتها', skip: 'تجاوزتها', hint: 'احتجت تلميحًا', madd: 'لم تعطِ المدّ حقّه', ghunna: 'أخطأت في الغنّة أو الإدغام', order: 'قدّمتها أو أخّرتها عن جارتها',
+    heavy: 'خلطت بين حرف مفخّم ونظيره المرقّق', near: 'أبدلت حرفًا بحرف قريب منه', maddlong: 'زدت في المدّ الطبيعي', maddnone: 'مددت حرفًا لا مدّ فيه' };
   const MASTER_DAYS = 3;
   const HINT_AFTER = 7000; // ms of silence on a hidden word before it shows
-  const CLS = ['rc-weak', 'rc-done', 'rc-now', 'rc-hid', 'rc-blind', 'rc-peek', 'rc-wrong', 'rc-haraka', 'rc-skip', 'rc-hint', 'rc-madd', 'rc-ghunna', 'rc-order'];
+  const CLS = ['rc-weak', 'rc-done', 'rc-now', 'rc-hid', 'rc-blind', 'rc-peek', 'rc-wrong', 'rc-haraka', 'rc-skip', 'rc-hint', 'rc-madd', 'rc-ghunna', 'rc-order', 'rc-heavy', 'rc-near', 'rc-maddlong', 'rc-maddnone'];
   // hidden, and blind (a setting): no trace of the words ahead, their number or their ayas'
   const blind = () => !!G?.hide && !G.done && store.get('recite.blind', false);
   // Muaalem listens in Hafs (its phonetic script is Hafs's)
@@ -350,7 +351,7 @@ const Recite = (() => {
   // ---- Muaalem: the reading so far, matched against the aya being said and
   // the next one together; once the next one has begun, the one before is
   // closed (words never reached count as skipped)
-  const MU_TYPE = { haraka: 'haraka', letter: 'wrong', extra: 'wrong', skipped: 'skip', madd: 'madd', ghunna: 'ghunna', order: 'order' };
+  const MU_TYPE = { haraka: 'haraka', letter: 'wrong', extra: 'wrong', skipped: 'skip', madd: 'madd', ghunna: 'ghunna', order: 'order', heavy: 'heavy', near: 'near', maddlong: 'maddlong', maddnone: 'maddnone' };
   function onMu(g, d) {
     if (G !== g) return;
     if (g.done) { g.mu.final = d.final; g.mu.tent = d.tent; g.mu.conf = d.conf; g.mu.alts = d.alts; return; } // the last of it, read after «finish»: pause() applies it
@@ -363,6 +364,19 @@ const Recite = (() => {
       g.voiceT = setTimeout(() => { if (G === g) { g.voice = false; paintBar(); } }, 900);
     }
     muFollow(false);
+    if (grew) g.grewAt = Date.now();
+    atEnd(g);
+  }
+  // the last word of the session heard, and nothing more for a moment: it is judged as said (a stop
+  // drops its last vowel, and the last sounds are final only a second or more later) and the session ends
+  const END_QUIET = 600;
+  function atEnd(g) {
+    clearTimeout(g.endT);
+    if (G !== g || !g.run || g.done || !g.mu || G.pos >= G.words.length || G.tent < G.words.length || g.mu.c !== G.ayas.length - 1) return;
+    const wait = END_QUIET - (Date.now() - (g.grewAt || 0));
+    if (wait > 0) { g.endT = setTimeout(() => atEnd(g), wait + 20); return; }
+    muSettle(true);
+    if (G.pos >= G.words.length) { paint(); G.chain ? chain() : finish(); }
   }
   function muFollow(done) {
     const m = G.mu, U = Match.units(m.final + m.tent);
@@ -386,7 +400,7 @@ const Recite = (() => {
       // what was heard from the cut on, as heard (a madd's run whole: its length is a tajweed check)
       const all = m.final + m.tent, c0 = Match.charAt(all, m.cut);
       const sub = all.slice(c0), fin = Math.max(0, m.final.length - c0);
-      const st = Match.words(ex, sub, fin, done, { freeLead: m.lead, conf: m.conf.slice(c0), alts: m.alts.slice(c0), tajweed: tjRules() });
+      const st = Match.words(ex, sub, fin, done, { freeLead: m.lead, conf: m.conf.slice(c0), alts: m.alts.slice(c0), tajweed: tjRules(), letters: letRules() });
       const n0 = cur.spans.length;
       const begun = nx != null && st.slice(n0, n0 + 2).some(x => x.state === 'ok' || x.state === 'err');
       muApply(st.slice(0, n0), begun, cur);
@@ -412,18 +426,21 @@ const Recite = (() => {
   }
   // the session is over: the words of the aya being said that were begun are
   // judged as they were said (the reading's end is their end); the rest stay unsaid
-  function muSettle() {
+  // (all: with what is still tentative, the reader having stopped)
+  function muSettle(all = false) {
     const m = G.mu;
-    if (m.c >= G.ayas.length) return;
-    const c0 = Match.charAt(m.final, m.cut), sub = m.final.slice(c0), conf = m.conf.slice(c0), alts = m.alts.slice(c0);
+    if (m.c >= G.ayas.length || !m.conf) return;
+    const heard = all ? m.final + m.tent : m.final;
+    const c0 = Match.charAt(heard, m.cut), sub = heard.slice(c0), conf = m.conf.slice(c0, c0 + sub.length), alts = m.alts.slice(c0, c0 + sub.length);
     const cur = Mu.expect(G.ayas[m.c], m.w0);
     const tajweed = tjRules();
-    const st = Match.words(cur, sub, sub.length, false, { freeLead: m.lead, conf, alts, tajweed });
+    const letters = letRules();
+    const st = Match.words(cur, sub, sub.length, false, { freeLead: m.lead, conf, alts, tajweed, letters });
     const t = st.findLastIndex(x => x.state !== 'todo');
     if (t < 0) return;
     const part = { ph: cur.ph.slice(0, cur.spans[t][1]), spans: cur.spans.slice(0, t + 1), wasl: cur.wasl.filter(k => k <= t) };
     if (cur.tj) part.tj = cur.tj.filter(c => c < part.ph.length);
-    const fin = Match.words(part, sub, sub.length, true, { freeLead: m.lead, conf, alts, tajweed });
+    const fin = Match.words(part, sub, sub.length, true, { freeLead: m.lead, conf, alts, tajweed, letters });
     muApply(fin.concat(st.slice(t + 1)), false, cur);
   }
 
@@ -1167,7 +1184,7 @@ const Recite = (() => {
   }
 
   // (tajweed: one setting before madd and ghunna were apart; turned off, both start off)
-  const SET_ON = { sound: true, tjMadd: store.get('recite.tajweed', true), tjGhunna: store.get('recite.tajweed', true) }; // settings on unless turned off
+  const SET_ON = { sound: true, tjMadd: store.get('recite.tajweed', true), tjGhunna: store.get('recite.tajweed', true), tjOver: true, lHeavy: true, lNear: true }; // settings on unless turned off
   // how often the words are read (Mu.rate): the same mistakes caught either way
   const RATE_NOTE = {
     auto: 'كل ربع ثانية إن أطاق جهازك، وأقل على الأجهزة البطيئة كي لا تسخن',
@@ -1176,7 +1193,9 @@ const Recite = (() => {
   };
   const setting = id => !!store.get('recite.' + id, SET_ON[id] ?? false);
   // the tajweed rules checked while reciting (match.js)
-  const tjRules = () => ({ madd: setting('tjMadd'), ghunna: setting('tjGhunna'), munfasil: setting('tjMunfasil') });
+  const tjRules = () => ({ madd: setting('tjMadd'), ghunna: setting('tjGhunna'), munfasil: setting('tjMunfasil'), over: setting('tjOver') });
+  // letters told apart from their like (match.js: opt.letters)
+  const letRules = () => ({ heavy: setting('lHeavy'), near: setting('lNear') });
   const toggle = (id, label, sub) => {
     const on = setting(id);
     return `<button class="row rc-set" data-rc-set="${id}" role="switch" aria-checked="${on}">
@@ -1366,7 +1385,11 @@ const Recite = (() => {
         ${MU() ? `<div class="group-label">التجويد</div>
         ${toggle('tjMadd', 'المدّ', 'يُعلَّم المدّ الطبيعي إن قُصِر، والمتصل واللازم إن لم يُمَدّا')}
         ${setting('tjMadd') ? toggle('tjMunfasil', 'المدّ المنفصل أربع حركات', 'قراءة الشاطبية؛ إن تركتها مطفأة فالقصر جائز') : ''}
-        ${toggle('tjGhunna', 'الغنّة والإدغام', 'الإدغام والإخفاء والإقلاب والنون والميم المشددتان بغنّتها، والإدغام بلا غنّة')}` : ''}
+        ${toggle('tjOver', 'المدّ الزائد', 'يُعلَّم المدّ الطبيعي إن زِيد فيه، والحرف القصير إن مُدّ')}
+        ${toggle('tjGhunna', 'الغنّة والإدغام', 'الإدغام والإخفاء والإقلاب والنون والميم المشددتان بغنّتها، والإدغام بلا غنّة')}
+        <div class="group-label">الحروف</div>
+        ${toggle('lHeavy', 'التفخيم والترقيق', 'س/ص، ت/ط، د/ض، ذ/ظ، ز/ظ، ق/ك: إن قُرئ أحدهما مكان الآخر')}
+        ${toggle('lNear', 'الحروف المتقاربة', 'م/ن، ح/هـ، ع/ء، ذ/ز، ث/س: إن قُرئ أحدهما مكان الآخر')}` : ''}
         <div class="row rc-goal"><span class="main"><span class="t">هدف يومي</span><span class="s">عدد الآيات التي تسمّعها كل يوم</span></span>
           <span class="rc-chips">${[0, 5, 10, 20].map(n => `<button data-rc-goal="${n}"${goal === n ? ' class="on"' : ''}>${n ? ar(n) : 'لا'}</button>`).join('')}</span></div>
         ${MU() ? '' : `<div class="row rc-goal"><span class="main"><span class="t">سرعة التعرّف</span><span class="s">السريع أخفّ وأسرع بمرتين، والدقيق أثبت قليلًا</span></span>
