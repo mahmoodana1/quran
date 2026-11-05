@@ -55,6 +55,20 @@
   </div>
 </div>
 
+<!-- a surah, its band tapped: التسميع of it -->
+<div id="suraBar" class="bar acts" hidden>
+  <div class="acts-head">
+    <div class="acts-title"><span class="dot"></span><b id="sbTitle"></b><small id="sbSub"></small></div>
+    <button data-sb="close" class="x-btn" aria-label="إغلاق"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round"/></svg></button>
+  </div>
+  <div id="sbBody"></div>
+  <div class="acts-row sb-row">
+    <button data-sb="start" class="main"><i><svg viewBox="0 0 24 24"><path d="M12 3.5a3 3 0 00-3 3v5a3 3 0 006 0v-5a3 3 0 00-3-3zM6.5 11a5.5 5.5 0 0011 0M12 16.5v4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></i><span>سمّع السورة</span></button>
+    <button data-sb="go" hidden><i><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></i><span id="sbGo"></span></button>
+    <button data-sb="play"><i><svg viewBox="0 0 24 24"><path d="M8.5 5.5v13l10.5-6.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></i><span>استماع</span></button>
+  </div>
+</div>
+
 <div id="wordBar" class="bar acts wbar" hidden>
   <div class="acts-head">
     <div class="acts-title"><span class="dot"></span><b id="wbWord"></b><small id="wbWhere"></small></div>

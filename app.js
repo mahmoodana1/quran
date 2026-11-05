@@ -310,7 +310,7 @@ function renderPage(p) {
     const ln = lines[i];
     if (!ln || pending) { html += '<div class="ln"></div>'; continue; }
     if (ln[0] === 'H') {
-      html += `<div class="ln sura"><div class="band"><i class="orn"></i><span class="sname">${SURA_GLYPH(ln[1])}</span><i class="orn"></i></div></div>`;
+      html += `<div class="ln sura"><div class="band" data-sura="${ln[1]}" role="button" aria-label="سورة ${suraName(ln[1])}"><i class="orn"></i><span class="sname">${SURA_GLYPH(ln[1])}</span><i class="orn"></i></div></div>`;
       continue;
     }
     if (ln[0] === 'B') {
@@ -360,7 +360,7 @@ function paintMarks(root = document) {
 // would be under one, the bar slides up under the page header instead (or to
 // wherever it covers less), so the aya is always in full view; in landscape,
 // where the page scrolls, the aya is scrolled into view as well.
-const BARS = ['#ayaBar', '#wordBar', '#player', '#recBar', '#recWord'];
+const BARS = ['#ayaBar', '#wordBar', '#suraBar', '#player', '#recBar', '#recWord'];
 let clearRaf = 0;
 function keepClear() {
   cancelAnimationFrame(clearRaf);
@@ -575,6 +575,9 @@ wordAudio.addEventListener('error', () => { sayEl?.classList.remove('say'); if (
       return;
     }
     if (typeof Recite !== 'undefined' && Recite.onTap(e.target)) return;
+    // a surah's band: its card (not while reciting)
+    const band = e.target.closest('.band[data-sura]');
+    if (band && !Recite.active()) { ripple(band); openSura(+band.dataset.sura); return; }
     // a tap on an aya (any of its words, or its number) marks it and opens its
     // actions; a second tap, or one off the text, closes them
     const w = e.target.closest('.w[data-a]');
@@ -644,7 +647,47 @@ function toggleSave(i, el) {
   refreshHeader();
 }
 
+// a surah's card: how much of it was recited and how it went, and to recite it
+let suraAt = null; // { s, from }
+function openSura(su) {
+  closeActions();
+  WordCard.close();
+  const c = Recite.suraCard(su);
+  suraAt = { s: su, from: c.from };
+  $('#sbTitle').textContent = `سورة ${suraName(su)}`;
+  const n = (R.suraStart[su + 1] ?? R.ayas.length) - R.suraStart[su];
+  $('#sbSub').textContent = n === 1 ? 'آية' : n === 2 ? 'آيتان' : n <= 10 ? `${ar(n)} آيات` : `${ar(n)} آية`;
+  $('#sbBody').innerHTML = c.html;
+  $('#suraBar [data-sb=go]').hidden = c.from == null;
+  if (c.from != null) $('#sbGo').textContent = `تابع من ${ar(R.ayas[c.from][1])}`;
+  if (P.ai == null) hide($('#player'));
+  const bar = $('#suraBar');
+  if (!bar.hidden && !bar.classList.contains('leaving')) { bar.classList.remove('swap'); void bar.offsetWidth; bar.classList.add('swap'); }
+  show(bar);
+  haptic(8);
+}
+function closeSura() {
+  if (suraAt == null) return;
+  suraAt = null;
+  hide($('#suraBar'));
+  if (P.ai != null) show($('#player'));
+}
+$('#suraBar').addEventListener('click', e => {
+  if (!suraAt) return;
+  const { s: su, from } = suraAt;
+  const aya = e.target.closest('[data-sb-aya]');
+  if (aya) { const ai = +aya.dataset.sbAya; closeSura(); goTo(R.ayas[ai][2]); setTimeout(() => openActions(ai), 350); return; }
+  const b = e.target.closest('[data-sb]');
+  if (!b) return;
+  const a = b.dataset.sb;
+  closeSura();
+  if (a === 'start') Recite.start(R.suraStart[su]);
+  if (a === 'go') Recite.start(from);
+  if (a === 'play') playFrom(R.suraStart[su]);
+});
+
 function openActions(i) {
+  closeSura();
   WordCard.close();
   S.act = i;
   S.focus = i;
@@ -663,6 +706,7 @@ function openActions(i) {
 
 function closeActions() {
   if (!$('#tafsir').hidden) return closeTafsir();
+  closeSura();
   const had = S.act != null || S.focus != null;
   S.act = null;
   S.focus = null;

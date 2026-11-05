@@ -1660,3 +1660,23 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 .in-row-txt b { font-size: 15.5px; font-weight: 800; color: var(--p-ink); }
 .in-row-txt small { font-size: 12px; color: var(--muted); line-height: 1.5; }
 .in-row .go { width: 20px; height: 20px; flex: none; fill: none; stroke: var(--p-gold); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* the surah card: its band tapped */
+.band[data-sura] { cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.band[data-sura] { position: relative; overflow: hidden; }
+#suraBar .acts-title small { color: var(--muted); font-size: 12.5px; }
+#sbBody:empty { display: none; }
+#sbBody { animation: swapIn .3s ease; }
+.sb-row { grid-template-columns: repeat(3, 1fr); }
+.sb-row button.main i { background: var(--accent); color: var(--on-accent); }
+.sb-row button.main:active i { background: var(--accent); filter: brightness(1.08); }
+.sb-row button[hidden] { display: none; }
+.sb-row:has(button[hidden]) { grid-template-columns: repeat(2, 1fr); }
+.rc-sb-p { display: flex; align-items: center; gap: 10px; }
+.rc-sb-p small { flex: none; font-size: 12px; color: var(--muted); }
+.rc-sb-l { font-size: 11.5px; color: var(--muted); margin-bottom: -3px; }
+.rc-sb-w button { font-size: 14px; min-width: 34px; justify-content: center; font-variant-numeric: tabular-nums; box-shadow: inset 0 -2px 0 var(--c-marks), inset 0 0 0 1px var(--line); }
+.rc-sb-w small { align-self: center; font-size: 11.5px; color: var(--muted); }
+.rc-sb-s { display: flex; flex-direction: column; gap: 6px; }
+.rc-sb-s div { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 13px; }
+.rc-sb-s small { flex: none; font-size: 11.5px; color: var(--muted); }
