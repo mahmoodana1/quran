@@ -223,13 +223,13 @@ const Recite = (() => {
     if (!words.length) return;
     G = { ayas, words, idx: new Map(words.map((w, k) => [w.p + ':' + w.n, k])), pos: 0, errs: {}, gone: new Set(),
       hide: !!opts.test || (!opts.seed && store.get('recite.hide', false)), run: false, secs: 0, busy: 0,
-      review: !!review && !opts.test, test: !!opts.test, lastP: null, miss: 0, tent: 0 };
+      review: !!review && !opts.test, test: !!opts.test, lastP: null, miss: 0, tent: 0, found: !!opts.stream };
     // Muaalem: c = the aya being said (in G.ayas), w0 = its first word still to
     // match, cut = how much of the reading belongs to ayas already done
     if (MU()) {
       const starts = [];
       words.forEach((w, k) => { if (w.wi === 0) starts.push(k); });
-      G.mu = { c: 0, w0: opts.w0 || 0, cut: 0, final: '', tent: '', starts, lead: true, open: true, stream: !!opts.stream };
+      G.mu = { c: 0, w0: opts.w0 || 0, cut: opts.cut || 0, final: '', tent: '', starts, lead: true, open: true, stream: !!opts.stream };
       G.pos = G.tent = G.mu.w0; // found by reciting from inside the aya: from that word
       G.heard = {}; // k -> { got, want }: what was heard for a word marked, and how it should sound
       if (opts.carry) Object.assign(G.mu, opts.carry, { lead: true, open: true }); // the reading of the surah before goes on
@@ -399,14 +399,24 @@ const Recite = (() => {
       const cur = Mu.expect(ai, m.w0), ex = after ? Mu.expect2(cur, after) : cur;
       // what was heard from the cut on, as heard (a madd's run whole: its length is a tajweed check)
       const all = m.final + m.tent, c0 = Match.charAt(all, m.cut);
-      const sub = all.slice(c0), fin = Math.max(0, m.final.length - c0);
-      const st = Match.words(ex, sub, fin, done, { freeLead: m.lead, conf: m.conf.slice(c0), alts: m.alts.slice(c0), tajweed: tjRules(), letters: letRules() });
+      let sub = all.slice(c0), fin = Math.max(0, m.final.length - c0), last = done;
+      // a long stretch heard at once (the place found late, by the header mic or after the reader went
+      // elsewhere) is taken as it was heard: the aya being said and a little after it, then on from the
+      // next, as when it came in (all of it at once is explained as sounds before the aya). A reading
+      // as it comes in never runs that far past the aya being said
+      const cu = Match.units(cur.ph).length, su = Match.units(sub).length;
+      if (su > cu * 1.5 + 45) { const cc = Match.charAt(sub, Math.round(cu * 1.25) + 10); sub = sub.slice(0, cc); fin = Math.min(fin, cc); last = false; }
+      const st = Match.words(ex, sub, fin, last, { freeLead: m.lead, conf: m.conf.slice(c0, c0 + sub.length), alts: m.alts.slice(c0, c0 + sub.length), tajweed: tjRules(), letters: letRules() });
       const n0 = cur.spans.length;
       const begun = nx != null && st.slice(n0, n0 + 2).some(x => x.state === 'ok' || x.state === 'err');
       muApply(st.slice(0, n0), begun, cur);
       const end = st[n0 - 1]?.state === 'ok' || st[n0 - 1]?.state === 'err' ? st[n0 - 1].at?.[1] : null;
       if (end != null) m.endAt = m.cut + end; // where the aya's last word ended in what was heard
-      if (!begun) { if (!done && muRelocate(st.slice(0, n0), sub, fin, m.conf.slice(c0), m.alts.slice(c0))) continue; break; }
+      if (!begun) {
+        if (!done && muRelocate(st.slice(0, n0), sub, fin, m.conf.slice(c0), m.alts.slice(c0))) continue;
+        if (!done && muFar(st.slice(0, n0), all, c0)) return;
+        break;
+      }
       m.cut += st[n0].at[0]; m.c++; m.w0 = 0; m.lead = false;
     }
     if (G.pos >= G.words.length) return G.chain ? chain() : finish();
@@ -467,6 +477,35 @@ const Recite = (() => {
     G.pos = pos; G.tent = tent;
     if (fresh) chime();
     warnSkipped(skips);
+  }
+  // mistakes piling up in the aya being said (or nothing of it heard), and no aya of the session near it fits better (muRelocate):
+  // the reading is elsewhere. Looked for in the whole Quran, as the header mic does; found clearly, the
+  // session goes on from there, on the same reading (the microphone never stops). Right after the
+  // header mic found the place (its first aya), that guess was wrong: it is dropped, unsaved, and all
+  // that was heard is looked for again; later on, ayas were skipped or the reader went elsewhere:
+  // what was heard from the aya being said on is looked for, and that aya's marks are dropped
+  const FAR_EVERY = 1500, FAR_MARGIN = 8;
+  function muFar(states, all, c0) {
+    const m = G.mu, early = G.found && m.c === 0;
+    const ok = states.filter(x => x.state === 'ok').length, bad = states.filter(x => x.state === 'err').length;
+    // (or nothing of it heard, in all that was: everything taken for sounds before it)
+    const from = early ? 0 : c0, text = all.slice(from), n = Match.units(text).length;
+    const lost = (bad >= (early ? 2 : 3) && ok <= bad && n >= 40) || (!ok && !bad && n >= 40);
+    if (!lost || Date.now() - (m.farAt || 0) < FAR_EVERY) return false;
+    m.farAt = Date.now();
+    const r = locateMu(text, m.conf.slice(from), m.alts.slice(from));
+    if (!r || r.fit - r.next < FAR_MARGIN) return false;
+    // where the session's own relocation looks (and the aya being said) is not elsewhere
+    const near = G.ayas.slice(Math.max(0, m.c - 3), m.c + 9);
+    if (near.includes(r.ai)) return false;
+    const g = G, cut = early ? 0 : m.cut;
+    if (early) g.saved = true; // the wrong guess: nothing of it kept
+    else for (let k = m.starts[m.c] + m.w0; k < G.words.length && G.words[k].ai === G.ayas[m.c]; k++) { delete G.errs[k]; delete G.heard[k]; }
+    g.keepMic = true;
+    start(r.ai, null, { stream: true, w0: r.w, cut });
+    if (G !== g && G?.mu) G.found = g.found; // still the header mic's, if it was
+    toast(`${early ? 'وجدناها' : 'انتقلنا'}: ${r.w ? `${ayaLabel(r.ai)} · من كلمة ${ayaTokens(r.ai)[r.w] || ''}` : ayaLabel(r.ai)}`);
+    return true;
   }
   // the aya being said doesn't fit what is heard (nothing of it, or mistakes
   // piling up), but another aya of the session clearly does: a skip ahead (even
