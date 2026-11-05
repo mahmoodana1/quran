@@ -310,7 +310,7 @@ const Recite = (() => {
       // what was heard from the cut on, as heard (a madd's run whole: its length is a tajweed check)
       const all = m.final + m.tent, c0 = Match.charAt(all, m.cut);
       const sub = all.slice(c0), fin = Math.max(0, m.final.length - c0);
-      const st = Match.words(ex, sub, fin, done, { freeLead: m.lead, conf: m.conf.slice(c0), alts: m.alts.slice(c0), tajweed: setting('tajweed') });
+      const st = Match.words(ex, sub, fin, done, { freeLead: m.lead, conf: m.conf.slice(c0), alts: m.alts.slice(c0), tajweed: tjRules() });
       const n0 = cur.spans.length;
       const begun = nx != null && st.slice(n0, n0 + 2).some(x => x.state === 'ok' || x.state === 'err');
       muApply(st.slice(0, n0), begun, cur);
@@ -345,7 +345,7 @@ const Recite = (() => {
     if (m.c >= G.ayas.length) return;
     const c0 = Match.charAt(m.final, m.cut), sub = m.final.slice(c0), conf = m.conf.slice(c0), alts = m.alts.slice(c0);
     const cur = Mu.expect(G.ayas[m.c], m.w0);
-    const tajweed = setting('tajweed');
+    const tajweed = tjRules();
     const st = Match.words(cur, sub, sub.length, false, { freeLead: m.lead, conf, alts, tajweed });
     const t = st.findLastIndex(x => x.state !== 'todo');
     if (t < 0) return;
@@ -1085,7 +1085,8 @@ const Recite = (() => {
     return last != null && R.ayas[last] ? last : pageInfo(S.page).first;
   }
 
-  const SET_ON = { sound: true, tajweed: true }; // settings on unless turned off
+  // (tajweed: one setting before madd and ghunna were apart; turned off, both start off)
+  const SET_ON = { sound: true, tjMadd: store.get('recite.tajweed', true), tjGhunna: store.get('recite.tajweed', true) }; // settings on unless turned off
   // how often the words are read (Mu.rate): the same mistakes caught either way
   const RATE_NOTE = {
     auto: 'كل ربع ثانية إن أطاق جهازك، وأقل على الأجهزة البطيئة كي لا تسخن',
@@ -1093,6 +1094,8 @@ const Recite = (() => {
     save: 'مرة كل ثانية ونصف · أخف على البطارية، والأخطاء تُكشف كما هي، وتظهر الكلمات متأخرة قليلًا',
   };
   const setting = id => !!store.get('recite.' + id, SET_ON[id] ?? false);
+  // the tajweed rules checked while reciting (match.js)
+  const tjRules = () => ({ madd: setting('tjMadd'), ghunna: setting('tjGhunna'), munfasil: setting('tjMunfasil') });
   const toggle = (id, label, sub) => {
     const on = setting(id);
     return `<button class="row rc-set" data-rc-set="${id}" role="switch" aria-checked="${on}">
@@ -1273,9 +1276,12 @@ const Recite = (() => {
       return `<div class="group">
         ${toggle('hide', 'ابدأ والكلمات مخفية', 'تظهر كل كلمة حين تقرؤها')}
         ${toggle('sound', 'صوت واهتزاز عند الخطأ', 'نغمة خفيفة واهتزاز حين تُعلَّم كلمة')}
-        ${MU() ? toggle('tajweed', 'أخطاء التجويد', 'المدّ والغنّة والإدغام: تُعلَّم الكلمة إن لم تعطها حقها') : ''}
         ${toggle('blind', 'تسميع أعمى', 'مع الإخفاء: لا أثر لما بعدك، فلا عدد للكلمات ولا أرقام للآيات')}
         ${toggle('weak', 'مواضع الضعف في المصحف', 'خط منقّط خفيف تحت كلمات أخطأت فيها')}
+        ${MU() ? `<div class="group-label">التجويد</div>
+        ${toggle('tjMadd', 'المدّ', 'يُعلَّم المدّ الطبيعي إن قُصِر، والمتصل واللازم إن لم يُمَدّا')}
+        ${setting('tjMadd') ? toggle('tjMunfasil', 'المدّ المنفصل أربع حركات', 'قراءة الشاطبية؛ إن تركتها مطفأة فالقصر جائز') : ''}
+        ${toggle('tjGhunna', 'الغنّة والإدغام', 'الإدغام والإخفاء والإقلاب والنون والميم المشددتان بغنّتها، والإدغام بلا غنّة')}` : ''}
         <div class="row rc-goal"><span class="main"><span class="t">هدف يومي</span><span class="s">عدد الآيات التي تسمّعها كل يوم</span></span>
           <span class="rc-chips">${[0, 5, 10, 20].map(n => `<button data-rc-goal="${n}"${goal === n ? ' class="on"' : ''}>${n ? ar(n) : 'لا'}</button>`).join('')}</span></div>
         ${MU() ? '' : `<div class="row rc-goal"><span class="main"><span class="t">سرعة التعرّف</span><span class="s">السريع أخفّ وأسرع بمرتين، والدقيق أثبت قليلًا</span></span>

@@ -161,6 +161,20 @@ const Mu = (() => {
     });
   }
 
+  // away from the app a while with nothing being read: the model is let go (it takes
+  // hundreds of MB; a phone closes a background tab that holds that much, and the app
+  // starts over when it comes back). Loaded again from the device when next needed.
+  const IDLE_MS = 60e3;
+  let idleT = null, kept = null; // kept: the recording from before the model was let go
+  document.addEventListener('visibilitychange', () => {
+    clearTimeout(idleT);
+    // (the last minutes heard, kept for sharing, are taken out of it first)
+    if (document.hidden) idleT = setTimeout(() => {
+      if (!document.hidden || mic || !worker || !ready) return;
+      recording().then(r => { if (document.hidden && !mic) { if (r) kept = r; reset(); } }, () => {});
+    }, IDLE_MS);
+  });
+
   // the model stopped working while listening (on phones, the GPU is sometimes
   // taken back): load it again, from the cache, and tell the page (onLost), which
   // goes on from where the reading was
@@ -191,7 +205,8 @@ const Mu = (() => {
     if (mic) return;
     prime();
     mic = { on: true };
-    try { await capture(mic); } catch (e) { mic = null; throw e; }
+    // (let go while the app was away: loaded again, from the device)
+    try { if (!ready) await load(); await capture(mic); } catch (e) { mic = null; throw e; }
     paceLog = [];
     worker.postMessage({ type: 'start' });
     watch(mic);
@@ -269,7 +284,7 @@ const Mu = (() => {
   // ---- the last minutes heard, as a WAV file (16 kHz, 16-bit), to share when
   // the recognition goes wrong; null when nothing was heard yet
   function recording() {
-    if (!worker || !ready) return Promise.resolve(null);
+    if (!worker || !ready) return Promise.resolve(kept);
     return new Promise(r => { onRecording = r; worker.postMessage({ type: 'recording' }); }).then(x => {
       if (!x || !x.length) return null;
       const buf = new ArrayBuffer(44 + x.length * 2), v = new DataView(buf);
