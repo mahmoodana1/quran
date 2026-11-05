@@ -55,6 +55,9 @@ const Mu = (() => {
   // onStep(done, total); resolves with the fastest 4-bit candidate, which becomes
   // the choice unless keep (a choice made by hand stays); all: the bigger ones too
   async function probe(onStep, keep = false, all = false) {
+    // the model in use let go first (loaded again when next needed): two at once on a phone
+    // fill its memory, and the test then times them fighting over it
+    if (!mic) reset();
     const gpu = await gpuInfo();
     const list = CANDS.filter(c => (all || BASE_IDS.includes(c.id)) && !(c.ep === 'webgpu' && (!gpu || (c.f16 && !gpu.f16))));
     const res = {};

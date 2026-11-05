@@ -19,6 +19,8 @@ const MIN_WIN = 1.5; // s heard before anything is final (the very start needs c
 const MAX_WIN = 8;   // s: the longest window read when catching up
 const CATCH = 6;     // s: the window read when a little behind
 const QUANT = 5 * 640; // samples (0.2 s): windows end on this grid, so they come in few lengths
+const SEC = RATE;      // while a window can't yet be its full length (the first seconds), on whole seconds:
+                       // windows of 1 to 8 s, eight lengths in all (a GPU prepares each length it meets)
 // how often it reads, the reader's choice (rate): the study found every 0.25 s or every 1.5 s
 // the same (words marked, mistakes caught); reading more often only shows the words sooner
 //   auto: every MIN_NEW s, but the model runs at most half the time: a slow phone reads less
@@ -128,9 +130,10 @@ function decode(list, probs, alts) {
 const written = () => Atomics.load(meta, 0);
 
 // samples [from, to) of the recitation, out of the ring
-function slice(from, to) {
+// (past what was heard, upto: silence; the last read is made up to a whole length so)
+function slice(from, to, upto = to) {
   const out = new Float32Array(to - from), R = ring.length;
-  for (let i = from; i < to; i++) out[i - from] = ring[(base + i) % R];
+  for (let i = from; i < Math.min(to, upto); i++) out[i - from] = ring[(base + i) % R];
   return out;
 }
 
@@ -142,14 +145,16 @@ async function step(final) {
   // is then closed and loaded again): read up to the last whole QUANT; the last WIN s, or from the
   // start while less was heard; when reading fell behind (a slow or busy device), from just
   // before the last final frame, in a window of CATCH s or MAX_WIN s, so nothing goes unread
-  const e = final ? n : Math.floor(n / QUANT) * QUANT;
-  let st = e - WIN * RATE;
+  // (the last read, final, made up to the grid with silence: under 0.2 s, or a second at the start)
+  const to = (g, x) => (final ? Math.ceil(x / g) : Math.floor(x / g)) * g;
+  let e = to(QUANT, n), st = e - WIN * RATE;
   const behind = Math.max(0, (kept.length - Math.round(0.5 * RATE / FRAME)) * FRAME);
   if (behind < st) st = e - (e - behind <= CATCH * RATE ? CATCH : MAX_WIN) * RATE;
-  st = Math.max(0, st);
+  if (st < 0) { e = to(SEC, n); st = 0; } // all heard so far, in whole seconds
+  if (!final && (e <= 0 || e / RATE <= readUpTo)) return false; // nothing new on the grid yet
   const f0 = st / FRAME;
   const t0 = performance.now();
-  const o = await ids(slice(st, e));
+  const o = await ids(slice(st, e, n));
   const ms = performance.now() - t0;
   stepMs = stepMs ? 0.7 * stepMs + 0.3 * ms : ms;
   const upto = final ? o.length : e - st < MIN_WIN * RATE ? 0 : Math.max(0, o.length - Math.round(RIGHT * RATE / FRAME));
@@ -168,8 +173,7 @@ async function step(final) {
 // prepared all it needs for them now, while the reader waits on a screen saying so
 async function warm() {
   const lens = [];
-  for (let e = QUANT; e <= WIN * RATE; e += QUANT) lens.push(e);
-  lens.push(CATCH * RATE, MAX_WIN * RATE);
+  for (let e = SEC; e <= MAX_WIN * RATE; e += SEC) lens.push(e); // (step(): 1 to 8 s, whole seconds)
   const x = new Float32Array(MAX_WIN * RATE);
   for (let i = 0; i < x.length; i++) x[i] = Math.sin(i * 0.031) * 0.02 * Math.sin(i * 0.0007); // quiet, not silent
   for (let i = 0; i < lens.length; i++) {
@@ -198,7 +202,7 @@ async function loop() {
   while (live) {
     record();
     if ((written() - base) / RATE - readUpTo >= gap()) {
-      try { await step(false); } catch (e) { postMessage({ type: 'error', message: String(e.stack || e) }); await new Promise(r => setTimeout(r, 200)); }
+      try { if (await step(false) === false) await new Promise(r => setTimeout(r, 15)); } catch (e) { postMessage({ type: 'error', message: String(e.stack || e) }); await new Promise(r => setTimeout(r, 200)); }
     }
     else await new Promise(r => setTimeout(r, 15));
   }
