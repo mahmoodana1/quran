@@ -252,6 +252,24 @@
   </div>
 </section>
 
+<!-- before a recitation: everything it needs, done first and shown (recite.js: prep) -->
+<section id="recPrep" class="modal" hidden>
+  <div class="card rc-prep">
+    <h2>تحضير التسميع</h2>
+    <p class="rc-lead" id="rpLead">لحظات، نجهّز كل شيء قبل أن تبدأ، فلا يقطعك شيء أثناء القراءة.</p>
+    <ol class="rp-steps">
+      <li data-rp="update"><i></i><span><b>تحديث التطبيق</b><small></small></span></li>
+      <li data-rp="mic"><i></i><span><b>الميكروفون</b><small></small></span></li>
+      <li data-rp="model"><i></i><span><b>نموذج التعرّف</b><small></small></span></li>
+      <li data-rp="warm"><i></i><span><b>تجهيز النموذج</b><small></small></span></li>
+    </ol>
+    <div class="actions">
+      <button id="rpGo" class="primary" hidden>ابدأ التسميع</button>
+      <button id="rpCancel">إلغاء</button>
+    </div>
+  </div>
+</section>
+
 <!-- recitation over -->
 <section id="recDone" class="modal" hidden>
   <div class="card rc-end">

@@ -34,6 +34,10 @@ const Recite = (() => {
   const MU = () => R.id === 'hafs' && typeof Mu !== 'undefined';
   const MU_NAMES = { 'q8-cpu': '٨ بت · المعالج', 'q8-gpu': '٨ بت · المعالج الرسومي', 'fp16-gpu': '١٦ بت · المعالج الرسومي', 'q4-cpu': '٤ بت · المعالج', 'q4-gpu': '٤ بت · المعالج الرسومي' };
   const ready = () => MU() ? Mu.ready() : Listen.ready();
+  // all a recitation needs, done (prep): no update waiting, the microphone allowed, the
+  // model loaded and prepared for every window it will read
+  let micOk = false;
+  const prepared = () => MU() ? Mu.ready() && Mu.warmed() && micOk && !UPD.stale : Listen.ready();
 
   // the session: words in order { ai, p, n (word on its page), wi (word in its aya), of (aya length), nt (normalised) },
   // idx 'page:n' -> word, pos = next word to say, errs[k] = type, gone = mistakes taken back
@@ -79,15 +83,15 @@ const Recite = (() => {
   // ---- the speech model: asked for once, then kept
 
   let pending = null;
-  function withModel(then) {
+  // intent: what is about to happen ({ start: [from, review, opts] }), to go on with after an update
+  function withModel(then, intent) {
     if (MU()) {
       Mu.prime();
-      if (Mu.ready()) return Mu.sounds().then(then, () => toast('تعذر تحضير التسميع'));
+      if (prepared()) return Mu.sounds().then(then, () => toast('تعذر تحضير التسميع'));
       if (!Mu.choice()) { pending = then; paintDl(); show($('#recIntro')); return; }
       Mu.saved().then(have => {
         if (!have) { pending = then; paintDl(); show($('#recIntro')); return; }
-        toast('جارٍ تحضير التسميع…');
-        Promise.all([Mu.load(), Mu.sounds()]).then(then, () => toast('تعذر تحضير التسميع'));
+        prep(then, intent);
       });
       return;
     }
@@ -131,12 +135,78 @@ const Recite = (() => {
       : Mu.choice() ? `تنزيل النموذج · ${ar(Mu.mb())} م.ب` : 'اختبر جهازك ونزّل النموذج';
   }
 
+  // ---- before a session: each thing it needs, on a screen, one after the other, so none of
+  // it happens during the recitation (an update loading the page again, the microphone's
+  // question, the model loaded or prepared on the GPU, where a phone short of memory would
+  // close the page). Shown only for what is left to do; then the session starts.
+  let prepRun = 0;
+  function prepStep(id, state, note = '') {
+    const li = $(`#recPrep [data-rp="${id}"]`);
+    li.className = state; // '', 'doing', 'done', 'skip', 'fail'
+    li.querySelector('small').textContent = note;
+  }
+  async function prep(then, intent, after) {
+    const run = ++prepRun;
+    ['update', 'mic', 'model', 'warm'].forEach(id => prepStep(id, ''));
+    $('#rpGo').hidden = true;
+    $('#rpLead').textContent = after ? 'حُدِّث التطبيق إلى نسخته الجديدة. نكمل تجهيز التسميع.' : 'لحظات، نجهّز كل شيء قبل أن تبدأ، فلا يقطعك شيء أثناء القراءة.';
+    show($('#recPrep'));
+    const live = () => run === prepRun && !$('#recPrep').hidden;
+    // 1. an update waiting: applied now, the page loaded again, and on from here (prepResume)
+    if (UPD.stale) {
+      prepStep('update', 'doing', 'نسخة جديدة جاهزة — تُطبَّق الآن ثم نكمل');
+      await new Promise(r => setTimeout(r, 900));
+      if (!live()) return;
+      return applyUpdate(intent ? { prep: intent } : { prep: {} });
+    }
+    prepStep('update', 'done', after ? 'حُدِّث الآن' : 'التطبيق محدَّث');
+    // 2. the microphone (asked once per opening of the app by some browsers)
+    if (!micOk) {
+      prepStep('mic', 'doing', 'اسمح للتطبيق باستعمال الميكروفون');
+      try { (await navigator.mediaDevices.getUserMedia({ audio: true })).getTracks().forEach(t => t.stop()); micOk = true; }
+      catch { if (live()) { prepStep('mic', 'fail', 'لم يُسمح به — اسمح به من إعدادات المتصفح ثم أعد المحاولة'); $('#rpGo').hidden = false; $('#rpGo').textContent = 'أعد المحاولة'; $('#rpGo').onclick = () => prep(then, intent); } return; }
+    }
+    if (!live()) return;
+    prepStep('mic', 'done', 'مسموح');
+    // 3. the model, from the device
+    if (!Mu.ready()) {
+      prepStep('model', 'doing', 'يُحمَّل من جهازك…');
+      try { await Promise.all([Mu.load(p => live() && prepStep('model', 'doing', `يُحمَّل من جهازك… ${ar(Math.round(p * 100))}٪`)), Mu.sounds()]); }
+      catch { if (live()) prepStep('model', 'fail', 'تعذر تحميله — أعد المحاولة'); return; }
+    } else await Mu.sounds();
+    if (!live()) return;
+    prepStep('model', 'done', `${MU_NAMES[Mu.choice()?.id] || ''}`);
+    // 4. prepared for every window it will read (the GPU); nothing to do on a CPU
+    if (!Mu.warmed()) {
+      prepStep('warm', 'doing', 'يُهيَّأ لقراءتك…');
+      await Mu.warm(p => live() && prepStep('warm', 'doing', `يُهيَّأ لقراءتك… ${ar(Math.round(p * 100))}٪`));
+    }
+    if (!live()) return;
+    prepStep('warm', 'done', 'جاهز');
+    // after an update the page has no tap yet to let sound and the microphone start: one is asked for
+    if (after) { $('#rpGo').hidden = false; $('#rpGo').textContent = 'ابدأ التسميع'; $('#rpGo').onclick = () => { Mu.prime(); hide($('#recPrep')); then(); }; return; }
+    await new Promise(r => setTimeout(r, 350));
+    if (!live()) return;
+    hide($('#recPrep'));
+    then();
+  }
+  $('#rpCancel').onclick = () => { prepRun++; hide($('#recPrep')); };
+  // the page loaded again for an update during a preparation: on with it
+  function prepResume() {
+    const u = store.get('upd.resume', null);
+    store.set('upd.resume', null);
+    if (!u?.prep || Date.now() - u.t > 3 * 60e3 || !MU() || !Mu.choice()) return;
+    const s = u.prep.start;
+    prep(s ? () => start(...s) : () => {}, u.prep, true);
+  }
+
   // ---- session
 
   // from an aya to the end of its surah, or just the ayas given (a review or a test);
   // opts.test hides the words, opts.seed is the phrase that found the aya (bubble)
   function start(from, review, opts = {}) {
-    if (!ready()) return withModel(() => start(from, review, opts));
+    // (a surah carried on into the next: the session goes on as it is, never prepared again)
+    if (opts.carry ? !ready() : !prepared()) return withModel(() => start(from, review, opts), opts.carry ? null : { start: [from, review, opts] });
     cancel();
     stopFind();
     stopAudio();
@@ -1537,5 +1607,5 @@ const Recite = (() => {
 
   syncBubble();
 
-  return { start, cancel, paint, onTap, card, suraCard, showWord, wordStats, resetWord, ago, restore, syncBubble, mic, panelHTML, mounted, onSheetClick, active: () => !!G };
+  return { start, cancel, paint, onTap, card, suraCard, showWord, prepResume, wordStats, resetWord, ago, restore, syncBubble, mic, panelHTML, mounted, onSheetClick, active: () => !!G };
 })();

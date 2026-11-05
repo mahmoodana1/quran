@@ -1683,3 +1683,21 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 .rc-sb-s { display: flex; flex-direction: column; gap: 6px; }
 .rc-sb-s div { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 13px; }
 .rc-sb-s small { flex: none; font-size: 11.5px; color: var(--muted); }
+
+/* before a recitation: its preparation, step by step */
+.rc-prep h2 { margin: 4px 0 6px; text-align: center; }
+.rc-prep .rc-lead { text-align: center; }
+.rp-steps { list-style: none; margin: 14px 0 18px; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.rp-steps li { display: flex; align-items: flex-start; gap: 12px; opacity: .5; transition: opacity .3s ease; }
+.rp-steps li.doing, .rp-steps li.done, .rp-steps li.fail { opacity: 1; }
+.rp-steps li > i { flex: none; width: 22px; height: 22px; margin-top: 2px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--line); position: relative; }
+.rp-steps li.doing > i { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent); }
+.rp-steps li.doing > i::after { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 2px solid transparent; border-top-color: var(--accent); animation: rpSpin .8s linear infinite; }
+.rp-steps li.done > i { background: var(--accent); box-shadow: none; }
+.rp-steps li.done > i::after { content: ""; position: absolute; left: 7px; top: 4px; width: 6px; height: 10px; border: solid var(--on-accent); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.rp-steps li.fail > i { background: var(--c-marks); box-shadow: none; }
+.rp-steps li span { display: flex; flex-direction: column; gap: 2px; }
+.rp-steps b { font-size: 15px; font-weight: 600; }
+.rp-steps small { font-size: 12.5px; color: var(--muted); min-height: 1em; }
+.rp-steps li.fail small { color: var(--c-marks); }
+@keyframes rpSpin { to { transform: rotate(360deg); } }

@@ -7,8 +7,8 @@
 // (SharedArrayBuffer), so each read takes everything heard up to that moment;
 // without isolation it falls back to messages.
 //
-// in:  load {variant, ep, threads, shared: {ring, meta, time}} · rate {rate} · start · audio {samples} · flush
-// out: progress {loaded, total} · ready {loadMs, ep, threads} · text {final, tent, conf, alts (per character), ms, lag} · flushed · error {message}
+// in:  load {variant, ep, threads, shared: {ring, meta, time}} · rate {rate} · warm · start · audio {samples} · flush
+// out: progress {loaded, total} · ready {loadMs, ep, threads} · warmed {done, total} · text {final, tent, conf, alts (per character), ms, lag} · flushed · error {message}
 
 const ORT = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/';
 const TJS = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.5';
@@ -164,6 +164,20 @@ async function step(final) {
   postMessage({ type: 'text', final: fin, tent: all.out.slice(fin.length), conf: all.conf, alts: all.alt, ms, lag: now() - heardAt, end: e / RATE });
 }
 
+// before a session: each length of window it will read (step()) read once, so a GPU has
+// prepared all it needs for them now, while the reader waits on a screen saying so
+async function warm() {
+  const lens = [];
+  for (let e = QUANT; e <= WIN * RATE; e += QUANT) lens.push(e);
+  lens.push(CATCH * RATE, MAX_WIN * RATE);
+  const x = new Float32Array(MAX_WIN * RATE);
+  for (let i = 0; i < x.length; i++) x[i] = Math.sin(i * 0.031) * 0.02 * Math.sin(i * 0.0007); // quiet, not silent
+  for (let i = 0; i < lens.length; i++) {
+    await ids(x.subarray(0, lens[i]));
+    postMessage({ type: 'warmed', done: i + 1, total: lens.length });
+  }
+}
+
 // keep reading while the recitation goes on
 // the last REC_MAX s of what was heard (across pauses and sessions), for a
 // recording the reader can share when the recognition goes wrong
@@ -221,6 +235,7 @@ onmessage = async ({ data }) => {
   try {
     if (data.type === 'probe') await probe(data);
     if (data.type === 'rate') rate = data.rate;
+    if (data.type === 'warm') await warm();
     if (data.type === 'load') await load(data);
     if (data.type === 'recording') {
       record();

@@ -740,6 +740,21 @@ $('#suraBar').addEventListener('click', e => {
   if (a === 'play') playFrom(R.suraStart[su]);
 });
 
+// an update waiting (a new service worker took over): applied by loading the page again,
+// never in the middle of something, and with a screen saying so. resume: what to do once
+// loaded again (recite.js: the session that was about to start)
+const UPD = {
+  stale: false,
+  busy: () => document.body.classList.contains('rc-on') || document.body.classList.contains('rc-find') || (typeof Mu !== 'undefined' && Mu.listening()),
+};
+function applyUpdate(resume) {
+  keepUI();
+  if (resume) store.set('upd.resume', { t: Date.now(), ...resume });
+  $('#loading').textContent = 'جارٍ تحديث التطبيق إلى نسخته الجديدة…';
+  $('#loading').hidden = false;
+  setTimeout(() => location.reload(), 700);
+}
+
 // what was open when the app went to the background (a panel and its tab, an aya's
 // actions, its tafsir): put back if the page is loaded again soon after (an update,
 // or a phone that closed it in the background to free memory)
@@ -2142,6 +2157,7 @@ $('#doneLater').onclick = () => hide($('#done'));
     hide($('#loading'));
     Recite.restore(); // a session cut off by a reload
     restoreUI();      // and what was open
+    Recite.prepResume(); // a recitation being prepared when an update was applied
   } catch (err) {
     $('#loading').textContent = 'تعذر التحميل — تحقق من الاتصال';
     console.error(err);
@@ -2153,22 +2169,22 @@ $('#doneLater').onclick = () => hide($('#done'));
     // else as it leaves the screen or comes back to it, with no recitation going.
     // An app brought back from the background looks for an update then too (phones
     // keep it open for days)
-    // Not on a quick switch to another app and back: only when it comes back after being
-    // away a while (AWAY_MS), as a fresh start would (and what was open is put back: keepUI)
+    // Never silently: before the app was touched, or when it comes back after being away a
+    // while (AWAY_MS), with a screen saying so (and what was open put back: keepUI); else
+    // when a recitation is about to start (recite.js: its preparation), or as a toast says
     const hadController = !!navigator.serviceWorker.controller, AWAY_MS = 4 * 60e3;
-    const busy = () => document.body.classList.contains('rc-on') || document.body.classList.contains('rc-find') || (typeof Mu !== 'undefined' && Mu.listening());
-    let stale = false, touched = false, hiddenAt = 0;
+    let touched = false, hiddenAt = 0;
     addEventListener('pointerdown', () => { touched = true; }, { capture: true, once: true });
-    const reloadIfIdle = () => { if (stale && !busy()) { keepUI(); location.reload(); } };
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) { hiddenAt = Date.now(); return; }
-      if (hiddenAt && Date.now() - hiddenAt >= AWAY_MS) reloadIfIdle();
+      if (hiddenAt && Date.now() - hiddenAt >= AWAY_MS && UPD.stale && !UPD.busy()) applyUpdate();
       navigator.serviceWorker.getRegistration().then(r => r?.update()).catch(() => {});
     });
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (!hadController && self.crossOriginIsolated) return;
-      stale = true;
-      if (!touched) reloadIfIdle();
+      UPD.stale = true;
+      if (!touched) applyUpdate();
+      else if (!UPD.busy()) toast('نسخة جديدة من التطبيق جاهزة — تُطبَّق قبل التسميع القادم');
     });
     navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
   }

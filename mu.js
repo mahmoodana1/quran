@@ -126,10 +126,17 @@ const Mu = (() => {
   }
 
   let worker = null, ready = false, loading = null, onText = null, onFlushed = null, onRecording = null, shared = null, info = null;
-  let fails = 0, onLost = null;
+  let fails = 0, onLost = null, warmed = false, onWarm = null, warmDone = null;
   function reset() {
     worker?.terminate();
-    worker = null; ready = false; loading = null;
+    worker = null; ready = false; loading = null; warmed = false;
+  }
+  // every length of window it will read, read once (on a GPU: it prepares them all now,
+  // not during the recitation); progress(0..1). On a CPU there is nothing to prepare.
+  function warm(progress) {
+    if (warmed || !ready) return Promise.resolve();
+    if (info?.ep !== 'webgpu') { warmed = true; return Promise.resolve(); }
+    return new Promise(r => { onWarm = progress; warmDone = r; worker.postMessage({ type: 'warm' }); });
   }
   // download (first time) or load from the cache; progress(0..1)
   function load(progress) {
@@ -146,6 +153,7 @@ const Mu = (() => {
       worker.onmessage = ({ data: d }) => {
         if (d.type === 'progress') progress?.(d.loaded / d.total);
         if (d.type === 'ready') { ready = true; info = d; resolve(); }
+        if (d.type === 'warmed') { onWarm?.(d.done / d.total); if (d.done === d.total) { warmed = true; const f = warmDone; warmDone = null; f?.(); } }
         if (d.type === 'text') { fails = 0; trackPace(d); onText?.(d); }
         if (d.type === 'flushed') { const f = onFlushed; onFlushed = null; f?.(); }
         if (d.type === 'recording') { const f = onRecording; onRecording = null; f?.(d.samples); }
@@ -527,6 +535,6 @@ const Mu = (() => {
     CANDS, BASE_IDS, choice, mb, probe, saved, savedVariants, use, bench: () => store.get('mu.bench', null), remove, load, prime, start, listen, stop, sounds, expect, expect2, locate, opening,
     ready: () => ready, listening: () => !!mic, pace: () => ({ pace, near: refs ? refs.r.filter((_, i) => paceMask & 1 << i).map(([r]) => r) : [] }), lost: f => { onLost = f; }, sound: () => actx, info: () => info, recording,
     reprobe: () => { store.set('mu.choice', null); reset(); },
-    rate, setRate,
+    rate, setRate, warm, warmed: () => warmed,
   };
 })();
