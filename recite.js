@@ -288,6 +288,17 @@ const Recite = (() => {
         G.heard = back.heard || {};
       }
     }
+    // found by the header mic (Muaalem): the words said while it made sure count as said, its
+    // mistakes as mistakes, and the reading goes on from the next word
+    if (opts.said?.n && G.mu) {
+      const k0 = G.mu.w0;
+      for (const [i, e, got, want] of opts.said.errs) if (k0 + i < words.length) { G.errs[k0 + i] = e; G.heard[k0 + i] = { got, want }; }
+      G.pos = G.tent = Math.min(words.length, k0 + opts.said.n);
+      const m = G.mu;
+      m.c = Math.max(0, m.starts.findLastIndex(k => k <= Math.min(G.pos, words.length - 1)));
+      m.w0 = Math.min(G.pos, words.length) - m.starts[m.c];
+      if (m.w0 >= words[m.starts[m.c]].of && m.c + 1 < ayas.length) { m.c++; m.w0 = 0; }
+    }
     // found by reciting: what was already said counts as said
     if (opts.seed) { const r = align(opts.seed, 0, words[0].of); if (r) G.pos = Math.min(r.end, words.length - 1); }
     dirty = true;
@@ -833,23 +844,48 @@ const Recite = (() => {
     const sure = r && f.same >= 2 && (r.fit - r.next >= FIND_MARGIN || (n > 150 && f.same >= 4) || (quiet && (r.fit - r.next >= 3 || f.same >= 3)));
     if (!sure) { if (n > 320 || (quiet && Date.now() - f.grew > 6000)) { stopFind(); toast('لم أجد الآية — اقرأ أكثر من آية'); } return; }
     clearInterval(f.timer);
+    const said = reached(r, h, d.conf, d.alts);
     stopFind(); // the search's listening ends here; the session is begun anew, prepared, on a tap
-    found(r.ai, r.w);
+    found(r.ai, r.w, said);
   }
-  // the aya found by the header mic: its page, and over it (blurred) the aya as the page writes it,
-  // its own words (the page's font and colours, the words before the one found faded); a tap
-  // anywhere and each word falls into its place on the page, and التسميع begins from there, as
-  // from an aya pressed (checked first, then a reading of its own: none of the search's in it)
-  function found(ai, w = 0) {
+  // how far the reading went from where it was found (it may have gone on into the next ayas while
+  // the search made sure): { n words said, errs: [[i, type, got, want]] } in the session's words from there
+  function reached(r, h, conf, alts) {
+    const errs = [], s0 = R.ayas[r.ai][0];
+    let n = 0, cut = 0, a = r.ai, w0 = r.w;
+    try {
+      // aya by aya, as a session follows a reading (muFollow): the aya and the two after it lined up
+      // with what was heard from it on; once the next is begun, this one is done
+      for (let guard = 0; guard < 8 && R.ayas[a]?.[0] === s0; guard++) {
+        const cur = Mu.expect(a, w0), more = [a + 1, a + 2].filter(b => R.ayas[b]?.[0] === s0);
+        let ex = cur;
+        for (const b of more) ex = Mu.expect2(ex, Mu.expect(b));
+        // (no more of what was heard than this aya and a little after it, as muFollow takes a long stretch)
+        const c0 = Match.charAt(h, cut), cu = Match.units(cur.ph).length;
+        let sub = h.slice(c0);
+        if (Match.units(sub).length > cu * 1.5 + 45) sub = sub.slice(0, Match.charAt(sub, Math.round(cu * 1.25) + 10));
+        const st = Match.words(ex, sub, sub.length, false, { freeLead: !guard, conf: conf.slice(c0, c0 + sub.length), alts: alts.slice(c0, c0 + sub.length), tajweed: tjRules(), letters: letRules() });
+        const n0 = cur.spans.length, begun = more.length && st.slice(n0, n0 + 2).some(x => x.state === 'ok' || x.state === 'err');
+        const upto = begun ? n0 : st.slice(0, n0).findLastIndex(x => x.state === 'ok' || x.state === 'err') + 1;
+        for (let i = 0; i < upto; i++) if (st[i].state === 'err') errs.push([n + i, MU_TYPE[st[i].type] || (st[i].heard?.length > 1 ? 'wrong' : 'skip'), st[i].heard || '', cur.ph.slice(...cur.spans[i])]);
+        n += upto;
+        if (!begun) break;
+        cut += st[n0].at[0]; a++; w0 = 0;
+      }
+    } catch { /* what was reached so far */ }
+    return { n, errs };
+  }
+  function found(ai, w = 0, said = { n: 0, errs: [] }) {
     const p = R.ayas[ai][2], turn = p !== S.page;
     if (turn) goTo(p);
     S.focus = ai; paintMarks();
-    setTimeout(() => showFound(ai, w), turn ? 420 : 40);
+    setTimeout(() => showFound(ai, w, said), turn ? 420 : 40);
   }
-  function showFound(ai, w) {
+  function showFound(ai, w, said) {
+    const go = () => start(ai, null, { w0: w, said });
     const pg = slots[1]?.firstElementChild, lines = pg?.querySelector('.lines');
     const own = pg ? [...pg.querySelectorAll(`.w[data-a="${ai}"]`)] : [];
-    if (!own.length) return start(ai, null, { w0: w }); // (not on the page shown: no place to fall into)
+    if (!own.length) return go(); // (not on the page shown: no place to fall into)
     const box = $('#recFound'), aya = $('#rfAya'), fs = parseFloat(getComputedStyle(own[0]).fontSize) || 24;
     aya.textContent = '';
     aya.style.fontFamily = getComputedStyle(lines).fontFamily;
@@ -859,7 +895,10 @@ const Recite = (() => {
       const c = el.cloneNode(true), end = el.classList.contains('end');
       c.className = end ? 'w end' : 'w';
       c.style.color = getComputedStyle(el).color;
-      if (!end && wi++ < w) c.classList.add('rf-before');
+      // the words before the one found faded; those said since, as the session shows words said
+      if (!end) { if (wi < w) c.classList.add('rf-before'); else if (wi < w + said.n) c.classList.add('rc-done'); wi++; }
+      else if (wi > w && wi <= w + said.n) c.classList.add('rc-done');
+      if (c.classList.contains('rc-done')) c.style.color = '';
       aya.append(c, ' ');
     });
     box.classList.remove('landing');
@@ -872,11 +911,11 @@ const Recite = (() => {
         const a = c.getBoundingClientRect(), b = own[i]?.getBoundingClientRect();
         if (!b) { c.style.opacity = '0'; return; }
         c.style.transformOrigin = '0 0';
-        c.style.transform = `translate(${b.left - a.left}px, ${b.top - a.top}px) scale(${b.height / a.height || 1})`; // (as shown: a page may be drawn scaled)
+        c.style.transform = `translate(${b.left - a.left}px, ${b.top - a.top}px) scale(${b.width / a.width || 1})`; // (the same glyphs: as wide as on the page, which may be drawn scaled)
         c.classList.remove('rf-before');
       });
       box.classList.add('landing');
-      setTimeout(() => { box.hidden = true; box.classList.remove('landing'); aya.textContent = ''; start(ai, null, { w0: w }); }, 640);
+      setTimeout(() => { box.hidden = true; box.classList.remove('landing'); aya.textContent = ''; go(); }, 640);
     };
     show(box);
     haptic(12);

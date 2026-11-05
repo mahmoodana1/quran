@@ -1820,7 +1820,7 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
   animation: fade .3s ease;
 }
 .rf-aya { width: min(560px, 100%); text-align: center; line-height: 2.15; direction: rtl; animation: rfIn .5s cubic-bezier(.2,.9,.3,1); }
-.rf-aya .w { display: inline-block; padding: 0; transition: transform .62s cubic-bezier(.25,.8,.25,1), opacity .4s ease; }
+.rf-aya .w { display: inline-block; padding: .18em 0; transition: transform .62s cubic-bezier(.25,.8,.25,1), opacity .4s ease; }
 .rf-aya .w.rf-before { opacity: .35; }
 @keyframes rfIn { from { transform: translateY(10px); opacity: 0; } }
 .rf-go { font-size: 14px; font-weight: 600; color: var(--muted); letter-spacing: .2px; animation: rfPulse 2.2s ease-in-out infinite; transition: opacity .3s ease; }
