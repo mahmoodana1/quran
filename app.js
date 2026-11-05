@@ -1402,9 +1402,8 @@ function settingsHTML() {
     <div class="group-label">المظهر</div>
     <div class="themes">${themes}</div>
 
-    <div class="group-label">الرواية</div>
-    <div class="group">${riwayat}</div>
-    <p class="note">لكل رواية رسمها وعلامات ضبطها ووقفها. التلاوة بصوت الشيخ ياسر الدوسري برواية حفص، وتُطابَق آيات الروايات الأخرى مع ما يقابلها فيها.</p>
+    ${'wakeLock' in navigator ? `<div class="group-label">القراءة</div>
+    <div class="group">${switchRow('awake', 'إبقاء الشاشة مضاءة', 'لا تنطفئ الشاشة وأنت تقرأ أو تسمّع، والتطبيق مفتوح')}</div>` : ''}
 
     <div class="group-label">الختمة</div>
     <div class="group"><button class="row" data-open-lib><span class="mini-cover">${coverHTML(K, true)}</span>
@@ -1414,7 +1413,94 @@ function settingsHTML() {
     <div class="group-label">دون اتصال</div>
     ${allCardHTML()}
     ${mushafCardHTML()}
-    ${audioPanelHTML()}`;
+    ${audioPanelHTML()}
+
+    <div class="group-label">بياناتك</div>
+    <div class="group">
+      <button class="row" data-backup="save"><span class="main"><span class="t">حفظ نسخة احتياطية</span><span class="s">العلامات والختمات وتقدّم التسميع والأذكار، في ملف واحد</span></span><svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button>
+      <button class="row" data-backup="load"><span class="main"><span class="t">استعادة من نسخة</span><span class="s">من ملف حفظته من قبل، على هذا الجهاز أو غيره</span></span><svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button>
+    </div>
+    <p class="note">بيانات التطبيق محفوظة على جهازك وحده، وقد يمسحها المتصفح إن قلّت مساحته أو طال تركه. احفظ نسخة بين حين وآخر.</p>
+
+    <div class="group-label">التطبيق</div>
+    <div class="group">
+      <div class="row"><span class="main"><span class="t">النسخة</span><span class="s" id="appVer">…</span></span><button class="rc-not" data-app-update>تحقق من التحديث</button></div>
+      <div class="row"><span class="main"><span class="t">المساحة المستعملة</span><span class="s" id="appStore">…</span></span></div>
+    </div>
+
+    <div class="group-label">الرواية</div>
+    <div class="group">${riwayat}</div>
+    <p class="note">لكل رواية رسمها وعلامات ضبطها ووقفها. التلاوة بصوت الشيخ ياسر الدوسري برواية حفص، وتُطابَق آيات الروايات الأخرى مع ما يقابلها فيها.</p>`;
+}
+
+// a setting that is on or off
+function switchRow(id, label, sub) {
+  const on = !!store.get(id, false);
+  return `<button class="row rc-set" data-switch="${id}" role="switch" aria-checked="${on}">
+    <span class="main"><span class="t">${label}</span><span class="s">${sub}</span></span><span class="tog${on ? ' on' : ''}"><i></i></span></button>`;
+}
+
+// the screen kept on while the app is open, if asked for
+let awakeLock = null;
+async function syncAwake() {
+  const want = !!store.get('awake', false) && !document.hidden;
+  if (want && !awakeLock && navigator.wakeLock) {
+    try { awakeLock = await navigator.wakeLock.request('screen'); awakeLock.addEventListener('release', () => { awakeLock = null; }); } catch {}
+  } else if (!want && awakeLock) { awakeLock.release().catch(() => {}); awakeLock = null; }
+}
+document.addEventListener('visibilitychange', syncAwake);
+syncAwake();
+
+// the app's version, and the room its downloads take
+function refreshAppInfo() {
+  if (!$('#appVer')) return;
+  caches.keys().then(k => {
+    const v = k.map(x => x.match(/^quran-v(\d+)$/)?.[1]).filter(Boolean).sort((a, b) => b - a)[0];
+    if ($('#appVer')) $('#appVer').textContent = v ? `الإصدار ${ar(v)}${UPD.stale ? ' · نسخة جديدة جاهزة' : ''}` : '—';
+  }).catch(() => {});
+  navigator.storage?.estimate?.().then(e => {
+    const mb = Math.round((e.usage || 0) / 1048576);
+    if ($('#appStore')) $('#appStore').textContent = mb >= 1024 ? `${ar((mb / 1024).toFixed(1))} غيغابايت` : `${ar(mb)} م.ب`;
+  }).catch(() => { if ($('#appStore')) $('#appStore').textContent = '—'; });
+}
+async function checkUpdate(b) {
+  b.disabled = true; b.textContent = 'نبحث…';
+  try { await (await navigator.serviceWorker?.getRegistration())?.update(); } catch {}
+  await new Promise(r => setTimeout(r, 2500));
+  if (UPD.stale && !UPD.busy()) return applyUpdate({});
+  b.disabled = false; b.textContent = 'تحقق من التحديث';
+  toast('التطبيق على أحدث نسخة');
+}
+
+// everything the app keeps (its 'q.' keys), to a file and back
+async function saveBackup() {
+  const data = {};
+  for (let k = 0; k < localStorage.length; k++) {
+    const key = localStorage.key(k);
+    if (key.startsWith('q.') && !key.startsWith('q.upd.') && !key.startsWith('q.ui.')) data[key] = localStorage.getItem(key);
+  }
+  const d = new Date(), name = `quran-backup-${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}.json`;
+  const file = new File([JSON.stringify({ app: 'quran', v: 1, t: Date.now(), data })], name, { type: 'application/json' });
+  try { if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: 'نسخة احتياطية' }); return; } } catch (e) { if (e.name === 'AbortError') return; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(file); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+function loadBackup() {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = 'application/json,.json';
+  inp.onchange = async () => {
+    try {
+      const j = JSON.parse(await inp.files[0].text());
+      if (j?.app !== 'quran' || !j.data) throw 0;
+      for (const [k, v] of Object.entries(j.data)) if (k.startsWith('q.') && typeof v === 'string') localStorage.setItem(k, v);
+      $('#loading').textContent = 'استُعيدت بياناتك…';
+      $('#loading').hidden = false;
+      setTimeout(() => location.reload(), 600);
+    } catch { toast('هذا الملف ليس نسخة احتياطية من التطبيق'); }
+  };
+  inp.click();
 }
 
 function audioPanelHTML() {
@@ -1855,6 +1941,9 @@ const PLACES = [
   ['settings', 'الرواية', 'حفص، ورش، قالون، وغيرها', 'روايه روايات قراءه قراءات حفص شعبه ورش قالون دوري سوسي بزي قنبل'],
   ['settings', 'المظهر', 'فاتح، ورقي، داكن، أو تلقائي', 'مظهر داكن ليلي فاتح ورقي الوان لون'],
   ['settings', 'دون اتصال', 'تحميل المصحف والتلاوة والتفسير', 'تحميل تنزيل انترنت اتصال صوت تفسير تلاوه'],
+  ['settings', 'إبقاء الشاشة مضاءة', 'لا تنطفئ وأنت تقرأ', 'شاشه اضاءه تنطفئ قفل سطوع'],
+  ['settings', 'نسخة احتياطية', 'احفظ بياناتك في ملف أو استعدها', 'نسخه احتياطي استعاده حفظ بيانات نقل'],
+  ['settings', 'التحديث', 'الإصدار، والتحقق من نسخة جديدة', 'تحديث اصدار نسخه جديده'],
   ['settings', 'الإعدادات', 'كل الإعدادات', 'اعدادات ضبط'],
 ];
 function shortcuts(raw) {
@@ -1945,7 +2034,7 @@ function renderSheet() {
     const here = body.querySelector('.row.here');
     if (here) here.scrollIntoView({ block: 'center' }); else if (tab !== 'adhkar') body.scrollTop = 0;
   }
-  if (tab === 'settings' && !q.trim()) { refreshAudioPanel(); refreshMushafCard(); }
+  if (tab === 'settings' && !q.trim()) { refreshAudioPanel(); refreshMushafCard(); refreshAppInfo(); }
   if (tab === 'prayer' && !q.trim()) Prayer.mount();
   if (tab === 'recite' && !q.trim()) Recite.mounted();
   if (tab === 'adhkar' && !q.trim()) Adhkar.mount($('#adhkarList'));
@@ -1959,6 +2048,18 @@ $('#sheetBody').addEventListener('click', async e => {
   const th = e.target.closest('[data-theme-set]');
   if (th) { store.set('theme', th.dataset.themeSet); applyTheme(); renderSheet(); return; }
   if (e.target.closest('[data-open-lib]')) { openLibrary(); return; }
+  const sw = e.target.closest('[data-switch]');
+  if (sw) {
+    const id = sw.dataset.switch, on = !store.get(id, false);
+    store.set(id, on);
+    sw.setAttribute('aria-checked', on); sw.querySelector('.tog').classList.toggle('on', on);
+    if (id === 'awake') syncAwake();
+    return;
+  }
+  const bk = e.target.closest('[data-backup]');
+  if (bk) { if (bk.dataset.backup === 'save') saveBackup(); else loadBackup(); return; }
+  const upd = e.target.closest('[data-app-update]');
+  if (upd) { checkUpdate(upd); return; }
   const compass = e.target.closest('[data-pr-compass]');
   if (compass) { Prayer.startCompass(compass); return; }
   const dk = e.target.closest('[data-dk]');
