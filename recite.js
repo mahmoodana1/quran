@@ -295,6 +295,7 @@ const Recite = (() => {
       for (const [i, e, got, want] of opts.said.errs) if (k0 + i < words.length) { G.errs[k0 + i] = e; G.heard[k0 + i] = { got, want }; }
       G.pos = G.tent = Math.min(words.length, k0 + opts.said.n);
       const m = G.mu;
+      if (opts.stream) { m.cut = opts.said.at || 0; m.lead = false; } // the reading goes on from where it got to
       m.c = Math.max(0, m.starts.findLastIndex(k => k <= Math.min(G.pos, words.length - 1)));
       m.w0 = Math.min(G.pos, words.length) - m.starts[m.c];
       if (m.w0 >= words[m.starts[m.c]].of && m.c + 1 < ayas.length) { m.c++; m.w0 = 0; }
@@ -845,14 +846,17 @@ const Recite = (() => {
     if (!sure) { if (n > 320 || (quiet && Date.now() - f.grew > 6000)) { stopFind(); toast('لم أجد الآية — اقرأ أكثر من آية'); } return; }
     clearInterval(f.timer);
     const said = reached(r, h, d.conf, d.alts);
-    stopFind(); // the search's listening ends here; the session is begun anew, prepared, on a tap
+    // the search ends, but not its listening: what the reader goes on to say while the aya is shown
+    // is kept, and the session, begun on a tap, goes on with it (nothing of the reading lost)
+    F = null; syncBubble();
+    Mu.listen(() => {});
     found(r.ai, r.w, said);
   }
   // how far the reading went from where it was found (it may have gone on into the next ayas while
   // the search made sure): { n words said, errs: [[i, type, got, want]] } in the session's words from there
   function reached(r, h, conf, alts) {
     const errs = [], s0 = R.ayas[r.ai][0];
-    let n = 0, cut = 0, a = r.ai, w0 = r.w;
+    let n = 0, cut = 0, a = r.ai, w0 = r.w, at = 0;
     try {
       // aya by aya, as a session follows a reading (muFollow): the aya and the two after it lined up
       // with what was heard from it on; once the next is begun, this one is done
@@ -869,11 +873,12 @@ const Recite = (() => {
         const upto = begun ? n0 : st.slice(0, n0).findLastIndex(x => x.state === 'ok' || x.state === 'err') + 1;
         for (let i = 0; i < upto; i++) if (st[i].state === 'err') errs.push([n + i, MU_TYPE[st[i].type] || (st[i].heard?.length > 1 ? 'wrong' : 'skip'), st[i].heard || '', cur.ph.slice(...cur.spans[i])]);
         n += upto;
+        at = upto && st[upto - 1].at ? cut + st[upto - 1].at[1] : cut;
         if (!begun) break;
-        cut += st[n0].at[0]; a++; w0 = 0;
+        cut += st[n0].at[0]; a++; w0 = 0; at = cut;
       }
     } catch { /* what was reached so far */ }
-    return { n, errs };
+    return { n, errs, at };
   }
   function found(ai, w = 0, said = { n: 0, errs: [] }) {
     const p = R.ayas[ai][2], turn = p !== S.page;
@@ -882,7 +887,8 @@ const Recite = (() => {
     setTimeout(() => showFound(ai, w, said), turn ? 420 : 40);
   }
   function showFound(ai, w, said) {
-    const go = () => start(ai, null, { w0: w, said });
+    // (the reading still listened to: the session takes it over; else, a reading of its own, prepared)
+    const go = () => start(ai, null, Mu.listening() ? { w0: w, said, stream: true } : { w0: w, said });
     const pg = slots[1]?.firstElementChild, lines = pg?.querySelector('.lines');
     const own = pg ? [...pg.querySelectorAll(`.w[data-a="${ai}"]`)] : [];
     if (!own.length) return go(); // (not on the page shown: no place to fall into)
@@ -904,7 +910,9 @@ const Recite = (() => {
     box.classList.remove('landing');
     box.onclick = e => {
       box.onclick = null;
-      if (e.target.closest('#rfCancel')) { hide(box); S.focus = null; paintMarks(); return; }
+      if (e.target.closest('#rfCancel')) { hide(box); S.focus = null; paintMarks(); if (!G) Mu.stop(); return; }
+      // not the aya read: what was heard is let go, and the search begins again, listening afresh
+      if (e.target.closest('#rfAgain')) { hide(box); S.focus = null; paintMarks(); Mu.stop().then(() => { if (!G && !F) findMu(true); }); return; }
       // each word from where it is shown to where it is on the page
       const clones = [...aya.querySelectorAll('.w')];
       clones.forEach((c, i) => {

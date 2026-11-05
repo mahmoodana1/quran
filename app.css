@@ -1825,7 +1825,13 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 @keyframes rfIn { from { transform: translateY(10px); opacity: 0; } }
 .rf-go { font-size: 14px; font-weight: 600; color: var(--muted); letter-spacing: .2px; animation: rfPulse 2.2s ease-in-out infinite; transition: opacity .3s ease; }
 @keyframes rfPulse { 50% { opacity: .45; } }
-.rf-cancel { padding: 6px 16px; border-radius: 99px; font-size: 13px; color: var(--faint); transition: opacity .3s ease; }
+.rf-acts { display: flex; flex-direction: column; align-items: center; gap: 4px; transition: opacity .3s ease; }
+.rf-again {
+  padding: 9px 18px; border-radius: 99px; font-size: 14px; font-weight: 600; color: var(--ink);
+  background: color-mix(in srgb, var(--surface) 85%, transparent); border: .5px solid var(--line); box-shadow: 0 1px 3px rgba(0, 0, 0, .08);
+}
+.rf-again:active { transform: scale(.97); }
+.rf-cancel { padding: 6px 16px; border-radius: 99px; font-size: 13px; color: var(--faint); }
 .rc-found.landing { background-color: transparent; -webkit-backdrop-filter: blur(0) saturate(1); backdrop-filter: blur(0) saturate(1); cursor: default; }
-.rc-found.landing .rf-go, .rc-found.landing .rf-cancel { opacity: 0; animation: none; }
+.rc-found.landing .rf-go, .rc-found.landing .rf-acts { opacity: 0; animation: none; }
 @media (prefers-reduced-motion: reduce) { .rf-go, .rf-aya { animation: none; } }
