@@ -306,6 +306,13 @@ const Recite = (() => {
         muFollow(false);
         if (g.done) { muSettle(); paint(); paintDone(); return; }
         const m = g.mu;
+        // stopped at the aya's end: its last word heard, but not yet decided (a stop drops its last
+        // haraka or tanween, which may still have been coming), so it is judged now, as said; else
+        // the reading would go on expecting it, and the next aya's first words would mark it
+        if (m.c < G.ayas.length) {
+          const endK = m.starts[m.c] + G.words[m.starts[m.c]].of;
+          if (G.tent >= endK && G.pos < endK) { muSettle(); paint(); }
+        }
         m.w0 = Math.max(0, Math.min(G.pos - m.starts[m.c], G.words[m.starts[m.c]].of));
         if (m.w0 >= G.words[m.starts[m.c]].of && m.c + 1 < G.ayas.length) { m.c++; m.w0 = 0; }
         m.cut = 0; m.final = ''; m.conf = null; m.alts = null; m.lead = false; m.open = true;
