@@ -836,22 +836,47 @@ const Recite = (() => {
     stopFind(); // the search's listening ends here; the session is begun anew, prepared, on a tap
     found(r.ai, r.w);
   }
-  // the aya found by the header mic: its page, the aya marked, and over it (the rest blurred) where
-  // it is and how it begins; a tap anywhere begins التسميع from there, as from an aya pressed
-  // (the checks first, then a reading of its own: none of the search's carried into it)
+  // the aya found by the header mic: its page, and over it (blurred) the aya as the page writes it,
+  // its own words (the page's font and colours, the words before the one found faded); a tap
+  // anywhere and each word falls into its place on the page, and التسميع begins from there, as
+  // from an aya pressed (checked first, then a reading of its own: none of the search's in it)
   function found(ai, w = 0) {
-    const p = R.ayas[ai][2];
-    if (p !== S.page) goTo(p);
+    const p = R.ayas[ai][2], turn = p !== S.page;
+    if (turn) goTo(p);
     S.focus = ai; paintMarks();
-    const words = ayaTokens(ai).slice(w);
-    $('#rfTitle').textContent = w ? `${ayaLabel(ai)} · من كلمة «${words[0] || ''}»` : ayaLabel(ai);
-    $('#rfText').textContent = words.slice(0, 12).join(' ') + (words.length > 12 ? ' …' : '');
-    $('#rfText').style.fontFamily = R.font;
-    const box = $('#recFound');
+    setTimeout(() => showFound(ai, w), turn ? 420 : 40);
+  }
+  function showFound(ai, w) {
+    const pg = slots[1]?.firstElementChild, lines = pg?.querySelector('.lines');
+    const own = pg ? [...pg.querySelectorAll(`.w[data-a="${ai}"]`)] : [];
+    if (!own.length) return start(ai, null, { w0: w }); // (not on the page shown: no place to fall into)
+    const box = $('#recFound'), aya = $('#rfAya'), fs = parseFloat(getComputedStyle(own[0]).fontSize) || 24;
+    aya.textContent = '';
+    aya.style.fontFamily = getComputedStyle(lines).fontFamily;
+    aya.style.fontSize = Math.min(fs * 1.45, 40) + 'px';
+    let wi = 0;
+    own.forEach(el => {
+      const c = el.cloneNode(true), end = el.classList.contains('end');
+      c.className = end ? 'w end' : 'w';
+      c.style.color = getComputedStyle(el).color;
+      if (!end && wi++ < w) c.classList.add('rf-before');
+      aya.append(c, ' ');
+    });
+    box.classList.remove('landing');
     box.onclick = e => {
-      hide(box);
-      if (e.target.closest('#rfCancel')) { S.focus = null; paintMarks(); return; }
-      start(ai, null, { w0: w });
+      box.onclick = null;
+      if (e.target.closest('#rfCancel')) { hide(box); S.focus = null; paintMarks(); return; }
+      // each word from where it is shown to where it is on the page
+      const clones = [...aya.querySelectorAll('.w')];
+      clones.forEach((c, i) => {
+        const a = c.getBoundingClientRect(), b = own[i]?.getBoundingClientRect();
+        if (!b) { c.style.opacity = '0'; return; }
+        c.style.transformOrigin = '0 0';
+        c.style.transform = `translate(${b.left - a.left}px, ${b.top - a.top}px) scale(${b.height / a.height || 1})`; // (as shown: a page may be drawn scaled)
+        c.classList.remove('rf-before');
+      });
+      box.classList.add('landing');
+      setTimeout(() => { box.hidden = true; box.classList.remove('landing'); aya.textContent = ''; start(ai, null, { w0: w }); }, 640);
     };
     show(box);
     haptic(12);
