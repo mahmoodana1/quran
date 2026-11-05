@@ -24,10 +24,10 @@
 // stopAudio, speakWord, suraName, ayaLabel, openRecite, renderSheet,
 // closeSheet and flashAya from app.js at call time.
 const Recite = (() => {
-  const TYPES = { wrong: 'قرأتها بكلمة أخرى', haraka: 'أخطأت في حركتها', skip: 'تجاوزتها', hint: 'احتجت تلميحًا', madd: 'لم تعطِ المدّ حقّه', ghunna: 'أخطأت في الغنّة أو الإدغام' };
+  const TYPES = { wrong: 'قرأتها بكلمة أخرى', haraka: 'أخطأت في حركتها', skip: 'تجاوزتها', hint: 'احتجت تلميحًا', madd: 'لم تعطِ المدّ حقّه', ghunna: 'أخطأت في الغنّة أو الإدغام', order: 'قدّمتها أو أخّرتها عن جارتها' };
   const MASTER_DAYS = 3;
   const HINT_AFTER = 7000; // ms of silence on a hidden word before it shows
-  const CLS = ['rc-weak', 'rc-done', 'rc-now', 'rc-hid', 'rc-blind', 'rc-peek', 'rc-wrong', 'rc-haraka', 'rc-skip', 'rc-hint', 'rc-madd', 'rc-ghunna'];
+  const CLS = ['rc-weak', 'rc-done', 'rc-now', 'rc-hid', 'rc-blind', 'rc-peek', 'rc-wrong', 'rc-haraka', 'rc-skip', 'rc-hint', 'rc-madd', 'rc-ghunna', 'rc-order'];
   // hidden, and blind (a setting): no trace of the words ahead, their number or their ayas'
   const blind = () => !!G?.hide && !G.done && store.get('recite.blind', false);
   // Muaalem listens in Hafs (its phonetic script is Hafs's)
@@ -343,7 +343,7 @@ const Recite = (() => {
   // ---- Muaalem: the reading so far, matched against the aya being said and
   // the next one together; once the next one has begun, the one before is
   // closed (words never reached count as skipped)
-  const MU_TYPE = { haraka: 'haraka', letter: 'wrong', extra: 'wrong', skipped: 'skip', madd: 'madd', ghunna: 'ghunna' };
+  const MU_TYPE = { haraka: 'haraka', letter: 'wrong', extra: 'wrong', skipped: 'skip', madd: 'madd', ghunna: 'ghunna', order: 'order' };
   function onMu(g, d) {
     if (G !== g) return;
     if (g.done) { g.mu.final = d.final; g.mu.tent = d.tent; g.mu.conf = d.conf; g.mu.alts = d.alts; return; } // the last of it, read after «finish»: pause() applies it
