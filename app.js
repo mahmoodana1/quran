@@ -2156,7 +2156,7 @@ $('#doneLater').onclick = () => hide($('#done'));
     // Not on a quick switch to another app and back: only when it comes back after being
     // away a while (AWAY_MS), as a fresh start would (and what was open is put back: keepUI)
     const hadController = !!navigator.serviceWorker.controller, AWAY_MS = 4 * 60e3;
-    const busy = () => document.body.classList.contains('rc-on') || document.body.classList.contains('rc-find');
+    const busy = () => document.body.classList.contains('rc-on') || document.body.classList.contains('rc-find') || (typeof Mu !== 'undefined' && Mu.listening());
     let stale = false, touched = false, hiddenAt = 0;
     addEventListener('pointerdown', () => { touched = true; }, { capture: true, once: true });
     const reloadIfIdle = () => { if (stale && !busy()) { keepUI(); location.reload(); } };

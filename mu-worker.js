@@ -17,6 +17,8 @@ const WIN = 4, RIGHT = 1, MIN_NEW = 0.25, RATE = 16000; // (the study, 480 readi
 const FRAME = 640;   // samples per output frame (40 ms); windows start on this grid so frames line up
 const MIN_WIN = 1.5; // s heard before anything is final (the very start needs context)
 const MAX_WIN = 8;   // s: the longest window read when catching up
+const CATCH = 6;     // s: the window read when a little behind
+const QUANT = 5 * 640; // samples (0.2 s): windows end on this grid, so they come in few lengths
 // how often it reads, the reader's choice (rate): the study found every 0.25 s or every 1.5 s
 // the same (words marked, mistakes caught); reading more often only shows the words sooner
 //   auto: every MIN_NEW s, but the model runs at most half the time: a slow phone reads less
@@ -135,26 +137,31 @@ function slice(from, to) {
 // read the newest window; final reads to the very end (the reader stopped)
 async function step(final) {
   const n = written() - base, heardAt = time[0];
-  // the last WIN s; but when reading fell behind (a slow or busy device), from
-  // just before the last final frame, so no stretch of the recitation goes unread
-  let st = Math.max(0, Math.floor((n - WIN * RATE) / FRAME) * FRAME);
+  // windows of a few lengths only (a GPU prepares buffers and programs for each length it
+  // is given, and keeps them: lengths of every size can fill a phone's memory, and the page
+  // is then closed and loaded again): read up to the last whole QUANT; the last WIN s, or from the
+  // start while less was heard; when reading fell behind (a slow or busy device), from just
+  // before the last final frame, in a window of CATCH s or MAX_WIN s, so nothing goes unread
+  const e = final ? n : Math.floor(n / QUANT) * QUANT;
+  let st = e - WIN * RATE;
   const behind = Math.max(0, (kept.length - Math.round(0.5 * RATE / FRAME)) * FRAME);
-  if (behind < st) st = Math.max(behind, Math.floor((n - MAX_WIN * RATE) / FRAME) * FRAME);
+  if (behind < st) st = e - (e - behind <= CATCH * RATE ? CATCH : MAX_WIN) * RATE;
+  st = Math.max(0, st);
   const f0 = st / FRAME;
   const t0 = performance.now();
-  const o = await ids(slice(st, n));
+  const o = await ids(slice(st, e));
   const ms = performance.now() - t0;
   stepMs = stepMs ? 0.7 * stepMs + 0.3 * ms : ms;
-  const upto = final ? o.length : n - st < MIN_WIN * RATE ? 0 : Math.max(0, o.length - Math.round(RIGHT * RATE / FRAME));
+  const upto = final ? o.length : e - st < MIN_WIN * RATE ? 0 : Math.max(0, o.length - Math.round(RIGHT * RATE / FRAME));
   for (let k = kept.length - f0; k < upto; k++) if (k >= 0) { kept[f0 + k] = o[k]; keptP[f0 + k] = o.p[k]; keptA[f0 + k] = o.alt[k]; }
   // frames before f0 that were never made final (can't happen once WIN > RIGHT) stay blank
   for (let k = 0; k < kept.length; k++) { kept[k] ??= 0; keptP[k] ??= 1; keptA[k] ??= ''; }
   const from = Math.max(0, kept.length - f0);
   const tent = final ? [] : Array.from(o.subarray(from)), tentP = final ? [] : Array.from(o.p.subarray(from)), tentA = final ? [] : o.alt.slice(from);
-  readUpTo = n / RATE;
+  readUpTo = e / RATE;
   // lag: from when the newest sample read came in, to its letters being out
   const fin = decode(kept, keptP, keptA).out, all = decode(kept.concat(tent), keptP.concat(tentP), keptA.concat(tentA)); // together, so a letter on the seam isn't doubled
-  postMessage({ type: 'text', final: fin, tent: all.out.slice(fin.length), conf: all.conf, alts: all.alt, ms, lag: now() - heardAt, end: n / RATE });
+  postMessage({ type: 'text', final: fin, tent: all.out.slice(fin.length), conf: all.conf, alts: all.alt, ms, lag: now() - heardAt, end: e / RATE });
 }
 
 // keep reading while the recitation goes on
