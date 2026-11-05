@@ -364,13 +364,6 @@ const Recite = (() => {
     for (let guard = 0; guard < 40 && m.c < G.ayas.length; guard++) {
       const ai = G.ayas[m.c];
       let nx = done ? null : G.ayas[m.c + 1], after = nx != null ? Mu.expect(nx) : null;
-      // the surah's last aya, the session going on: what comes after is the next
-      // surah's basmala and first aya (at-Tawbah: its first aya), so the last aya
-      // is closed when they begin
-      if (nx == null && !done && G.chain && m.c === G.ayas.length - 1 && R.ayas[ai + 1]) {
-        nx = ai + 1;
-        after = R.ayas[nx][0] === 9 ? Mu.expect(nx) : Mu.expect2(Mu.expect(0), Mu.expect(nx));
-      }
       // and the aya after the next too: what was heard past the next then has an aya to line
       // up with, so an aya skipped (and the two after it said) isn't stretched over the next
       // one's words, putting everything after it an aya behind
@@ -398,15 +391,11 @@ const Recite = (() => {
   // surah goes on at once, on the same reading (its basmala set aside), until the
   // reader stops
   function chain() {
+    // the surah read to its end: the session stops there (its summary says so), and the
+    // next surah is one tap away on it
     const g = G, next = g.ayas[g.ayas.length - 1] + 1;
-    if (!R.ayas[next] || !g.run) return finish();
-    save();
-    // the next surah's reading starts where it was heard beginning (its basmala then set aside)
-    const m = g.mu, carry = m && { final: m.final, tent: m.tent, conf: m.conf, alts: m.alts,
-      cut: m.c >= g.ayas.length ? m.cut : m.endAt ?? Match.units(m.final + m.tent).length };
-    g.keepMic = !!m;
-    start(next, null, { stream: !!m, carry });
-    toast(`سورة ${suraName(R.ayas[next][0])}`);
+    if (R.ayas[next] && R.ayas[next][0] !== R.ayas[next - 1][0]) g.next = next;
+    finish();
   }
   // the session is over: the words of the aya being said that were begun are
   // judged as they were said (the reading's end is their end); the rest stay unsaid
@@ -861,7 +850,9 @@ const Recite = (() => {
   function paintDone() {
     const said = G.words.slice(0, G.pos), list = mistakes();
     const first = G.words[0].ai, last = said[said.length - 1].ai;
-    $('#rdTitle').textContent = list.length ? 'انتهت الجلسة' : 'ما شاء الله، بلا أخطاء';
+    const sura = suraName(R.ayas[G.words[G.words.length - 1].ai][0]);
+    $('#rdTitle').textContent = G.next != null ? (list.length ? `تمّت سورة ${sura}` : `تمّت سورة ${sura}، بلا أخطاء`)
+      : list.length ? 'انتهت الجلسة' : 'ما شاء الله، بلا أخطاء';
     $('#rdRange').textContent = G.test ? `اختبار · ${ayaLabel(first)}` : G.review ? `مراجعة مواضع الضعف · ${ayaCount(new Set(said.map(w => w.ai)).size)}`
       : first === last ? ayaLabel(first) : `${ayaLabel(first)} – ${ar(R.ayas[last][1])}`;
     $('#rdRight').textContent = ar(said.length - liveErrs().length);
@@ -878,6 +869,11 @@ const Recite = (() => {
     $('#rdList').innerHTML = rows;
     $('#rdList').hidden = !rows;
     $('#rdNote').innerHTML = rows ? 'تُحفظ في سجل أخطائك عند الإغلاق · <button data-rd-log>عرض السجل</button>' : '';
+    // the surah done: on to the next first; the ayas got wrong after it
+    $('#rdNext').hidden = G.next == null;
+    if (G.next != null) $('#rdNext').textContent = `تابع: سورة ${suraName(R.ayas[G.next][0])}`;
+    $('#rdAgain').hidden = G.next != null && !list.length;
+    $('#rdAgain').classList.toggle('primary', G.next == null);
     $('#rdAgain').textContent = list.length ? 'أعد الآيات المخطوءة' : 'تابع من الآية التالية';
   }
 
@@ -1596,6 +1592,13 @@ const Recite = (() => {
   });
   $('#rdNote').addEventListener('click', e => { if (e.target.closest('[data-rd-log]')) { closeDone(); openRecite(); } });
   $('#rdOk').onclick = () => closeDone();
+  $('#rdNext').onclick = () => {
+    const g = G;
+    if (!g || g.next == null) return;
+    const next = g.next;
+    closeDone();
+    start(next);
+  };
   $('#rdAgain').onclick = () => {
     const g = G;
     if (!g) return;

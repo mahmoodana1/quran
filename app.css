@@ -1220,6 +1220,14 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 }
 .rec-hide svg { width: 17px; height: 17px; }
 .rec-hide.on { background: var(--accent); color: var(--on-accent); }
+/* ending the session: a word and a stop square, in the colour of mistakes, beside «إخفاء» */
+.rec-stop {
+  height: 34px; padding: 0 12px 0 11px; border-radius: 17px; display: flex; align-items: center; gap: 5px;
+  font-size: 13px; font-weight: 600; color: var(--c-marks); background: color-mix(in srgb, var(--c-marks) 12%, transparent);
+  transition: background-color .2s ease, transform .15s ease;
+}
+.rec-stop svg { width: 15px; height: 15px; }
+.rec-stop:active { transform: scale(.95); background: color-mix(in srgb, var(--c-marks) 22%, transparent); }
 
 /* a tapped mistake, above the reciting bar */
 #recWord { bottom: calc(52px + 80px + env(safe-area-inset-bottom)); }
