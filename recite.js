@@ -833,10 +833,28 @@ const Recite = (() => {
     const sure = r && f.same >= 2 && (r.fit - r.next >= FIND_MARGIN || (n > 150 && f.same >= 4) || (quiet && (r.fit - r.next >= 3 || f.same >= 3)));
     if (!sure) { if (n > 320 || (quiet && Date.now() - f.grew > 6000)) { stopFind(); toast('لم أجد الآية — اقرأ أكثر من آية'); } return; }
     clearInterval(f.timer);
-    F = null; // the reading goes on, now as the session's
-    syncBubble();
-    start(r.ai, null, { stream: true, w0: r.w });
-    toast(r.w ? `${ayaLabel(r.ai)} · من كلمة ${ayaTokens(r.ai)[r.w] || ''}` : ayaLabel(r.ai));
+    stopFind(); // the search's listening ends here; the session is begun anew, prepared, on a tap
+    found(r.ai, r.w);
+  }
+  // the aya found by the header mic: its page, the aya marked, and over it (the rest blurred) where
+  // it is and how it begins; a tap anywhere begins التسميع from there, as from an aya pressed
+  // (the checks first, then a reading of its own: none of the search's carried into it)
+  function found(ai, w = 0) {
+    const p = R.ayas[ai][2];
+    if (p !== S.page) goTo(p);
+    S.focus = ai; paintMarks();
+    const words = ayaTokens(ai).slice(w);
+    $('#rfTitle').textContent = w ? `${ayaLabel(ai)} · من كلمة «${words[0] || ''}»` : ayaLabel(ai);
+    $('#rfText').textContent = words.slice(0, 12).join(' ') + (words.length > 12 ? ' …' : '');
+    $('#rfText').style.fontFamily = R.font;
+    const box = $('#recFound');
+    box.onclick = e => {
+      hide(box);
+      if (e.target.closest('#rfCancel')) { S.focus = null; paintMarks(); return; }
+      start(ai, null, { w0: w });
+    };
+    show(box);
+    haptic(12);
   }
   // where the reading fits best: { ai, w, g, fit, next (the runner-up's fit) },
   // equal fits going to the one nearest the page open

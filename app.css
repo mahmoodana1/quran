@@ -1807,3 +1807,33 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 .in-row { border-radius: 18px; border: .5px solid var(--line); background: var(--surface); box-shadow: 0 1px 2px rgba(60, 40, 10, .04); }
 /* the grip line: pulled down, the card closes (app.js) */
 .modal .card::before { width: 44px; height: 5px; margin-bottom: 4px; }
+
+/* the header mic found the aya (recite.js found()): everything behind blurred, the place shown
+   on an emerald card, and a tap anywhere begins التسميع there. Its colours come from the theme,
+   light, sepia or dark (the phone's own, with "auto"), so it reads clearly on each */
+.rc-found {
+  position: fixed; inset: 0; z-index: 46; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  padding: max(24px, env(safe-area-inset-top)) 20px max(24px, env(safe-area-inset-bottom)); cursor: pointer;
+  background: color-mix(in srgb, var(--paper) 62%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15); backdrop-filter: blur(14px) saturate(1.15);
+  animation: fade .3s ease;
+}
+.rf-card {
+  width: min(420px, 100%); display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center;
+  padding: 22px 20px 20px; border-radius: 24px; color: var(--p-on);
+  background: var(--p-pattern) 0 0 / 30px 30px, linear-gradient(155deg, var(--p-green), var(--p-green-2));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p-gold) 50%, transparent), 0 18px 48px -12px color-mix(in srgb, var(--p-green-2) 75%, transparent), var(--shadow-float);
+  animation: rfIn .45s cubic-bezier(.2,.9,.3,1);
+}
+@keyframes rfIn { from { transform: translateY(14px) scale(.96); opacity: 0; } }
+.rf-l { font-size: 12.5px; font-weight: 700; letter-spacing: .3px; padding: 3px 12px; border-radius: 99px; color: #f1dc9c; background: color-mix(in srgb, #000 22%, transparent); }
+#rfTitle { font-size: 21px; font-weight: 800; color: #ecd597; line-height: 1.4; }
+#rfText { margin: 2px 0 6px; font-size: 26px; line-height: 1.9; color: var(--p-on); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.rf-go {
+  display: inline-flex; align-items: center; gap: 8px; margin-top: 4px; padding: 11px 18px; border-radius: 14px; font-size: 15px; font-weight: 800;
+  color: var(--p-green-2); background: linear-gradient(180deg, #f0dba2, #d6b770); box-shadow: 0 1px 0 rgba(255, 255, 255, .4) inset, 0 3px 10px rgba(0, 0, 0, .22);
+  animation: rfPulse 1.8s ease-in-out infinite;
+}
+@keyframes rfPulse { 50% { transform: scale(1.035); box-shadow: 0 1px 0 rgba(255, 255, 255, .4) inset, 0 6px 18px rgba(0, 0, 0, .28); } }
+.rf-cancel { padding: 8px 18px; border-radius: 99px; font-size: 14px; font-weight: 600; color: var(--ink); background: color-mix(in srgb, var(--surface) 80%, transparent); border: .5px solid var(--line); }
+@media (prefers-reduced-motion: reduce) { .rf-go, .rf-card { animation: none; } }
