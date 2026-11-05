@@ -309,10 +309,13 @@ const Mu = (() => {
   // and, per aya, how real reciters reading it right were heard where the rules
   // alone would mark them, and who said it: { r: [[reciter, pace]], a: { ai: { wi: { heard: reciters (bits) } } } }
   // (data/refs-hafs.json; optional). Only the reciters nearest the reader's pace count.
-  let phon = null, phonLoading = null, refs = null;
+  // and where tajweed isn't checked (correct reciters heard otherwise there: data/tj-hafs.json,
+  // { ai: [character offsets in its phonetic script] }; optional)
+  let phon = null, phonLoading = null, refs = null, tjSkip = null;
   function sounds() {
     return phonLoading ||= Promise.all([
       fetch(`data/phon-hafs.json?v=${DATA_VERSION}`).then(r => r.json()).then(d => { phon = d; }),
+      fetch(`data/tj-hafs.json?v=${DATA_VERSION}t`).then(r => r.ok ? r.json() : null).then(d => { tjSkip = d; }, () => {}),
       fetch(`data/refs-hafs.json?v=${DATA_VERSION}p`).then(r => r.ok ? r.json() : null).then(d => { refs = d?.a ? d : null; }, () => {}),
     ]);
   }
@@ -325,6 +328,7 @@ const Mu = (() => {
     const spans = [];
     for (let i = w0 * 2; i < sp.length; i += 2) spans.push([sp[i] - o, sp[i + 1] - o]);
     const e = { ph: ph.slice(o), spans, wasl: wasl.filter(k => k >= w0).map(k => k - w0) };
+    if (tjSkip?.[ai]) e.tj = tjSkip[ai].filter(c => c >= o).map(c => c - o);
     const r = refs?.a[ai];
     if (r) {
       e.refs = [];
@@ -342,6 +346,9 @@ const Mu = (() => {
     const k = a.ph + '|' + b.ph;
     if (cache.has(k)) return cache.get(k);
     const n = a.ph.length, e = { ph: a.ph + b.ph, spans: a.spans.concat(b.spans.map(([x, y]) => [x + n, y + n])), wasl: a.wasl.concat(b.wasl.map(k => k + a.spans.length)) };
+    if (a.tj || b.tj) e.tj = (a.tj || []).concat((b.tj || []).map(c => c + n));
+    // the words that end an aya (a madd before its last letter is free at the stop)
+    e.ends = (a.ends || [a.spans.length - 1]).concat((b.ends || [b.spans.length - 1]).map(w => w + a.spans.length));
     if (a.refs || b.refs) { e.refs = []; a.refs?.forEach((v, i) => { e.refs[i] = v; }); b.refs?.forEach((v, i) => { e.refs[i + a.spans.length] = v; }); }
     cache.set(k, e);
     return e;

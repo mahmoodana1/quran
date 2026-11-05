@@ -24,10 +24,10 @@
 // stopAudio, speakWord, suraName, ayaLabel, openRecite, renderSheet,
 // closeSheet and flashAya from app.js at call time.
 const Recite = (() => {
-  const TYPES = { wrong: 'قرأتها بكلمة أخرى', haraka: 'أخطأت في حركتها', skip: 'تجاوزتها', hint: 'احتجت تلميحًا' };
+  const TYPES = { wrong: 'قرأتها بكلمة أخرى', haraka: 'أخطأت في حركتها', skip: 'تجاوزتها', hint: 'احتجت تلميحًا', madd: 'لم تعطِ المدّ حقّه', ghunna: 'أخطأت في الغنّة أو الإدغام' };
   const MASTER_DAYS = 3;
   const HINT_AFTER = 7000; // ms of silence on a hidden word before it shows
-  const CLS = ['rc-weak', 'rc-done', 'rc-now', 'rc-hid', 'rc-blind', 'rc-peek', 'rc-wrong', 'rc-haraka', 'rc-skip', 'rc-hint'];
+  const CLS = ['rc-weak', 'rc-done', 'rc-now', 'rc-hid', 'rc-blind', 'rc-peek', 'rc-wrong', 'rc-haraka', 'rc-skip', 'rc-hint', 'rc-madd', 'rc-ghunna'];
   // hidden, and blind (a setting): no trace of the words ahead, their number or their ayas'
   const blind = () => !!G?.hide && !G.done && store.get('recite.blind', false);
   // Muaalem listens in Hafs (its phonetic script is Hafs's)
@@ -267,7 +267,7 @@ const Recite = (() => {
   // ---- Muaalem: the reading so far, matched against the aya being said and
   // the next one together; once the next one has begun, the one before is
   // closed (words never reached count as skipped)
-  const MU_TYPE = { haraka: 'haraka', letter: 'wrong', extra: 'wrong', skipped: 'skip' };
+  const MU_TYPE = { haraka: 'haraka', letter: 'wrong', extra: 'wrong', skipped: 'skip', madd: 'madd', ghunna: 'ghunna' };
   function onMu(g, d) {
     if (G !== g) return;
     if (g.done) { g.mu.final = d.final; g.mu.tent = d.tent; g.mu.conf = d.conf; g.mu.alts = d.alts; return; } // the last of it, read after «finish»: pause() applies it
@@ -282,8 +282,7 @@ const Recite = (() => {
     muFollow(false);
   }
   function muFollow(done) {
-    const m = G.mu, U = Match.units(m.final + m.tent), uf = Match.units(m.final).length;
-    const Uc = Match.unitConf(m.final + m.tent, m.conf), Ua = Match.unitAlts(m.final + m.tent, m.alts);
+    const m = G.mu, U = Match.units(m.final + m.tent);
     // each stretch read (the first, and after every pause) may open with an
     // isti'adha or a basmala: set aside, and nothing marked while it is said
     if (m.open && m.c < G.ayas.length && U.length - m.cut >= 6) {
@@ -302,15 +301,22 @@ const Recite = (() => {
         nx = ai + 1;
         after = R.ayas[nx][0] === 9 ? Mu.expect(nx) : Mu.expect2(Mu.expect(0), Mu.expect(nx));
       }
+      // and the aya after the next too: what was heard past the next then has an aya to line
+      // up with, so an aya skipped (and the two after it said) isn't stretched over the next
+      // one's words, putting everything after it an aya behind
+      const nx2 = after && !done ? G.ayas[m.c + 2] : null;
+      if (nx2 != null) after = Mu.expect2(after, Mu.expect(nx2));
       const cur = Mu.expect(ai, m.w0), ex = after ? Mu.expect2(cur, after) : cur;
-      const sub = Match.text(U.slice(m.cut)), fin = Match.text(U.slice(m.cut, Math.max(m.cut, uf))).length;
-      const st = Match.words(ex, sub, fin, done, { freeLead: m.lead, conf: Uc.slice(m.cut), alts: Ua.slice(m.cut) });
+      // what was heard from the cut on, as heard (a madd's run whole: its length is a tajweed check)
+      const all = m.final + m.tent, c0 = Match.charAt(all, m.cut);
+      const sub = all.slice(c0), fin = Math.max(0, m.final.length - c0);
+      const st = Match.words(ex, sub, fin, done, { freeLead: m.lead, conf: m.conf.slice(c0), alts: m.alts.slice(c0), tajweed: setting('tajweed') });
       const n0 = cur.spans.length;
       const begun = nx != null && st.slice(n0, n0 + 2).some(x => x.state === 'ok' || x.state === 'err');
       muApply(st.slice(0, n0), begun, cur);
       const end = st[n0 - 1]?.state === 'ok' || st[n0 - 1]?.state === 'err' ? st[n0 - 1].at?.[1] : null;
       if (end != null) m.endAt = m.cut + end; // where the aya's last word ended in what was heard
-      if (!begun) { if (!done && muRelocate(st.slice(0, n0), sub, fin, Uc.slice(m.cut), Ua.slice(m.cut))) continue; break; }
+      if (!begun) { if (!done && muRelocate(st.slice(0, n0), sub, fin, m.conf.slice(c0), m.alts.slice(c0))) continue; break; }
       m.cut += st[n0].at[0]; m.c++; m.w0 = 0; m.lead = false;
     }
     if (G.pos >= G.words.length) return G.chain ? chain() : finish();
@@ -337,13 +343,15 @@ const Recite = (() => {
   function muSettle() {
     const m = G.mu;
     if (m.c >= G.ayas.length) return;
-    const U = Match.units(m.final), sub = Match.text(U.slice(m.cut)), conf = Match.unitConf(m.final, m.conf).slice(m.cut), alts = Match.unitAlts(m.final, m.alts).slice(m.cut);
+    const c0 = Match.charAt(m.final, m.cut), sub = m.final.slice(c0), conf = m.conf.slice(c0), alts = m.alts.slice(c0);
     const cur = Mu.expect(G.ayas[m.c], m.w0);
-    const st = Match.words(cur, sub, sub.length, false, { freeLead: m.lead, conf, alts });
+    const tajweed = setting('tajweed');
+    const st = Match.words(cur, sub, sub.length, false, { freeLead: m.lead, conf, alts, tajweed });
     const t = st.findLastIndex(x => x.state !== 'todo');
     if (t < 0) return;
     const part = { ph: cur.ph.slice(0, cur.spans[t][1]), spans: cur.spans.slice(0, t + 1), wasl: cur.wasl.filter(k => k <= t) };
-    const fin = Match.words(part, sub, sub.length, true, { freeLead: m.lead, conf, alts });
+    if (cur.tj) part.tj = cur.tj.filter(c => c < part.ph.length);
+    const fin = Match.words(part, sub, sub.length, true, { freeLead: m.lead, conf, alts, tajweed });
     muApply(fin.concat(st.slice(t + 1)), false, cur);
   }
 
@@ -380,9 +388,13 @@ const Recite = (() => {
     if (Date.now() - (m.relocAt || 0) < 800 || (ok0 && bad0 < 2)) return false;
     if (Match.units(sub).length < 25) return false;
     m.relocAt = Date.now();
+    // of ayas heard alike (a refrain, as ar-Rahman's «فبأي آلاء ربكما تكذبان»), the one
+    // just read (said again), else the nearest ahead; further back only when it fits better
+    const order = m.c > 0 ? [m.c - 1] : [];
+    for (let j = m.c + 1; j < Math.min(G.ayas.length, m.c + 9); j++) order.push(j);
+    for (let j = m.c - 2; j >= Math.max(0, m.c - 3); j--) order.push(j);
     let best = null;
-    for (let j = Math.max(0, m.c - 3); j < Math.min(G.ayas.length, m.c + 9); j++) {
-      if (j === m.c) continue;
+    for (const j of order) {
       const st = Match.words(Mu.expect(G.ayas[j]), sub, fin, false, { freeLead: true, conf, alts });
       const ok = st.filter(x => x.state === 'ok').length, bad = st.filter(x => x.state === 'err').length;
       if (ok >= Math.max(3, ok0 + 2) && ok / (ok + bad) >= 0.7 && (!best || ok > best.ok)) best = { j, ok };
@@ -1073,7 +1085,7 @@ const Recite = (() => {
     return last != null && R.ayas[last] ? last : pageInfo(S.page).first;
   }
 
-  const SET_ON = { sound: true }; // settings on unless turned off
+  const SET_ON = { sound: true, tajweed: true }; // settings on unless turned off
   // how often the words are read (Mu.rate): the same mistakes caught either way
   const RATE_NOTE = {
     auto: 'كل ربع ثانية إن أطاق جهازك، وأقل على الأجهزة البطيئة كي لا تسخن',
@@ -1261,6 +1273,7 @@ const Recite = (() => {
       return `<div class="group">
         ${toggle('hide', 'ابدأ والكلمات مخفية', 'تظهر كل كلمة حين تقرؤها')}
         ${toggle('sound', 'صوت واهتزاز عند الخطأ', 'نغمة خفيفة واهتزاز حين تُعلَّم كلمة')}
+        ${MU() ? toggle('tajweed', 'أخطاء التجويد', 'المدّ والغنّة والإدغام: تُعلَّم الكلمة إن لم تعطها حقها') : ''}
         ${toggle('blind', 'تسميع أعمى', 'مع الإخفاء: لا أثر لما بعدك، فلا عدد للكلمات ولا أرقام للآيات')}
         ${toggle('weak', 'مواضع الضعف في المصحف', 'خط منقّط خفيف تحت كلمات أخطأت فيها')}
         <div class="row rc-goal"><span class="main"><span class="t">هدف يومي</span><span class="s">عدد الآيات التي تسمّعها كل يوم</span></span>
