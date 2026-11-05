@@ -87,8 +87,9 @@ const Recite = (() => {
   function withModel(then, intent) {
     if (MU()) {
       Mu.prime();
-      if (prepared()) return Mu.sounds().then(then, () => toast('تعذر تحضير التسميع'));
+      // every use is checked first, on its screen, even when all is ready (then it only ticks through)
       if (!Mu.choice()) { pending = then; paintDl(); show($('#recIntro')); return; }
+      if (Mu.ready()) return prep(then, intent);
       Mu.saved().then(have => {
         if (!have) { pending = then; paintDl(); show($('#recIntro')); return; }
         prep(then, intent);
@@ -108,7 +109,7 @@ const Recite = (() => {
   // goes on from where it was, or the search starts over
   Mu.lost(err => {
     if (err) { if (F) stopFind(); if (G?.run) pause(); toast('تعذر تحضير التسميع — أعد فتح التطبيق'); return; }
-    if (F) { stopFind(); findMu(); return; }
+    if (F) { stopFind(); findMu(true); return; }
     if (G?.run && G.mu) { pause(); setTimeout(() => { if (G && !G.run && !G.done) resume(); }, 100); }
   });
 
@@ -161,8 +162,8 @@ const Recite = (() => {
     }
     prepStep('update', 'done', after ? 'حُدِّث الآن' : 'التطبيق محدَّث');
     // 2. the microphone (asked once per opening of the app by some browsers)
-    if (!micOk) {
-      prepStep('mic', 'doing', 'اسمح للتطبيق باستعمال الميكروفون');
+    {
+      prepStep('mic', 'doing', micOk ? 'نتحقق منه…' : 'اسمح للتطبيق باستعمال الميكروفون');
       try { (await navigator.mediaDevices.getUserMedia({ audio: true })).getTracks().forEach(t => t.stop()); micOk = true; }
       catch { if (live()) { prepStep('mic', 'fail', 'لم يُسمح به — اسمح به من إعدادات المتصفح ثم أعد المحاولة'); $('#rpGo').hidden = false; $('#rpGo').textContent = 'أعد المحاولة'; $('#rpGo').onclick = () => prep(then, intent); } return; }
     }
@@ -175,7 +176,8 @@ const Recite = (() => {
       catch { if (live()) prepStep('model', 'fail', 'تعذر تحميله — أعد المحاولة'); return; }
     } else await Mu.sounds();
     if (!live()) return;
-    prepStep('model', 'done', `${MU_NAMES[Mu.choice()?.id] || ''}`);
+    if (!Mu.ready()) { prepStep('model', 'fail', 'تعذر تحميله — أعد المحاولة'); return; }
+    prepStep('model', 'done', `${MU_NAMES[Mu.choice()?.id] || ''} · يعمل`);
     // 4. prepared for every window it will read (the GPU); nothing to do on a CPU
     if (!Mu.warmed()) {
       prepStep('warm', 'doing', 'يُهيَّأ لقراءتك…');
@@ -197,7 +199,7 @@ const Recite = (() => {
     store.set('upd.resume', null);
     if (!u?.prep || Date.now() - u.t > 3 * 60e3 || !MU() || !Mu.choice()) return;
     const s = u.prep.start;
-    prep(s ? () => start(...s) : u.prep.find ? () => find() : () => {}, u.prep, true);
+    prep(s ? () => start(s[0], s[1], { ...s[2], checked: true }) : u.prep.find ? () => findMu(true) : () => restore(), u.prep, true);
   }
 
   // ---- session
@@ -206,7 +208,10 @@ const Recite = (() => {
   // opts.test hides the words, opts.seed is the phrase that found the aya (bubble)
   function start(from, review, opts = {}) {
     // (a surah carried on into the next: the session goes on as it is, never prepared again)
-    if (opts.carry ? !ready() : !prepared()) return withModel(() => start(from, review, opts), opts.carry ? null : { start: [from, review, opts] });
+    // a reading going on (into the next surah, found by reciting) or a session brought back paused only needs the
+    // model; anything else the reader begins is checked first, on its screen (withModel → prep)
+    const going = opts.carry || opts.stream || opts.seed || opts.restore || opts.checked;
+    if (going ? !ready() : true) return withModel(() => start(from, review, { ...opts, checked: true }), going ? null : { start: [from, review, opts] });
     cancel();
     stopFind();
     stopAudio();
@@ -265,6 +270,7 @@ const Recite = (() => {
       secs: G.secs + (G.run ? (Date.now() - G.t) / 1000 : 0), hide: G.hide, review: G.review, test: G.test });
   }
   function restore() {
+    if (store.get('upd.resume', null)?.prep) return; // an update came mid-preparation: prepResume brings it back
     const s = store.get(LIVE(), null);
     if (!s || Date.now() - s.t > 3 * 3600e3 || !s.pos || !s.ayas?.every(ai => R.ayas[ai])) return;
     start(null, s.ayas, { test: s.test, restore: s });
@@ -682,8 +688,9 @@ const Recite = (() => {
   // word); the session then goes on with it, from that word
   const FIND_EVERY = 500, QUIET = 1500;
   const FIND_MARGIN = 12; // heard sounds the best place must explain beyond any other
-  function findMu() {
-    withModel(() => {
+  // checked: the steps already seen to (after an update, or the model brought back mid-search)
+  function findMu(checked) {
+    const go = () => {
       if (G) return;
       F = { voice: false, d: null, n: 0, grew: 0, same: 0, last: null };
       syncBubble();
@@ -695,7 +702,8 @@ const Recite = (() => {
       }).then(() => {
         if (F === f) f.timer = setInterval(() => { if (F !== f) clearInterval(f.timer); else checkFind(f); }, FIND_EVERY);
       }, () => { stopFind(); toast('لا يمكن الوصول إلى الميكروفون — اسمح به من إعدادات المتصفح'); });
-    }, { find: true });
+    };
+    if (checked) go(); else withModel(go, { find: true });
   }
   // many places in the Quran read alike: go only once one fits clearly better
   // than any other, and has stayed the best for a second; when the reader has
@@ -1534,7 +1542,7 @@ const Recite = (() => {
   $('#recToggle').onclick = () => {
     if (G?.run) return pause();
     const g = G;
-    if (MU() && g && !g.done && !prepared()) return withModel(() => { if (G === g) resume(); }, {});
+    if (MU() && g && !g.done) return withModel(() => { if (G === g) resume(); }, {});
     resume();
   };
   $('#recHide').onclick = () => {
