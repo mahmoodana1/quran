@@ -128,7 +128,8 @@ const Mu = (() => {
     } catch {}
   }
 
-  let worker = null, ready = false, loading = null, onText = null, onFlushed = null, onRecording = null, shared = null, info = null;
+  let worker = null, ready = false, loading = null, onText = null, onFlushed = null, onRecording = null, shared = null, info = null, onDead = null;
+  const MUTE_MS = 3000; // only silence this long, while listening: the microphone is gone
   let fails = 0, onLost = null, warmed = false, onWarm = null, warmDone = null;
   function reset() {
     worker?.terminate();
@@ -222,15 +223,50 @@ const Mu = (() => {
     worker.postMessage({ type: 'start' });
     watch(mic);
   }
+  // the microphone, raw if it can be (a new device may not take the settings: then as it comes)
+  async function openMic() {
+    try { return await navigator.mediaDevices.getUserMedia({ audio: RAW_MIC }); }
+    catch (e) { if (e.name === 'NotAllowedError' || e.name === 'SecurityError') throw e; return navigator.mediaDevices.getUserMedia({ audio: true }); }
+  }
+  // the microphone, asked for and listened to: 'ok' once real sound comes in (a room is never
+  // perfectly silent), 'denied', 'silent' (it opened but sends nothing: unplugged, taken by
+  // another app, a phone that lost it), or 'none' (no microphone found, or it can't be opened)
+  const SILENT = 1e-6;
+  async function micCheck(ms = 1500) {
+    let stream;
+    try { stream = await openMic(); }
+    catch (e) { return e.name === 'NotAllowedError' || e.name === 'SecurityError' ? 'denied' : 'none'; }
+    try {
+      if (!actx || actx.state === 'closed') context();
+      await actx.resume().catch(() => {});
+      if (stream.getAudioTracks().every(t => t.readyState === 'ended' || t.muted)) return 'silent';
+      const src = actx.createMediaStreamSource(stream), an = actx.createAnalyser();
+      an.fftSize = 2048; src.connect(an);
+      const buf = new Float32Array(an.fftSize), t0 = Date.now();
+      let peak = 0;
+      while (Date.now() - t0 < ms && peak <= SILENT) {
+        await new Promise(r => setTimeout(r, 60));
+        an.getFloatTimeDomainData(buf);
+        for (let i = 0; i < buf.length; i++) peak = Math.max(peak, Math.abs(buf[i]));
+      }
+      src.disconnect();
+      // (an audio engine not running hears nothing either: not the microphone's fault)
+      return peak > SILENT || actx.state !== 'running' ? 'ok' : 'silent';
+    } finally { stream.getTracks().forEach(t => t.stop()); }
+  }
   // the microphone into the tap; m: the listening it is for
   async function capture(m) {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: RAW_MIC });
+    const stream = await openMic();
     if (!m.on) { stream.getTracks().forEach(t => t.stop()); return; }
     await tapReady;
     const clock0 = now() - actx.currentTime * 1000;
     const node = new AudioWorkletNode(actx, 'tap', { numberOfInputs: 1, numberOfOutputs: 1, outputChannelCount: [1], processorOptions: { shared, clock0 } });
     m.fed = Date.now();
-    node.port.onmessage = e => { m.fed = Date.now(); if (!shared) worker?.postMessage({ type: 'audio', samples: e.data.samples, at: e.data.at }); };
+    m.sound = Date.now(); // when sound last came in (not only samples: an unplugged microphone sends silence)
+    node.port.onmessage = e => {
+      m.fed = Date.now();
+      if (!shared) { const x = e.data.samples; for (let i = 0; i < x.length; i += 7) if (Math.abs(x[i]) > SILENT) { m.sound = Date.now(); break; } worker?.postMessage({ type: 'audio', samples: x, at: e.data.at }); }
+    };
     node.connect(actx.destination); // silent
     const src = actx.createMediaStreamSource(stream);
     src.connect(node);
@@ -253,7 +289,13 @@ const Mu = (() => {
     m.unwatch = () => { clearInterval(m.timer); document.removeEventListener('pointerdown', tap, true); document.removeEventListener('visibilitychange', vis); };
     m.timer = setInterval(async () => {
       if (!m.on || busy || document.hidden) return;
-      if (shared) { const w = Atomics.load(shared.meta, 0); if (w !== seen) { seen = w; m.fed = Date.now(); } }
+      if (shared) {
+        const w = Atomics.load(shared.meta, 0), R = shared.ring, L = R.length;
+        if (w !== seen) {
+          for (let i = Math.max(seen, w - 16000); i < w; i += 7) if (Math.abs(R[i % L]) > SILENT) { m.sound = Date.now(); break; }
+          seen = w; m.fed = Date.now();
+        }
+      }
       // held by the phone (a call, another app): only a tap brings it back; no new engine
       if (actx.state === 'suspended' || actx.state === 'interrupted') {
         kick(); m.fed = Date.now();
@@ -262,12 +304,14 @@ const Mu = (() => {
         return;
       }
       m.held = 0; m.told = false;
-      const dead = m.stream?.getAudioTracks().some(t => t.readyState === 'ended');
+      // samples, but only silence for a while: the microphone is gone (unplugged, lost by the phone)
+      const mute = actx.state === 'running' && Date.now() - m.fed < 1500 && Date.now() - (m.sound || 0) > MUTE_MS;
+      const dead = m.stream?.getAudioTracks().some(t => t.readyState === 'ended') || mute;
       if (!dead && actx.state === 'running' && Date.now() - m.fed < 1500) return;
-      // a few times a minute at most: past that, something else is wrong and taking
-      // the microphone again and again would only make it worse
+      // twice a minute at most: past that, taking the microphone again and again would only
+      // make it worse (a phone asking again each time, for ever): the reader is told instead
       m.tries = (m.tries || []).filter(t => Date.now() - t < 60000);
-      if (m.tries.length >= 3) return;
+      if (m.tries.length >= 2) { if (!m.gaveUp) { m.gaveUp = true; onDead?.(); } return; }
       m.tries.push(Date.now());
       busy = true;
       try {
@@ -277,7 +321,7 @@ const Mu = (() => {
         release(m);
         if (actx.state === 'closed') { context(); actx.resume(); }
         await capture(m);
-      } catch { /* tried again next time */ } finally { busy = false; m.fed = Date.now(); }
+      } catch (e) { if (e?.name === 'NotAllowedError' && !m.gaveUp) { m.gaveUp = true; onDead?.(); } } finally { busy = false; m.fed = Date.now(); m.sound = Date.now(); }
     }, 1000);
   }
   // the handler only (the same reading goes on: the found aya takes it over)
@@ -538,6 +582,6 @@ const Mu = (() => {
     CANDS, BASE_IDS, choice, mb, probe, saved, savedVariants, use, bench: () => store.get('mu.bench', null), remove, load, prime, start, listen, stop, sounds, expect, expect2, locate, opening,
     ready: () => ready, listening: () => !!mic, pace: () => ({ pace, near: refs ? refs.r.filter((_, i) => paceMask & 1 << i).map(([r]) => r) : [] }), lost: f => { onLost = f; }, sound: () => actx, info: () => info, recording,
     reprobe: () => { store.set('mu.choice', null); reset(); },
-    rate, setRate, warm, warmed: () => warmed,
+    rate, setRate, warm, warmed: () => warmed, micCheck, dead: f => { onDead = f; },
   };
 })();

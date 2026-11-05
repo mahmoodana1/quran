@@ -151,7 +151,8 @@ const Recite = (() => {
     const run = ++prepRun;
     ['update', 'mic', 'model', 'warm'].forEach(id => prepStep(id, ''));
     $('#rpGo').hidden = true;
-    $('#rpLead').textContent = after ? 'حُدِّث التطبيق إلى نسخته الجديدة. نكمل تجهيز التسميع.' : 'لحظات، نجهّز كل شيء قبل أن تبدأ، فلا يقطعك شيء أثناء القراءة.';
+    $('#rpLead').textContent = after && intent?.mic ? 'أُعيد تحميل التطبيق. نتأكد من الميكروفون ونكمل.'
+      : after ? 'حُدِّث التطبيق إلى نسخته الجديدة. نكمل تجهيز التسميع.' : 'لحظات، نجهّز كل شيء قبل أن تبدأ، فلا يقطعك شيء أثناء القراءة.';
     show($('#recPrep'));
     const live = () => run === prepRun && !$('#recPrep').hidden;
     // 1. an update waiting: applied now, the page loaded again, and on from here (prepResume)
@@ -161,15 +162,29 @@ const Recite = (() => {
       if (!live()) return;
       return applyUpdate(intent ? { prep: intent } : { prep: {} });
     }
-    prepStep('update', 'done', after ? 'حُدِّث الآن' : 'التطبيق محدَّث');
+    prepStep('update', 'done', after && !intent?.mic ? 'حُدِّث الآن' : 'التطبيق محدَّث');
     // 2. the microphone (asked once per opening of the app by some browsers)
-    {
-      prepStep('mic', 'doing', micOk ? 'نتحقق منه…' : 'اسمح للتطبيق باستعمال الميكروفون');
-      try { (await navigator.mediaDevices.getUserMedia({ audio: true })).getTracks().forEach(t => t.stop()); micOk = true; }
-      catch { if (live()) { prepStep('mic', 'fail', 'لم يُسمح به — اسمح به من إعدادات المتصفح ثم أعد المحاولة'); $('#rpGo').hidden = false; $('#rpGo').textContent = 'أعد المحاولة'; $('#rpGo').onclick = () => prep(then, intent); } return; }
+    // heard working once since the app opened: not asked for again (some phones ask each time it is
+    // opened), unless the permission was taken back; while reading, Mu watches that sound comes in
+    let perm = null;
+    try { perm = (await navigator.permissions?.query({ name: 'microphone' }))?.state; } catch {}
+    if (!micOk || perm === 'denied') {
+      prepStep('mic', 'doing', 'اسمح للتطبيق باستعمال الميكروفون، ونتأكد أن الصوت يصل');
+      const r = await Mu.micCheck();
+      if (!live()) return;
+      if (r !== 'ok') {
+        prepStep('mic', 'fail', r === 'denied' ? 'لم يُسمح به — اسمح به من إعدادات المتصفح ثم أعد المحاولة'
+          : r === 'silent' ? 'لا يصل منه صوت — إن فصلت سماعة أو غيّرت الميكروفون فأعد تحميل التطبيق'
+          : 'لم نجد ميكروفونًا يعمل — صِل الميكروفون ثم أعد تحميل التطبيق');
+        $('#rpGo').hidden = false;
+        if (r === 'denied') { $('#rpGo').textContent = 'أعد المحاولة'; $('#rpGo').onclick = () => prep(then, intent); }
+        else { $('#rpGo').textContent = 'أعد تحميل التطبيق'; $('#rpGo').onclick = () => reloadApp(intent); }
+        return;
+      }
+      micOk = true;
     }
     if (!live()) return;
-    prepStep('mic', 'done', 'مسموح');
+    prepStep('mic', 'done', 'يعمل');
     // 3. the model, from the device
     if (!Mu.ready()) {
       prepStep('model', 'doing', 'يُحمَّل من جهازك…');
@@ -194,6 +209,32 @@ const Recite = (() => {
     then();
   }
   $('#rpCancel').onclick = () => { prepRun++; hide($('#recPrep')); };
+  // the app loaded again, safely: what was being said is kept (it comes back paused), and what
+  // was about to begin goes on after (prepResume): the way out when the microphone is lost
+  function reloadApp(intent) {
+    if (G?.run) pause();
+    keep(true);
+    store.set('upd.resume', { t: Date.now(), prep: { ...intent, mic: true } });
+    $('#loading').textContent = 'جارٍ إعادة تحميل التطبيق…';
+    $('#loading').hidden = false;
+    setTimeout(() => location.reload(), 500);
+  }
+  // listening, the microphone sends nothing, and taking it again didn't help (Mu.dead): the
+  // reading is paused, and the reader is told, with the reload one tap away
+  Mu.dead?.(() => {
+    micOk = false;
+    if (F) stopFind();
+    if (G?.run) pause();
+    prepRun++;
+    ['update', 'mic', 'model', 'warm'].forEach(id => prepStep(id, ''));
+    prepStep('update', 'done', '');
+    prepStep('mic', 'fail', 'لا يصل منه صوت — إن فصلت سماعة أو غيّرت الميكروفون، أعد تحميل التطبيق، وتعود جلستك كما هي');
+    $('#rpLead').textContent = 'توقف الميكروفون عن إرسال الصوت، فأوقفنا التسميع مؤقتًا.';
+    // (a session with nothing said yet is begun again after; one under way comes back as it was)
+    const g = G, again = g && !g.pos && !g.done ? { start: [g.review || g.test ? null : g.ayas[0], g.review || g.test ? g.ayas : null, { test: g.test }] } : null;
+    $('#rpGo').hidden = false; $('#rpGo').textContent = 'أعد تحميل التطبيق'; $('#rpGo').onclick = () => reloadApp(again);
+    show($('#recPrep'));
+  });
   // the page loaded again for an update during a preparation: on with it
   function prepResume() {
     const u = store.get('upd.resume', null);
