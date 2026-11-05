@@ -29,6 +29,7 @@ const WordCard = (() => {
     const bar = $('#wordBar');
     if (!bar.hidden && !bar.classList.contains('leaving')) { bar.classList.remove('swap'); void bar.offsetWidth; bar.classList.add('swap'); }
     bar.style.maxHeight = '';
+    delete bar.dataset.pin; // a new word: placed clear of it again
     show(bar);
     $('#wbBody').scrollTop = 0;
     $('#wordBar [data-wb=deep]').hidden = R.id !== 'hafs';

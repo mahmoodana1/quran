@@ -441,15 +441,27 @@ function clearNow() {
       return;
     }
   }
+  BARS.forEach(sel => { const b = $(sel); if (b.hidden) delete b.dataset.pin; });
   for (const b of bars) {
     const lifted = parseFloat(b.style.getPropertyValue('--lift')) || 0;
-    if (!box) { if (lifted) b.style.setProperty('--lift', '0px'); continue; }
     const top = b.offsetTop, h = b.offsetHeight, up = head + 8; // where it rests (not mid-slide)
+    // put where the reader tapped it to (flipBar), while it stays open
+    if (b.dataset.pin) { b.style.setProperty('--lift', (b.dataset.pin === 'up' ? up - top : 0) + 'px'); continue; }
+    if (!box) { if (lifted) b.style.setProperty('--lift', '0px'); continue; }
     const over = t => Math.max(0, Math.min(t + h, box.bottom + 6) - Math.max(t, box.top - 6));
     const down = over(top), high = over(up);
     b.style.setProperty('--lift', (down === 0 || down <= high ? 0 : up - top) + 'px');
   }
 }
+
+// a tap on a bar, away from its buttons, sends it to the other end of the screen and back
+function flipBar(e) {
+  const b = e.currentTarget;
+  if (e.target.closest('button, a, input, select, label, summary, [data-act], [data-wb], [data-rc-word], [role=button]')) return;
+  b.dataset.pin = (parseFloat(b.style.getPropertyValue('--lift')) || 0) < 0 ? 'down' : 'up';
+  keepClear();
+}
+BARS.filter(sel => sel !== '#player' && sel !== '#recBar').forEach(sel => $(sel).addEventListener('click', flipBar));
 
 // one rounded band per line behind the words of the highlighted aya
 function drawBands(root) {
@@ -790,6 +802,7 @@ function openActions(i) {
   $('#ayaBarRc').hidden = !card;
   if (P.ai == null) hide($('#player'));
   const bar = $('#ayaBar');
+  if (String(i) !== bar.dataset.for) { delete bar.dataset.pin; bar.dataset.for = i; } // a new aya: placed clear of it again
   if (!bar.hidden && !bar.classList.contains('leaving')) { bar.classList.remove('swap'); void bar.offsetWidth; bar.classList.add('swap'); }
   show(bar);
 }

@@ -1738,3 +1738,63 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 }
 .jz.on { background: linear-gradient(160deg, var(--p-green), var(--p-green-2)); color: var(--p-on); font-weight: 800; }
 .jz:active { transform: scale(.93); }
+
+/* =====================================================================
+   Panels, modern: rounded cards on the paper, as the التسميع panel. The
+   emerald and gold stay; the double frames and square corners go.
+   ===================================================================== */
+/* header: the title plain, the khatma under it */
+.sheet-title { border: 0; outline: 0; background: none; padding: 2px 8px; margin: 4px 0; }
+.sheet-title::before, .sheet-title::after { display: none; }
+.sheet-head h1 { font-size: 18px; }
+.sheet-title small { color: var(--muted); }
+/* the search: a rounded field */
+#sheet .search { border: 0; border-radius: 12px; padding: 0 12px; margin: 4px 16px 8px; background: color-mix(in srgb, var(--ink) 6%, var(--paper)); }
+#sheet .search:focus-within { background: var(--surface); box-shadow: 0 0 0 1.5px var(--p-green); color: var(--p-ink); }
+#sheet .search input { padding: 9px 0; font-size: 16px; }
+/* tabs: the one you're on underlined in green (التسميع keeps its plate) */
+.tabs button.on::after { bottom: -1px; left: 22%; right: 22%; width: auto; height: 3px; margin: 0; border-radius: 3px 3px 0 0; transform: none; box-shadow: none; background: var(--p-green); }
+.tabs button[data-tab="recite"].on::after { display: none; }
+
+/* sections: cards */
+#sheet .group { background: var(--surface); border: .5px solid var(--line); border-radius: 18px; box-shadow: 0 1px 2px rgba(60, 40, 10, .04); overflow: hidden; margin-bottom: 12px; }
+#sheet .row + .row::before { border-top: .5px solid var(--line); left: 16px; right: 64px; }
+#sheet .row:active { background: color-mix(in srgb, var(--p-green) 7%, transparent); }
+#sheet .row.here, #sheet .row.best { background: color-mix(in srgb, var(--p-green) 8%, transparent); }
+#sheet .row .tag { border: 0; border-radius: 99px; padding: 3px 10px; background: color-mix(in srgb, var(--p-gold) 16%, transparent); }
+#sheet .row .del { border: 0; background: color-mix(in srgb, var(--danger) 9%, transparent); }
+#sheet .group-label { justify-content: flex-start; margin: 20px 6px 8px; font-size: 13px; font-weight: 700; color: var(--muted); }
+#sheet .group-label::before { display: none; }
+#sheet .group-label::after { opacity: .35; background: linear-gradient(270deg, transparent, var(--p-rule)); }
+#sheet .note { text-align: start; margin: -4px 8px 14px; }
+.juz-strip { border-bottom: 0; }
+
+/* the emerald cards: rounded, one fine gold line */
+.pr-hero, .dk-hero, .all-card {
+  border-radius: 22px; border: 0;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p-gold) 45%, transparent), 0 8px 24px -10px color-mix(in srgb, var(--p-green-2) 70%, transparent);
+}
+.dk-hero.now { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p-gold) 45%, transparent), 0 0 0 2px var(--p-bg), 0 0 0 3.5px var(--p-gold), 0 8px 24px -10px color-mix(in srgb, var(--p-green-2) 70%, transparent); }
+.dk-now { border-radius: 99px; }
+.all-btn { border-radius: 14px; }
+.all-btn.ghost { border-radius: 14px; }
+.dk-tile { border: .5px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: 0 1px 2px rgba(60, 40, 10, .04); }
+.dk-tile.all { box-shadow: inset 0 0 0 1.5px var(--p-gold); }
+.dk-part { border: 0; border-radius: 99px; padding: 1px 8px; background: color-mix(in srgb, var(--p-gold) 16%, transparent); }
+
+/* buttons: rounded, no frames */
+.dl-actions button { border-radius: 12px; border: 0; background: var(--tint); }
+.dl-actions button.primary, .actions button.primary, .pr-btn { border: 0; border-radius: 12px; box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--p-green-2) 60%, transparent); }
+.actions button { border-radius: 12px; }
+.tf-group, .book-done { border-radius: 10px; }
+.dots { border: 0; background: var(--tint); }
+.fields { background: var(--surface); border: .5px solid var(--line); border-radius: 14px; }
+.field + .field { border-top: .5px solid var(--line); }
+#sheet .prog, #sheet .prog i { border-radius: 3px; }
+
+/* settings: the theme pages with rounded corners, the chosen one ringed in green */
+.theme .th { border-radius: 14px; border: .5px solid var(--line); box-shadow: 0 2px 6px rgba(60, 40, 10, .1); }
+.theme.on .th { box-shadow: 0 0 0 2px var(--p-bg), 0 0 0 4px var(--p-green), 0 6px 12px rgba(60, 40, 10, .18); }
+.theme.on::after { display: none; }
+.theme.on { color: var(--p-ink); }
+.in-row { border-radius: 18px; border: .5px solid var(--line); background: var(--surface); box-shadow: 0 1px 2px rgba(60, 40, 10, .04); }
