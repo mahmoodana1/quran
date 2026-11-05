@@ -197,7 +197,7 @@ const Recite = (() => {
     store.set('upd.resume', null);
     if (!u?.prep || Date.now() - u.t > 3 * 60e3 || !MU() || !Mu.choice()) return;
     const s = u.prep.start;
-    prep(s ? () => start(...s) : () => {}, u.prep, true);
+    prep(s ? () => start(...s) : u.prep.find ? () => find() : () => {}, u.prep, true);
   }
 
   // ---- session
@@ -695,7 +695,7 @@ const Recite = (() => {
       }).then(() => {
         if (F === f) f.timer = setInterval(() => { if (F !== f) clearInterval(f.timer); else checkFind(f); }, FIND_EVERY);
       }, () => { stopFind(); toast('لا يمكن الوصول إلى الميكروفون — اسمح به من إعدادات المتصفح'); });
-    });
+    }, { find: true });
   }
   // many places in the Quran read alike: go only once one fits clearly better
   // than any other, and has stayed the best for a second; when the reader has
@@ -1529,7 +1529,14 @@ const Recite = (() => {
 
   // ---- controls
 
-  $('#recToggle').onclick = () => (G?.run ? pause() : resume());
+  // going on after a pause: if the model was let go meanwhile (Mu's idle unload), or the microphone
+  // or an update needs seeing to, the steps first, on their screen
+  $('#recToggle').onclick = () => {
+    if (G?.run) return pause();
+    const g = G;
+    if (MU() && g && !g.done && !prepared()) return withModel(() => { if (G === g) resume(); }, {});
+    resume();
+  };
   $('#recHide').onclick = () => {
     if (!G) return;
     G.hide = !G.hide;

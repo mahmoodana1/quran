@@ -1386,20 +1386,20 @@ function settingsHTML() {
   }).join('');
   return `
     ${typeof Install !== 'undefined' ? Install.settingsHTML() : ''}
-    ${allCardHTML()}
     <div class="group-label">المظهر</div>
     <div class="themes">${themes}</div>
+
+    <div class="group-label">الرواية</div>
+    <div class="group">${riwayat}</div>
+    <p class="note">لكل رواية رسمها وعلامات ضبطها ووقفها. التلاوة بصوت الشيخ ياسر الدوسري برواية حفص، وتُطابَق آيات الروايات الأخرى مع ما يقابلها فيها.</p>
 
     <div class="group-label">الختمة</div>
     <div class="group"><button class="row" data-open-lib><span class="mini-cover">${coverHTML(K, true)}</span>
       <span class="main"><span class="t">ختماتي</span><span class="s">${esc(K.name)} · ${ar(khatmaPct(K))}٪ · صفحة ${ar(K.page)}${KH.length > 1 ? ` · ${ar(KH.length)} ختمات` : ''}</span></span>
       <svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button></div>
 
-    <div class="group-label">الرواية</div>
-    <div class="group">${riwayat}</div>
-    <p class="note">لكل رواية رسمها وعلامات ضبطها ووقفها. التلاوة بصوت الشيخ ياسر الدوسري برواية حفص، وتُطابَق آيات الروايات الأخرى مع ما يقابلها فيها.</p>
-
     <div class="group-label">دون اتصال</div>
+    ${allCardHTML()}
     ${mushafCardHTML()}
     ${audioPanelHTML()}`;
 }
@@ -1764,6 +1764,7 @@ function openSheet(t = tab) {
   $('#sheetSub').textContent = `${K.name} · ${META.riwayat.find(r => r.id === R.id)?.name || ''} · صفحة ${ar(S.page)}`;
   closeActions();
   show($('#sheet'));
+  Adhkar.load().then(() => { if ($('#q').value.trim() && !$('#sheet').hidden) renderSheet(); }).catch(() => {}); // so the search finds adhkar too
   $('#q').value = '';
   renderSheet();
 }
@@ -1810,40 +1811,93 @@ function khatmaRowHTML() {
     <svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button></div>`;
 }
 
+// the 30 juz, a tap each, above the surahs; the one being read marked
+function juzStarts() {
+  const at = [];
+  R.ayas.forEach(a => { if (a[3] && at[a[3]] == null) at[a[3]] = a[2]; });
+  return at;
+}
+function juzStripHTML() {
+  const at = juzStarts(), cur = R.ayas[pageInfo(S.page).first][3];
+  let h = '';
+  for (let j = 1; j <= 30; j++) if (at[j]) h += `<button class="jz${j === cur ? ' on' : ''}" data-go-juz="${at[j]}" aria-label="الجزء ${ar(j)}، صفحة ${ar(at[j])}">${ar(j)}</button>`;
+  return `<nav class="juz-strip" aria-label="الأجزاء"><span class="jz-l">الجزء</span>${h}</nav>`;
+}
+// «الجزء ٣» / «جزء عم»
+function juzHit(raw) {
+  const q = toLatinDigits(raw.trim()).replace(/^ال/, '');
+  const m = q.match(/^جزء\s*(\d+)$/) || q.match(/^juz\s*(\d+)$/i);
+  const j = m ? +m[1] : /^جزء\s*(ال)?عم$/.test(q) ? 30 : /^جزء\s*(ال)?تبارك$/.test(q) ? 29 : 0;
+  const p = j >= 1 && j <= 30 ? juzStarts()[j] : null;
+  return p ? `<div class="group"><button class="row best" data-go-page="${p}"><span class="num">${ar(j)}</span><span class="main"><span class="t">الجزء ${ar(j)}</span><span class="s">يبدأ في صفحة ${ar(p)}</span></span><span class="tag">جزء</span></button></div>` : '';
+}
+// the app's own places, found by what people call them
+const PLACES = [
+  ['prayer', 'مواقيت الصلاة', 'الأوقات والتنبيه بالوقت القادم', 'صلاه صلوات مواقيت اوقات اذان فجر ظهر عصر مغرب عشاء'],
+  ['prayer', 'اتجاه القبلة', 'البوصلة نحو الكعبة', 'قبله بوصله اتجاه كعبه'],
+  ['recite', 'التسميع', 'سمّع من حفظك ونتابعك ونصحح', 'تسميع حفظ محفوظ مراجعه اختبار اخطاء تلاوه'],
+  ['adhkar', 'الأذكار', 'الصباح والمساء والنوم وغيرها', 'اذكار ذكر ادعيه دعاء صباح مساء نوم'],
+  ['marks', 'العلامات', 'الآيات التي علّمتها', 'علامات علامه محفوظات مفضله'],
+  ['lib', 'ختماتي', 'ختماتك وتقدّمك في كل منها', 'ختمه ختمات مكتبه'],
+  ['settings', 'الرواية', 'حفص، ورش، قالون، وغيرها', 'روايه روايات قراءه قراءات حفص شعبه ورش قالون دوري سوسي بزي قنبل'],
+  ['settings', 'المظهر', 'فاتح، ورقي، داكن، أو تلقائي', 'مظهر داكن ليلي فاتح ورقي الوان لون'],
+  ['settings', 'دون اتصال', 'تحميل المصحف والتلاوة والتفسير', 'تحميل تنزيل انترنت اتصال صوت تفسير تلاوه'],
+  ['settings', 'الإعدادات', 'كل الإعدادات', 'اعدادات ضبط'],
+];
+function shortcuts(raw) {
+  const n = x => x.replace(/[ًٌٍَُِّْـ]/g, '').replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه');
+  const ws = n(raw.trim()).split(/\s+/).map(w => w.replace(/^ال(?=..)/, '')).filter(w => w.length >= 2 && !/^\d+$/.test(w));
+  if (!ws.length) return '';
+  const hits = PLACES.filter(([, , , k]) => ws.every(w => k.split(' ').some(x => x.startsWith(w))));
+  return hits.length ? '<div class="group">' + hits.slice(0, 3).map(([t, name, sub]) =>
+    `<button class="row" ${t === 'lib' ? 'data-open-lib' : `data-go-tab="${t}"`}><span class="main"><span class="t">${name}</span><span class="s">${sub}</span></span><svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button>`).join('') + '</div>' : '';
+}
+
 function renderSheet() {
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   const body = $('#sheetBody');
   const q = $('#q').value;
   $('#tabs').hidden = !!q.trim();
   $('#setBtn').classList.toggle('on', tab === 'settings');
-  $('.search').hidden = tab === 'prayer' || tab === 'settings' || tab === 'recite';
-  $('#q').placeholder = tab === 'adhkar' ? 'ابحث في الأذكار… (مثال: الكرب، السفر)' : 'ابحث عن سورة أو آية… (مثال: البقرة ٢٥٥)';
+  $('#q').placeholder = 'ابحث: سورة، آية، صفحة، جزء، ذكر، أو إعداد…';
   let html = '';
 
-  if (q.trim() && tab === 'adhkar') {
-    html = Adhkar.searchHTML(q);
-  } else if (q.trim()) {
-    const res = search(q);
-    if (!res.length) html = '<div class="empty"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M15.5 15.5L21 21" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg><b>لا توجد نتائج</b>جرّب كلمات أخرى أو اسم السورة.</div>';
-    else {
-      html = '<div class="group">';
+  if (q.trim()) {
+    // one search for all of it: the app's own places, juz, the Quran, the adhkar
+    const res = search(q), go = shortcuts(q), jz = juzHit(q);
+    let dk = Adhkar.searchHTML(q);
+    if (/class="(empty|tf-wait)"/.test(dk)) dk = '';
+    let quran = '';
+    if (res.length) {
+      quran = '<div class="group">';
       res.slice(0, 50).forEach((r, k) => {
         const best = k === 0 ? ' best' : '';
-        if (r.type === 'sura') html += suraRow(r.s, best).replace('<span class="meta">', '<span class="tag">سورة</span><span class="meta">');
-        else if (r.type === 'page') html += `<button class="row${best}" data-go-page="${r.p}"><span class="num">${ar(r.p)}</span><span class="main"><span class="t">الصفحة ${ar(r.p)}</span></span><span class="tag">صفحة</span></button>`;
+        if (r.type === 'sura') quran += suraRow(r.s, best).replace('<span class="meta">', '<span class="tag">سورة</span><span class="meta">');
+        else if (r.type === 'page') quran += `<button class="row${best}" data-go-page="${r.p}"><span class="num">${ar(r.p)}</span><span class="main"><span class="t">الصفحة ${ar(r.p)}</span></span><span class="tag">صفحة</span></button>`;
         else {
           const ai = R.fromHafs[r.h];
           const [s, a] = META.hafs[r.h];
-          html += `<button class="row${best}" data-go-aya="${ai}">
+          quran += `<button class="row${best}" data-go-aya="${ai}">
             <span class="main"><span class="s">${suraName(s)} ${ar(a)} · ص ${ar(R.ayas[ai][2])}</span>
             <span class="verse" style="font-family:${R.font}">${esc(R.text[ai])}</span></span>
             <span class="tag">آية</span></button>`;
         }
       });
-      html += '</div>';
+      quran += '</div>';
     }
+    const app = jz + go;
+    const parts = [
+      app && ['في التطبيق', app],
+      quran && ['القرآن', quran],
+      dk && ['الأذكار', dk],
+    ].filter(Boolean);
+    // the adhkar first when searching from their tab; the app's places first unless a surah or aya is a sure match
+    if (tab === 'adhkar' && dk) parts.sort((a, b) => (b[0] === 'الأذكار') - (a[0] === 'الأذكار'));
+    else if (app && quran && res[0].score >= 1.3) parts.sort((a, b) => (b[0] === 'القرآن') - (a[0] === 'القرآن'));
+    html = parts.length ? parts.map(([t, h]) => (parts.length > 1 ? `<div class="group-label">${t}</div>` : '') + h).join('')
+      : '<div class="empty"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M15.5 15.5L21 21" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg><b>لا توجد نتائج</b>جرّب اسم سورة، أو رقم صفحة، أو كلمة من آية أو ذكر.</div>';
   } else if (tab === 'suras') {
-    html = '<div class="group">' + META.suras.map((_, i) => suraRow(i + 1)).join('') + '</div>';
+    html = juzStripHTML() + '<div class="group">' + META.suras.map((_, i) => suraRow(i + 1)).join('') + '</div>';
   } else if (tab === 'adhkar') {
     html = '<div id="adhkarList"></div>';
   } else if (tab === 'recite') {
@@ -1873,6 +1927,8 @@ function renderSheet() {
   body.innerHTML = html;
   if (!q.trim()) {
     // open the surah list at the surah being read
+    const jz = body.querySelector('.jz.on');
+    if (jz) jz.parentNode.scrollLeft = jz.offsetLeft - jz.parentNode.clientWidth / 2 + jz.offsetWidth / 2;
     const here = body.querySelector('.row.here');
     if (here) here.scrollIntoView({ block: 'center' }); else if (tab !== 'adhkar') body.scrollTop = 0;
   }
@@ -1895,6 +1951,10 @@ $('#sheetBody').addEventListener('click', async e => {
   const dk = e.target.closest('[data-dk]');
   if (dk) { $('#q').blur(); Adhkar.open(dk.dataset.dk, dk.dataset.dkI != null ? +dk.dataset.dkI : undefined); return; }
   if (typeof Recite !== 'undefined' && Recite.onSheetClick(e)) return;
+  const jz = e.target.closest('[data-go-juz]');
+  if (jz) { closeSheet(); goTo(+jz.dataset.goJuz); return; }
+  const gt = e.target.closest('[data-go-tab]');
+  if (gt) { tab = gt.dataset.goTab; $('#q').value = ''; $('#q').blur(); renderSheet(); $('#sheetBody').scrollTop = 0; return; }
   const del = e.target.closest('[data-del-mark]');
   if (del) {
     e.stopPropagation();

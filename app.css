@@ -1724,3 +1724,17 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 .rp-steps small { font-size: 12.5px; color: var(--muted); min-height: 1em; }
 .rp-steps li.fail small { color: var(--c-marks); }
 @keyframes rpSpin { to { transform: rotate(360deg); } }
+
+/* the 30 juz above the surahs, a tap each; sticks while the list scrolls */
+.juz-strip {
+  position: sticky; top: -4px; z-index: 2; display: flex; align-items: center; gap: 6px; margin: 0 -16px 6px; padding: 6px 16px 8px;
+  overflow-x: auto; scrollbar-width: none; background: var(--p-bg); border-bottom: 1px solid var(--p-rule); scroll-padding-inline: 16px;
+}
+.juz-strip::-webkit-scrollbar { display: none; }
+.jz-l { flex: none; font-size: 12px; font-weight: 700; color: var(--muted); margin-inline-end: 2px; }
+.jz {
+  flex: none; min-width: 34px; height: 32px; padding: 0 6px; border-radius: 10px; font-size: 14px; font-weight: 600; color: var(--p-ink);
+  background: var(--tint); font-variant-numeric: tabular-nums;
+}
+.jz.on { background: linear-gradient(160deg, var(--p-green), var(--p-green-2)); color: var(--p-on); font-weight: 800; }
+.jz:active { transform: scale(.93); }
