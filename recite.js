@@ -242,6 +242,7 @@ const Recite = (() => {
   function cancel() {
     store.set(LIVE(), null);
     if (!G) return;
+    save(); // what was said is kept, however the session ends (another begun, the audio played, the riwaya changed)
     clearInterval(timer);
     if (!G.keepMic) { if (G.mu) Mu.stop(); else Listen.stop(); }
     G = null; S.focus = null;
@@ -800,9 +801,11 @@ const Recite = (() => {
 
   // keep what was said: mistakes by aya, a clean full aya towards «mastered»
   function save() {
+    if (!G || G.saved) return; // once per session (a surah carried on into the next is kept at its end)
     const l = log(), today = day();
     const said = G.words.slice(0, G.pos);
     if (!said.length) return;
+    G.saved = true;
     const byAya = new Map();
     said.forEach((w, k) => {
       if (!byAya.has(w.ai)) byAya.set(w.ai, []);
@@ -832,12 +835,15 @@ const Recite = (() => {
         if (a.ok.length >= MASTER_DAYS) { a.done = true; a.at = Date.now(); }
       }
     }
+    // recited: an aya said to its end (mistakes or not); begun and left, or skipped whole, isn't
+    const whole = [...byAya].filter(([, list]) => list.length === list[0][0].of && !list.every(x => x[1] === 'skip')).map(([ai]) => ai);
     l.said ||= {}; l.days ||= {};
-    for (const [ai, list] of byAya) if (list.length === list[0][0].of) l.said[ai] = Date.now();
-    l.days[today] = (l.days[today] || 0) + byAya.size;
+    for (const ai of whole) l.said[ai] = Date.now();
+    if (whole.length) l.days[today] = (l.days[today] || 0) + whole.length;
     const days = Object.keys(l.days);
     if (days.length > 400) days.slice(0, days.length - 400).forEach(d => delete l.days[d]);
-    l.sessions.unshift({ t: Date.now(), from: said[0].ai, to: said[said.length - 1].ai, ayas: byAya.size,
+    // (a session that got through no aya and marked nothing isn't one)
+    if (whole.length || mistakes().length) l.sessions.unshift({ t: Date.now(), from: said[0].ai, to: said[said.length - 1].ai, ayas: whole.length,
       words: said.length, errs: mistakes().length, secs: Math.round(G.secs), review: G.review, test: G.test,
       list: mistakes().slice(0, 30).map(({ k, e, aya }) => aya != null ? [aya, -1, 'skip'] : [G.words[k].ai, G.words[k].wi, e]) });
     l.sessions.length = Math.min(l.sessions.length, 60);

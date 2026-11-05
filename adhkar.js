@@ -41,7 +41,9 @@ const Adhkar = (() => {
   // ---------------------------------------------------------------- progress
   // remaining count of every dhikr touched today: { day, c: { cat: { i: n } } }
   let P = null;
-  const today = () => { const d = new Date(); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
+  // the adhkar day turns at 3 at night, where the evening's time ends (listHTML), so the
+  // evening adhkar said before midnight still show as said after it
+  const today = () => { const d = new Date(Date.now() - 3 * 3600e3); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
   function prog() {
     if (!P) P = store.get('adhkar', null);
     if (!P || P.day !== today()) P = { day: today(), c: {} };

@@ -113,8 +113,55 @@ function saveKh() {
 }
 
 function newKhatma(name, riwaya = 'hafs', cover = 0) {
-  return { id: Date.now().toString(36), name, riwaya, cover, page: 1, mark: null, bookmarks: [], done: 0, created: Date.now(), read: Date.now() };
+  return { id: Date.now().toString(36), name, riwaya, cover, page: 1, mark: null, bookmarks: [], done: 0, created: Date.now(), read: Date.now(), pages: '' };
 }
+
+// the pages read in this round of a khatma: k.pages, a '1' for each page read ('' : none).
+// A page is read once it has been on screen READ_MS with the app in front; jumping
+// past pages doesn't read them, so the khatma is done only when every page was read.
+const READ_MS = 10000;
+const pagesRead = k => (k.pages || '').split('').filter(c => c === '1').length;
+const khatmaTotal = k => k === K && R ? R.pages.length : k.total || 604; // (k.total: its riwaya's pages, kept when open)
+function khatmaPct(k) {
+  const n = pagesRead(k), t = khatmaTotal(k);
+  return n >= t ? 100 : Math.min(99, Math.floor(n / t * 100));
+}
+// the same share of the mushaf read, on a riwaya with another number of pages
+function remapPages(k, total) {
+  const old = k.pages || '';
+  if (!old || old.length === total) return;
+  let out = '';
+  for (let p = 0; p < total; p++) {
+    const a = Math.floor(p / total * old.length), b = Math.max(a + 1, Math.floor((p + 1) / total * old.length));
+    out += old.slice(a, b).includes('0') || old.slice(a, b) === '' ? '0' : '1';
+  }
+  k.pages = out;
+}
+let readT = null;
+function startReading() {
+  clearTimeout(readT);
+  if (!K || !R || document.hidden) return;
+  const k = K, p = S.page;
+  if (k.total !== R.pages.length) { k.total = R.pages.length; saveKh(); }
+  readT = setTimeout(() => markRead(k, p), READ_MS);
+}
+function markRead(k, p) {
+  if (k !== K || p !== S.page || document.hidden) return;
+  const total = R.pages.length;
+  let m = (k.pages || '').padEnd(total, '0').slice(0, total);
+  if (m[p - 1] === '1') return;
+  k.pages = m = m.slice(0, p - 1) + '1' + m.slice(p);
+  if (!m.includes('0') && !k.endShown) {
+    // the whole mushaf read: counted now, whatever is chosen on the screen that says so
+    k.done = (k.done || 0) + 1;
+    k.endShown = true;
+    saveKh();
+    setTimeout(showDone, 400);
+    return;
+  }
+  saveKh();
+}
+document.addEventListener('visibilitychange', () => document.hidden ? clearTimeout(readT) : startReading());
 
 function loadKhatmas() {
   KH = store.get('khatmas', []);
@@ -127,6 +174,12 @@ function loadKhatmas() {
     KH = [k];
   }
   K = KH.find(k => k.id === store.get('kh.current')) || KH[0];
+  // before pages were counted as read: the pages up to the place reached, and the
+  // end reached by going there no longer finishes it
+  for (const k of KH) if (k.pages == null) {
+    k.pages = k.page > 1 && k.page < 604 ? '1'.repeat(k.page - 1) : '';
+    k.endShown = false;
+  }
   saveKh();
 }
 
@@ -450,6 +503,7 @@ function renderAll() {
   [S.page - 1, S.page, S.page + 1].forEach((p, i) => slots[i].replaceChildren(renderPage(p)));
   placeSlots();
   paintMarks();
+  startReading();
 }
 
 function goTo(p, { animate = false, from = 0 } = {}) {
@@ -458,7 +512,7 @@ function goTo(p, { animate = false, from = 0 } = {}) {
   const step = p - S.page;
   S.page = p;
   K.page = p; K.read = Date.now(); saveKh();
-  if (p === R.pages.length && !K.endShown) setTimeout(showDone, 700);
+  startReading();
   if (animate && Math.abs(step) === 1) {
     // rotate slots so the page we're moving to stays in place, then slide
     if (step === 1) slots.push(slots.shift()); else slots.unshift(slots.pop());
@@ -1302,7 +1356,7 @@ function settingsHTML() {
 
     <div class="group-label">الختمة</div>
     <div class="group"><button class="row" data-open-lib><span class="mini-cover">${coverHTML(K, true)}</span>
-      <span class="main"><span class="t">ختماتي</span><span class="s">${esc(K.name)} · صفحة ${ar(K.page)}${KH.length > 1 ? ` · ${ar(KH.length)} ختمات` : ''}</span></span>
+      <span class="main"><span class="t">ختماتي</span><span class="s">${esc(K.name)} · ${ar(khatmaPct(K))}٪ · صفحة ${ar(K.page)}${KH.length > 1 ? ` · ${ar(KH.length)} ختمات` : ''}</span></span>
       <svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button></div>
 
     <div class="group-label">الرواية</div>
@@ -1716,7 +1770,7 @@ function suraRow(s, extra = '') {
 // the khatma shelf, first thing in the bookmarks tab
 function khatmaRowHTML() {
   return `<div class="group kh-entry"><button class="row" data-open-lib><span class="mini-cover">${coverHTML(K, true)}</span>
-    <span class="main"><span class="t">ختماتي</span><span class="s">${esc(K.name)} · صفحة ${ar(K.page)}${KH.length > 1 ? ` · ${ar(KH.length)} ختمات` : ''}</span></span>
+    <span class="main"><span class="t">ختماتي</span><span class="s">${esc(K.name)} · ${ar(khatmaPct(K))}٪ · صفحة ${ar(K.page)}${KH.length > 1 ? ` · ${ar(KH.length)} ختمات` : ''}</span></span>
     <svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button></div>`;
 }
 
@@ -1858,6 +1912,7 @@ async function switchRiwaya(id, keepPlace) {
     R = d;
     S.page = h != null ? R.ayas[R.fromHafs[h]][2] : K.page;
     K.riwaya = id; K.page = S.page;
+    remapPages(K, R.pages.length);
     S.act = S.focus = null;
     normalizeBookmarks();
     saveKh();
@@ -1913,15 +1968,14 @@ function renderShelf() {
   const riwayaName = id => META.riwayat.find(r => r.id === id)?.name || id;
   const sorted = [...KH].sort((a, b) => b.read - a.read);
   $('#shelf').innerHTML = sorted.map((k, idx) => {
-    const total = 604;
-    const pct = Math.round((k.page - 1) / (total - 1) * 100);
+    const pct = khatmaPct(k);
     return `<div class="book${k.id === K.id ? ' current' : ''}" data-kh="${k.id}" style="--i:${idx}">
       <button class="book-open" data-open="${k.id}" aria-label="${esc(k.name)}">${coverHTML(k)}</button>
       <div class="book-info">
         <div class="book-row"><b>${esc(k.name)}</b><button class="dots" data-edit="${k.id}" aria-label="تعديل">•••</button></div>
         <div class="book-sub">${riwayaName(k.riwaya)}</div>
         <div class="prog"><i style="width:${pct}%"></i></div>
-        <div class="book-meta"><span>صفحة ${ar(k.page)}</span><span>${ar(pct)}٪</span></div>
+        <div class="book-meta"><span>قرأت ${ar(pagesRead(k))} من ${ar(khatmaTotal(k))} صفحة</span><span>${ar(pct)}٪</span></div>
         ${k.done ? `<div class="book-done">✓ ${k.done === 1 ? 'ختمة مكتملة' : `${ar(k.done)} ختمات مكتملة`}</div>` : ''}
       </div>
     </div>`;
@@ -2003,7 +2057,7 @@ $('#khForm').addEventListener('submit', async e => {
     Object.assign(editing, { name, cover: +f.cover.value });
     if (riwayaChanged) {
       editing.riwaya = f.riwaya.value;
-      editing.mark = null; editing.page = 1;
+      editing.mark = null; editing.page = 1; editing.pages = ''; editing.endShown = false;
     }
     saveKh();
     hide($('#khEdit'));
@@ -2018,7 +2072,7 @@ $('#khForm').addEventListener('submit', async e => {
   }
 });
 $('#khRestart').onclick = () => {
-  Object.assign(editing, { page: 1, mark: null, endShown: false });
+  Object.assign(editing, { page: 1, mark: null, endShown: false, pages: '' });
   saveKh();
   hide($('#khEdit'));
   if (editing === K) { S.page = 1; renderAll(); }
@@ -2040,15 +2094,12 @@ $('#khDelete').onclick = async () => {
 };
 
 function showDone() {
-  if (S.page !== R.pages.length) return;
-  K.endShown = true; saveKh();
   $('#doneCover').innerHTML = coverHTML(K, true);
-  $('#doneText').textContent = `أتممت «${K.name}»${K.done ? ` — الختمة رقم ${ar(K.done + 1)}` : ''}`;
+  $('#doneText').textContent = `أتممت «${K.name}»${K.done > 1 ? ` — الختمة رقم ${ar(K.done)}` : ''}`;
   show($('#done'));
 }
 $('#doneAgain').onclick = () => {
-  K.done = (K.done || 0) + 1;
-  Object.assign(K, { page: 1, mark: null, endShown: false });
+  Object.assign(K, { page: 1, mark: null, endShown: false, pages: '' });
   saveKh();
   hide($('#done'));
   S.page = 1; renderAll();
