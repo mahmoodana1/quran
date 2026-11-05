@@ -1232,6 +1232,7 @@ const Recite = (() => {
     review: '<svg viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 0113-5.1M19.5 12a7.5 7.5 0 01-13 5.1"/><path d="M17.5 3.5v3.4h-3.4M6.5 20.5v-3.4h3.4"/></svg>',
     test: '<svg viewBox="0 0 24 24"><path d="M6.5 4.5h11v15h-11z"/><path d="M9.5 9.5l1.6 1.6 3.4-3.4M9.5 15h5"/></svg>',
     find: '<svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5M10.5 7.8v3.6M8.7 10.4a1.8 1.8 0 003.6 0"/></svg>',
+    flame: '<svg viewBox="0 0 24 24"><path d="M12 21c-3.6 0-6-2.4-6-5.6 0-3.4 2.6-5 3.4-8.4 1.9 1.3 2.6 3 2.6 4.6 1-.6 1.6-1.7 1.8-2.9 1.6 1.4 4.2 3.6 4.2 6.7 0 3.2-2.4 5.6-6 5.6z"/></svg>',
   };
   const SEGS = [['memo', 'حفظي'], ['errs', 'الأخطاء'], ['log', 'السجل'], ['set', 'الإعدادات']];
 
@@ -1249,25 +1250,32 @@ const Recite = (() => {
     for (const k of Object.keys(said)) { const a = R.ayas[+k]; if (a) { got[a[0]]++; lastIn[a[0]] = Math.max(lastIn[a[0]], said[k]); } }
     const words = ayaTokens(at), open = words.slice(0, 7).join(' ') + (words.length > 7 ? ' …' : '');
     const today = l.days?.[day()] || 0, run = streak(l);
-    const C = 2 * Math.PI * 15, part = goal ? Math.min(1, today / goal) : 0;
-    const ring = goal ? `<svg viewBox="0 0 36 36" class="rc-ring${today >= goal ? ' full' : ''}"><circle cx="18" cy="18" r="15" class="trk"/>
-      <circle cx="18" cy="18" r="15" class="val" style="stroke-dasharray:${(part * C).toFixed(1)} ${C.toFixed(1)}"/></svg>` : '';
-    const todayTxt = goal ? (today >= goal ? 'بلغت هدف اليوم' : `اليوم ${ar(today)} من ${ayaCount(goal)}`) : today ? `اليوم ${ayaCount(today)}` : 'لم تسمّع اليوم بعد';
-    let html = `<div class="rc-go">
-      <div class="rc-go-l">${fresh ? 'ابدأ التسميع' : 'تابع من حيث توقفت'}</div>
+    const runTxt = run === 1 ? 'يوم' : run === 2 ? 'يومان' : run <= 10 ? `${ar(run)} أيام` : `${ar(run)} يومًا`;
+    let html = `<section class="rc-go">
+      <div class="rc-go-h"><span class="rc-go-l">${fresh ? 'ابدأ من هنا' : 'تابع من حيث توقفت'}</span>
+        ${run ? `<span class="rc-run" title="${streakText(run)}" aria-label="${streakText(run)}">${ICONS.flame}${runTxt}</span>` : ''}</div>
       <div class="rc-go-t">${ayaLabel(at)}</div>
       <div class="rc-go-v" style="font-family:${R.font}">${esc(open)}</div>
-      <div class="rc-go-p"><span class="rc-bar"><i style="width:${Math.round(got[s0] / sizes[s0] * 100)}%"></i></span><small>${ar(got[s0])} من ${ar(sizes[s0])} في ${suraName(s0)}</small></div>
+      <div class="rc-go-p"><span class="rc-bar"><i style="width:${Math.round(got[s0] / sizes[s0] * 100)}%"></i></span><small>${ar(got[s0])} من ${ar(sizes[s0])}</small></div>
       <button class="rc-go-b" data-rc-resume>${MIC}${fresh ? 'ابدأ التسميع' : 'تابع التسميع'}</button>
-      <div class="rc-go-f">${ring ? `<span class="rc-ring-w">${ring}</span>` : ''}<span>${todayTxt}</span><span class="sep">·</span><span>${streakText(run)}</span></div>
+    </section>`;
+
+    // ---- the whole so far, in one strip: today (against the goal), ayas, surahs, share
+    const n = Object.keys(said).filter(k => R.ayas[+k]).length, pct = n / R.ayas.length * 100;
+    const full = Array.from({ length: 114 }, (_, i) => i + 1).filter(s => sizes[s] && got[s] >= sizes[s]).length;
+    if (!fresh) html += `<div class="rc-stats">
+      <div class="rc-st${goal && today >= goal ? ' met' : ''}"><b>${ar(today)}${goal ? `<small>/${ar(goal)}</small>` : ''}</b><small>${goal ? (today >= goal ? 'بلغت هدفك' : 'هدف اليوم') : 'اليوم'}</small>${goal ? `<span class="rc-gbar"><i style="width:${Math.round(Math.min(1, today / goal) * 100)}%"></i></span>` : ''}</div>
+      <div class="rc-st"><b>${ar(n)}</b><small>آية سمّعتها</small></div>
+      <div class="rc-st"><b>${ar(full)}</b><small>${full === 1 ? 'سورة كاملة' : 'سور كاملة'}</small></div>
+      <div class="rc-st"><b>${ar(pct < 1 ? pct.toFixed(1) : Math.round(pct))}٪</b><small>من القرآن</small></div>
     </div>`;
 
     // ---- the three things most often wanted next
     const test = testAyas();
     html += `<div class="rc-quick">
-      <button data-rc-review${weak.length ? '' : ' disabled'}>${ICONS.review}<b>راجع أخطاءك</b><small>${weak.length ? ayaCount(weak.length) : 'لا أخطاء الآن'}</small></button>
-      <button data-rc-test${test ? '' : ' disabled'}>${ICONS.test}<b>اختبرني</b><small>${test ? 'من مواضع حفظتها' : 'سمّع ٣ آيات أولًا'}</small></button>
-      <button data-rc-find>${ICONS.find}<b>ابحث بصوتك</b><small>اقرأ، ونجد الآية</small></button>
+      <button data-rc-review${weak.length ? '' : ' disabled'}><span class="ic">${ICONS.review}${weak.length ? `<i>${ar(weak.length)}</i>` : ''}</span><span class="tx"><b>راجع أخطاءك</b><small>${weak.length ? 'تنتظر المراجعة' : 'لا أخطاء الآن'}</small></span></button>
+      <button data-rc-test${test ? '' : ' disabled'}><span class="ic">${ICONS.test}</span><span class="tx"><b>اختبرني</b><small>${test ? 'آيات مخفية' : 'بعد ٣ آيات'}</small></span></button>
+      <button data-rc-find><span class="ic">${ICONS.find}</span><span class="tx"><b>ابحث بصوتك</b><small>اقرأ ونجدها</small></span></button>
     </div>`;
 
     html += `<nav class="rc-seg" role="tablist">${SEGS.map(([k, t]) => `<button role="tab" data-rc-seg="${k}" aria-selected="${k === seg}"${k === seg ? ' class="on"' : ''}>${t}${k === 'errs' && weak.length ? `<i>${ar(weak.length)}</i>` : ''}</button>`).join('')}</nav>`;
@@ -1276,13 +1284,9 @@ const Recite = (() => {
 
     // ---- حفظي: the whole so far, and each surah begun, to go on with
     function memoHTML() {
-      const n = Object.keys(said).filter(k => R.ayas[+k]).length, total = R.ayas.length;
-      const full = Array.from({ length: 114 }, (_, i) => i + 1).filter(s => sizes[s] && got[s] >= sizes[s]).length;
       const begun = Array.from({ length: 114 }, (_, i) => i + 1).filter(s => got[s]).sort((a, b) => lastIn[b] - lastIn[a]);
       if (!n) return `<p class="rc-empty">ما تسمّعه كاملًا من الآيات يُعَدّ هنا، سورةً سورة، لتعود إليه وتتابع.</p>` + helpHTML();
-      const pct = n / total * 100;
-      let h = `<div class="rc-sum"><div><b>${ar(n)}</b><small>آية سمّعتها</small></div><div><b>${ar(full)}</b><small>سورة كاملة</small></div><div><b>${ar(pct < 1 ? pct.toFixed(1) : Math.round(pct))}٪</b><small>من القرآن</small></div></div>`;
-      h += '<div class="group">' + begun.map(s => {
+      let h = `<div class="group-label">سورك · الأحدث أولًا</div><div class="group">` + begun.map(s => {
         const f = got[s] / sizes[s], nx = nextIn(s, said), doneS = got[s] >= sizes[s];
         return `<div class="row rc-sura" data-rc-sura="${s}"><span class="num">${ar(s)}</span>
           <span class="main"><span class="t">${suraName(s)}</span>

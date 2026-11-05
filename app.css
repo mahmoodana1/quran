@@ -1284,7 +1284,7 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 .rc-row .t { font-size: 21px; font-weight: 400; line-height: 1.6; }
 .rc-row.gone { opacity: .45; }
 .rc-row.gone .t { text-decoration: line-through; }
-.rc-not { flex: none; font-size: 12.5px; color: var(--p-ink); padding: 6px 10px; border: 1px solid var(--p-rule); border-radius: 3px; }
+.rc-not { flex: none; font-size: 12.5px; font-weight: 600; color: var(--p-ink); padding: 6px 12px; border-radius: 99px; background: color-mix(in srgb, var(--p-green) 9%, transparent); }
 .rd-note { margin: 0 4px; }
 .rd-note button { color: var(--p-ink); font-weight: 700; font-size: inherit; text-decoration: underline; text-underline-offset: 3px; }
 
@@ -1362,14 +1362,10 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
   #sheet:not([hidden]) .set-btn, #sheet:not([hidden]) .set-btn svg { animation: none; }
 }
 
-/* today, the daily goal and the streak, on the emerald card */
-.rc-ring-w { position: relative; width: 52px; height: 52px; flex: none; display: grid; place-items: center; }
-.rc-ring-w b { font-size: 16px; font-weight: 800; color: #e6cc8a; }
-.rc-ring { position: absolute; inset: 0; transform: rotate(-90deg) scaleY(-1); }
-.rc-ring circle { fill: none; stroke-width: 3.5; }
-.rc-ring .trk { stroke: color-mix(in srgb, var(--p-on) 18%, transparent); }
-.rc-ring .val { stroke: #e6cc8a; stroke-linecap: round; transition: stroke-dasharray .6s ease; }
-.rc-ring.full .val { stroke: #f1dc9c; }
+/* today against the daily goal, a slim bar under the number */
+.rc-gbar { width: 34px; height: 3px; margin-top: 4px; border-radius: 2px; background: var(--tint-2); overflow: hidden; display: flex; }
+.rc-gbar i { border-radius: 2px; background: var(--p-green); }
+.rc-st.met .rc-gbar i { background: var(--p-gold); }
 
 /* every surah, shaded by how much of it has been recited from memory */
 .rc-tiles { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; }
@@ -1389,9 +1385,9 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 .rc-legend .rc-tile { width: 14px; height: 14px; aspect-ratio: auto; }
 
 /* daily goal choice */
-.rc-chips { display: flex; gap: 4px; flex: none; }
-.rc-chips button { min-width: 34px; height: 30px; padding: 0 8px; border: 1px solid var(--p-rule); border-radius: 3px; font-size: 13px; color: var(--muted); }
-.rc-chips button.on { background: linear-gradient(160deg, var(--p-green), var(--p-green-2)); color: var(--p-on); border-color: var(--p-gold); font-weight: 700; }
+.rc-chips { display: flex; gap: 2px; flex: none; padding: 2px; border-radius: 10px; background: var(--tint); }
+.rc-chips button { min-width: 34px; height: 28px; padding: 0 9px; border-radius: 8px; font-size: 13px; color: var(--muted); }
+.rc-chips button.on { background: linear-gradient(160deg, var(--p-green), var(--p-green-2)); color: var(--p-on); font-weight: 700; }
 .rc-goal { gap: 10px; }
 
 /* the header mic: recite and the aya is found */
@@ -1463,72 +1459,91 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 .rc-big[open] summary .go { transform: rotate(-90deg); }
 .rc-bigtest { justify-self: start; }
 
-/* ---- the «التسميع» panel: go on from where you were, then quick ways in, then sub-tabs */
+/* ---- the «التسميع» panel: go on from where you were, the whole so far in a strip,
+   quick ways in, then sub-tabs. Cards rounded like the rest of the panels. */
 .rc-go {
-  position: relative; border-radius: 3px; color: var(--p-on); padding: 16px 18px 12px; margin-bottom: 12px; text-align: center;
-  background: var(--p-pattern) 0 0 / 30px 30px, linear-gradient(160deg, var(--p-green), var(--p-green-2));
-  border: 1px solid var(--p-gold);
-  box-shadow: inset 0 0 0 4px var(--p-green-2), inset 0 0 0 5px color-mix(in srgb, var(--p-gold) 70%, transparent);
+  position: relative; border-radius: 22px; color: var(--p-on); padding: 14px 16px 16px; margin-bottom: 10px; overflow: hidden;
+  background: var(--p-pattern) 0 0 / 30px 30px, linear-gradient(155deg, var(--p-green), var(--p-green-2));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p-gold) 45%, transparent), 0 8px 24px -10px color-mix(in srgb, var(--p-green-2) 70%, transparent);
 }
-.rc-go-l { font-size: 12.5px; opacity: .8; letter-spacing: .2px; }
-.rc-go-t { font-size: 22px; font-weight: 800; color: #e6cc8a; margin-top: 2px; }
-.rc-go-v { font-size: 21px; line-height: 1.75; margin: 6px 4px 8px; opacity: .96; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.rc-go-p { display: flex; align-items: center; gap: 10px; margin: 0 6px 12px; }
-.rc-go-p small { flex: none; font-size: 12px; opacity: .85; }
-.rc-go-p .rc-bar { background: color-mix(in srgb, var(--p-on) 18%, transparent); }
-.rc-go-p .rc-bar i { background: #e6cc8a; }
+.rc-go-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 24px; }
+.rc-go-l { font-size: 12.5px; font-weight: 600; opacity: .78; }
+.rc-run {
+  display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px 3px 8px; border-radius: 99px; font-size: 12px; font-weight: 700;
+  color: #f1dc9c; background: color-mix(in srgb, #000 22%, transparent);
+}
+.rc-run svg { width: 14px; height: 14px; fill: #e6b85c; stroke: none; }
+.rc-go-t { font-size: 21px; font-weight: 800; color: #ecd597; margin-top: 4px; }
+.rc-go-v { font-size: 20px; line-height: 1.75; margin: 2px 0 8px; opacity: .95; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden; }
+.rc-go-p { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; }
+.rc-go-p small { flex: none; font-size: 12px; opacity: .8; font-variant-numeric: tabular-nums; }
+.rc-go-p .rc-bar { height: 4px; background: color-mix(in srgb, var(--p-on) 18%, transparent); }
+.rc-go-p .rc-bar i { background: #ecd597; }
 .rc-go-b {
-  width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 13px; border-radius: 3px;
-  font-size: 17px; font-weight: 800; color: var(--p-green-2); background: linear-gradient(180deg, #ecd597, #d4b46c);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, .35) inset, 0 2px 6px rgba(0, 0, 0, .25);
+  width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 13px; border-radius: 14px;
+  font-size: 17px; font-weight: 800; color: var(--p-green-2); background: linear-gradient(180deg, #f0dba2, #d6b770);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .4) inset, 0 3px 10px rgba(0, 0, 0, .22);
 }
 .rc-go-b svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .rc-go-b:active { transform: scale(.98); }
-.rc-go-f { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; font-size: 12.5px; opacity: .88; }
-.rc-go-f .sep { opacity: .5; }
-.rc-go-f .rc-ring-w { width: 22px; height: 22px; }
-.rc-go-f .rc-ring circle { stroke-width: 4.5; }
 
 .rc-bar { position: relative; flex: 1; display: block; height: 5px; border-radius: 3px; overflow: hidden; background: var(--tint-2); }
 .rc-bar i { position: absolute; inset: 0 0 0 auto; border-radius: 3px; background: var(--p-green); transition: width .5s ease; }
 .rc-bar.full i { background: linear-gradient(90deg, var(--p-gold), #d9b86c); }
 
+/* numbers side by side on one card: here the whole so far, in السجل the week */
+.rc-stats, .rc-sum {
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); margin: 0 0 10px; padding: 12px 4px;
+  border-radius: 18px; background: var(--surface); border: .5px solid var(--line); box-shadow: 0 1px 2px rgba(60, 40, 10, .04);
+}
+.rc-st, .rc-sum div { position: relative; display: flex; flex-direction: column; align-items: center; gap: 1px; min-width: 0; }
+.rc-st + .rc-st, .rc-sum div + div { border-inline-start: .5px solid var(--line); }
+.rc-st b, .rc-sum b { font-size: 20px; font-weight: 800; line-height: 1.3; color: var(--p-ink); font-variant-numeric: tabular-nums; }
+.rc-st b small { font-size: 12px; font-weight: 600; color: var(--muted); }
+.rc-st > small, .rc-sum small { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
+.rc-st.met > small { color: var(--p-ink); font-weight: 700; }
+
 .rc-quick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
 .rc-quick button {
-  display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 12px 4px 10px; border-radius: 3px;
-  border: 1px solid var(--p-rule); background: color-mix(in srgb, var(--p-gold) 5%, var(--p-bg)); color: var(--p-ink);
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 11px; border-radius: 18px; text-align: start;
+  background: var(--surface); border: .5px solid var(--line); box-shadow: 0 1px 2px rgba(60, 40, 10, .04); color: var(--ink);
+  transition: transform .15s ease;
 }
-.rc-quick button:active { transform: scale(.97); background: color-mix(in srgb, var(--p-gold) 14%, var(--p-bg)); }
-.rc-quick button:disabled { opacity: .5; }
-.rc-quick svg { width: 24px; height: 24px; fill: none; stroke: var(--p-gold); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; margin-bottom: 2px; }
-.rc-quick b { font-size: 14px; font-weight: 800; }
-.rc-quick small { font-size: 11.5px; color: var(--muted); line-height: 1.4; text-align: center; }
+.rc-quick button:active { transform: scale(.96); }
+.rc-quick button:disabled { opacity: .45; }
+.rc-quick .ic {
+  position: relative; width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--p-green) 11%, transparent); color: var(--p-ink);
+}
+.rc-quick svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.rc-quick .ic i {
+  position: absolute; top: -5px; inset-inline-end: -7px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: grid; place-items: center;
+  font-style: normal; font-size: 11px; font-weight: 800; color: #fff; background: var(--c-marks); box-shadow: 0 0 0 2px var(--surface);
+}
+.rc-quick .tx { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.rc-quick b { font-size: 14px; font-weight: 700; white-space: nowrap; }
+.rc-quick small { font-size: 11.5px; color: var(--muted); line-height: 1.35; }
 
 .rc-seg {
-  position: sticky; top: -4px; z-index: 2; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px; padding: 3px;
-  margin: 0 0 10px; border-radius: 4px; background: color-mix(in srgb, var(--p-gold) 13%, var(--p-bg)); border: 1px solid var(--p-rule);
+  position: sticky; top: -4px; z-index: 2; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; padding: 3px;
+  margin: 0 0 6px; border-radius: 13px; background: color-mix(in srgb, var(--ink) 6%, var(--paper));
 }
-.rc-seg button { position: relative; padding: 8px 0; border-radius: 3px; font-size: 14px; font-weight: 600; color: var(--muted); transition: background-color .2s ease, color .2s ease; }
-.rc-seg button.on { background: var(--p-bg); color: var(--p-ink); font-weight: 800; box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
+.rc-seg button { position: relative; padding: 7px 0; border-radius: 10px; font-size: 14px; font-weight: 600; color: var(--muted); transition: background-color .2s ease, color .2s ease; }
+.rc-seg button.on { background: var(--surface); color: var(--p-ink); font-weight: 700; box-shadow: 0 1px 3px rgba(0, 0, 0, .1), 0 0 0 .5px var(--line); }
 .rc-seg button i {
   display: inline-grid; place-items: center; min-width: 17px; height: 17px; padding: 0 4px; margin-inline-start: 5px; border-radius: 9px;
   font-style: normal; font-size: 11px; font-weight: 800; color: #fff; background: var(--c-marks); vertical-align: 1px;
 }
 .rc-pane { animation: fadeIn .25s ease both; }
-
-.rc-sum { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; margin: 4px 0 12px; padding: 10px 0; border-top: 1px solid var(--p-rule); border-bottom: 1px solid var(--p-rule); }
-.rc-sum div { display: flex; flex-direction: column; align-items: center; }
-.rc-sum div + div { border-inline-start: 1px solid var(--p-rule); }
-.rc-sum b { font-size: 22px; font-weight: 800; color: var(--p-ink); font-variant-numeric: tabular-nums; }
-.rc-sum small { font-size: 12px; color: var(--muted); }
+.rc-pane > .group-label:first-child { margin-top: 12px; }
 
 .rc-sura .main { gap: 4px; }
 .rc-sura .rc-bar { flex: none; width: 100%; margin: 3px 0 1px; }
 .rc-cont {
-  flex: none; display: flex; align-items: center; justify-content: center; gap: 5px; min-width: 76px; padding: 7px 10px; border-radius: 3px; font-size: 13px; font-weight: 700;
-  color: var(--p-ink); border: 1px solid var(--p-gold); background: color-mix(in srgb, var(--p-gold) 8%, transparent);
+  flex: none; display: flex; align-items: center; justify-content: center; gap: 4px; min-width: 70px; padding: 7px 12px; border-radius: 99px; font-size: 13px; font-weight: 700;
+  color: var(--p-ink); background: color-mix(in srgb, var(--p-green) 10%, transparent);
 }
-.rc-cont svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+.rc-cont svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
 .rc-cont:active { transform: scale(.95); }
 
 .rc-empty { margin: 18px 12px; text-align: center; color: var(--muted); font-size: 14.5px; line-height: 1.8; }
