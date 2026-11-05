@@ -1,5 +1,5 @@
 // التسميع with Muaalem: runs one model candidate (file + backend) and reads recitation as it
-// grows: whenever at least MIN_NEW s of new audio has come in, the last WIN s
+// grows: whenever at least MIN_NEW s of new audio has come in (more on a slow device, see DUTY), the last WIN s
 // are read again; output frames with RIGHT s of audio after them are final,
 // the rest is shown as tentative.
 //
@@ -7,7 +7,7 @@
 // (SharedArrayBuffer), so each read takes everything heard up to that moment;
 // without isolation it falls back to messages.
 //
-// in:  load {variant, ep, threads, shared: {ring, meta, time}} · start · audio {samples} · flush
+// in:  load {variant, ep, threads, shared: {ring, meta, time}} · rate {rate} · start · audio {samples} · flush
 // out: progress {loaded, total} · ready {loadMs, ep, threads} · text {final, tent, conf, alts (per character), ms, lag} · flushed · error {message}
 
 const ORT = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/';
@@ -17,6 +17,15 @@ const WIN = 4, RIGHT = 1, MIN_NEW = 0.25, RATE = 16000; // (the study, 480 readi
 const FRAME = 640;   // samples per output frame (40 ms); windows start on this grid so frames line up
 const MIN_WIN = 1.5; // s heard before anything is final (the very start needs context)
 const MAX_WIN = 8;   // s: the longest window read when catching up
+// how often it reads, the reader's choice (rate): the study found every 0.25 s or every 1.5 s
+// the same (words marked, mistakes caught); reading more often only shows the words sooner
+//   auto: every MIN_NEW s, but the model runs at most half the time: a slow phone reads less
+//         often, and stays cool and its page responsive (never more than MAX_GAP s apart)
+//   fast: every MIN_NEW s, or as often as the phone can
+//   save: every SAVE_GAP s
+const DUTY = 0.5, MAX_GAP = 3, SAVE_GAP = 1.5;
+let rate = 'auto';
+const gap = () => rate === 'save' ? SAVE_GAP : rate === 'fast' ? MIN_NEW : Math.max(MIN_NEW, Math.min(MAX_GAP, stepMs / 1000 / DUTY));
 const ALT = 0.1;     // a sound the model gives this much chance, besides its first choice, is kept as a runner-up
 const now = () => performance.timeOrigin + performance.now(); // same clock as the page
 
@@ -25,7 +34,7 @@ let ort, fe, vocab, session, fromCache = false;
 let ring = new Float32Array(RATE * 30), meta = new Int32Array(1), time = new Float64Array(1);
 let base = 0;                                      // samples written before this recitation
 let kept = [], keptP = [], keptA = [], readUpTo = 0; // final frames (by absolute frame number), how sure each was, its runner-ups, and up to when (s)
-let live = false, looping = null;
+let live = false, looping = null, stepMs = 0; // stepMs: how long a read takes here, lately
 
 async function fetchParts(variant) {
   const man = await (await fetch(BASE + 'muaalem/manifest.json', { cache: 'no-cache' })).json();
@@ -135,6 +144,7 @@ async function step(final) {
   const t0 = performance.now();
   const o = await ids(slice(st, n));
   const ms = performance.now() - t0;
+  stepMs = stepMs ? 0.7 * stepMs + 0.3 * ms : ms;
   const upto = final ? o.length : n - st < MIN_WIN * RATE ? 0 : Math.max(0, o.length - Math.round(RIGHT * RATE / FRAME));
   for (let k = kept.length - f0; k < upto; k++) if (k >= 0) { kept[f0 + k] = o[k]; keptP[f0 + k] = o.p[k]; keptA[f0 + k] = o.alt[k]; }
   // frames before f0 that were never made final (can't happen once WIN > RIGHT) stay blank
@@ -166,7 +176,7 @@ function record() {
 async function loop() {
   while (live) {
     record();
-    if ((written() - base) / RATE - readUpTo >= MIN_NEW) {
+    if ((written() - base) / RATE - readUpTo >= gap()) {
       try { await step(false); } catch (e) { postMessage({ type: 'error', message: String(e.stack || e) }); await new Promise(r => setTimeout(r, 200)); }
     }
     else await new Promise(r => setTimeout(r, 15));
@@ -203,6 +213,7 @@ async function probe({ list, threads }) {
 onmessage = async ({ data }) => {
   try {
     if (data.type === 'probe') await probe(data);
+    if (data.type === 'rate') rate = data.rate;
     if (data.type === 'load') await load(data);
     if (data.type === 'recording') {
       record();

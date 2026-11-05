@@ -29,6 +29,10 @@ const Mu = (() => {
   const BASE_IDS = ['q4-cpu', 'q4-gpu'];
   const PROBE_X = 19; // a full update (a WIN s window) takes about this many times the stand-in (2.5 s)
   const threads = () => Math.min(4, navigator.hardwareConcurrency || 4);
+  // how often the recitation is read: 'auto' (as often as the phone can at ease), 'fast', 'save' (mu-worker.js)
+  const RATES = ['auto', 'fast', 'save'];
+  const rate = () => RATES.includes(store.get('mu.rate')) ? store.get('mu.rate') : 'auto';
+  function setRate(r) { store.set('mu.rate', r); worker?.postMessage({ type: 'rate', rate: rate() }); }
   const now = () => performance.timeOrigin + performance.now();
 
   // the candidate chosen for this device: { id, ms } (ms: expected per update)
@@ -153,6 +157,7 @@ const Mu = (() => {
       };
       worker.onerror = e => { if (!ready) { reset(); reject(new Error(e.message || 'worker failed')); } };
       worker.postMessage({ type: 'load', variant: c.variant, ep: c.ep, threads: threads(), shared });
+      worker.postMessage({ type: 'rate', rate: rate() });
     });
   }
 
@@ -500,5 +505,6 @@ const Mu = (() => {
     CANDS, BASE_IDS, choice, mb, probe, saved, savedVariants, use, bench: () => store.get('mu.bench', null), remove, load, prime, start, listen, stop, sounds, expect, expect2, locate, opening,
     ready: () => ready, listening: () => !!mic, pace: () => ({ pace, near: refs ? refs.r.filter((_, i) => paceMask & 1 << i).map(([r]) => r) : [] }), lost: f => { onLost = f; }, sound: () => actx, info: () => info, recording,
     reprobe: () => { store.set('mu.choice', null); reset(); },
+    rate, setRate,
   };
 })();

@@ -1039,6 +1039,12 @@ const Recite = (() => {
   }
 
   const SET_ON = { sound: true }; // settings on unless turned off
+  // how often the words are read (Mu.rate): the same mistakes caught either way
+  const RATE_NOTE = {
+    auto: 'كل ربع ثانية إن أطاق جهازك، وأقل على الأجهزة البطيئة كي لا تسخن',
+    fast: 'كل ربع ثانية دائمًا، أو بأقصى ما يطيقه جهازك · أثقل على البطارية',
+    save: 'مرة كل ثانية ونصف · أخف على البطارية، والأخطاء تُكشف كما هي، وتظهر الكلمات متأخرة قليلًا',
+  };
   const setting = id => !!store.get('recite.' + id, SET_ON[id] ?? false);
   const toggle = (id, label, sub) => {
     const on = setting(id);
@@ -1226,6 +1232,8 @@ const Recite = (() => {
           <span class="rc-chips">${[0, 5, 10, 20].map(n => `<button data-rc-goal="${n}"${goal === n ? ' class="on"' : ''}>${n ? ar(n) : 'لا'}</button>`).join('')}</span></div>
         ${MU() ? '' : `<div class="row rc-goal"><span class="main"><span class="t">سرعة التعرّف</span><span class="s">السريع أخفّ وأسرع بمرتين، والدقيق أثبت قليلًا</span></span>
           <span class="rc-chips">${[['fast', 'سريع'], ['exact', 'دقيق']].map(([k, t]) => `<button data-rc-use="${k}"${Listen.which() === k ? ' class="on"' : ''}>${t}</button>`).join('')}</span></div>`}
+        ${MU() ? `<div class="row rc-goal"><span class="main"><span class="t">تحديث الكلمات</span><span class="s">${RATE_NOTE[Mu.rate()]}</span></span>
+          <span class="rc-chips">${[['auto', 'تلقائي'], ['fast', 'الأسرع'], ['save', 'موفّر']].map(([k, t]) => `<button data-rc-rate="${k}"${Mu.rate() === k ? ' class="on"' : ''}>${t}</button>`).join('')}</span></div>` : ''}
         <div class="row rc-model"><span class="main"><span class="t">نموذج التعرّف على التلاوة</span><span class="s" id="rcModelS">…</span></span><span id="rcModelB"></span></div>
         ${MU() ? `<div class="rc-models" id="rcModels"></div>
         <div class="row rc-model" id="rcDiag" hidden><span class="main"><span class="t">تسجيل آخر جلسة</span><span class="s">إن أخطأ التعرّف، شارك هذا التسجيل (آخر ٥ دقائق) لنحسّنه</span></span><button class="rc-not" data-rc-diag>مشاركة</button></div>` : ''}
@@ -1358,6 +1366,14 @@ const Recite = (() => {
       renderSheet();
       $('#sheetBody').scrollTop = y;
       return true;
+    }
+    const rt = e.target.closest('[data-rc-rate]');
+    if (rt) {
+      Mu.setRate(rt.dataset.rcRate);
+      const y = $('#sheetBody').scrollTop;
+      renderSheet();
+      $('#sheetBody').scrollTop = y;
+      return;
     }
     const g = e.target.closest('[data-rc-goal]');
     if (g) {
