@@ -1274,7 +1274,7 @@ const Recite = (() => {
     const have = await Mu.savedVariants(), bench = Mu.bench(), c = Mu.choice();
     if (!$('#rcModels')) return;
     s.textContent = testing ? `نختبر النماذج على جهازك… ${testing}`
-      : bench ? `الأساسي ٤ بت، على الأسرع في جهازك (اختبرناه ${ago(bench.at)}). يكتب ما تقرؤه أسرع، ويكفي لكشف الأخطاء`
+      : bench ? `الأسرع على جهازك يُختار له (اختبرناه ${ago(bench.at)}): ٤ بت على المعالج الرسومي، و٨ بت على المعالج`
       : 'لم نختبرها على جهازك بعد';
     b.innerHTML = `<button class="rc-not" data-rc-model="probe"${testing ? ' disabled' : ''}>${bench ? 'اختبر من جديد' : 'اختبر جهازك'}</button>`;
     const diag = $('#rcDiag');
@@ -1297,7 +1297,7 @@ const Recite = (() => {
           <span class="s">أدق قليلًا في الحركات والمدود، وتنزيله أكبر وأبطأ على أكثر الأجهزة. يُنزَّل حين تختاره.</span></span><svg viewBox="0 0 24 24" class="go"><path d="M14.5 6l-6 6 6 6"/></svg></summary>
         ${big.map(row).join('')}
         ${bigTested ? '' : `<button class="rc-not rc-bigtest" data-rc-model="probe"${testing ? ' disabled' : ''}>اختبرها على جهازك</button>`}
-        ${onBig ? `<button class="rc-not rc-bigtest" data-rc-pick="${times['q4-gpu'] != null && times['q4-gpu'] < (times['q4-cpu'] ?? Infinity) ? 'q4-gpu' : 'q4-cpu'}">العودة إلى النموذج الأساسي (٤ بت)</button>` : ''}
+        ${onBig ? `<button class="rc-not rc-bigtest" data-rc-pick="${bench?.best || 'q4-cpu'}">العودة إلى الأسرع على جهازك</button>` : ''}
       </details>`
       + (Object.values(have).some(Boolean) ? `<div class="rc-mfoot">${Object.entries(have).filter(([, v]) => v).map(([k]) =>
       `<button class="rc-not" data-rc-delv="${k}">حذف ${k === 'q8' ? '٨ بت' : k === 'q4' ? '٤ بت' : '١٦ بت'} من جهازك</button>`).join('')}</div>` : '');

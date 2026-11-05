@@ -23,10 +23,10 @@ const Mu = (() => {
     { id: 'q4-cpu', variant: 'q4', ep: 'wasm', mb: 86 },
     { id: 'q4-gpu', variant: 'q4', ep: 'webgpu', mb: 86 },
   ];
-  // every device starts on 4-bit, on whichever of the CPU or the GPU runs it faster;
-  // the bigger ones (a little more exact, two or three times the download) are
-  // there to choose in the settings
-  const BASE_IDS = ['q4-cpu', 'q4-gpu'];
+  // every device starts on whichever of these runs fastest there: 4-bit on a GPU, and on a
+  // CPU 8-bit (in the browser it runs twice as fast as 4-bit there, as exact: the study);
+  // the bigger ones are there to choose in the settings
+  const BASE_IDS = ['q4-cpu', 'q4-gpu', 'q8-cpu'];
   const PROBE_X = 19; // a full update (a WIN s window) takes about this many times the stand-in (2.5 s)
   const threads = () => Math.min(4, navigator.hardwareConcurrency || 4);
   // how often the recitation is read: 'auto' (as often as the phone can at ease), 'fast', 'save' (mu-worker.js)
