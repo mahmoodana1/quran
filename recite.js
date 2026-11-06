@@ -361,7 +361,7 @@ const Recite = (() => {
     if (MU()) {
       const starts = [];
       words.forEach((w, k) => { if (w.wi === 0) starts.push(k); });
-      G.mu = { c: 0, w0: opts.w0 || 0, cut: opts.cut || 0, final: '', tent: '', starts, lead: true, open: true, stream: !!opts.stream, late: !!opts.stream };
+      G.mu = { c: 0, w0: opts.w0 || 0, cut: opts.cut || 0, final: '', tent: '', starts, lead: true, open: true, stream: !!opts.stream, late: !!opts.stream, letPairs: {} };
       G.pos = G.tent = G.mu.w0; // found by reciting from inside the aya: from that word
       G.heard = {}; // k -> { got, want }: what was heard for a word marked, and how it should sound
       if (opts.carry) Object.assign(G.mu, opts.carry, { lead: true, open: true }); // the reading of the surah before goes on
@@ -556,9 +556,9 @@ const Recite = (() => {
       if (m.late && su <= cu * 1.5 + 45) m.late = false;
       if (m.late) { const cc = Match.charAt(sub, Math.round(cu * 1.25) + 10); sub = sub.slice(0, cc); fin = Math.min(fin, cc); last = false; }
       // (each natural madd of the aya as last heard: this reader's own length, taken in as it ends)
-      if (m.tjAt !== ai + ':' + m.w0) { m.tjAt = ai + ':' + m.w0; m.tjSeen = {}; }
-      const seen = m.tjSeen;
-      const st = Match.words(ex, sub, fin, last, { freeLead: m.lead, conf: m.conf.slice(c0, c0 + sub.length), alts: m.alts.slice(c0, c0 + sub.length), at: m.at?.slice(c0, c0 + sub.length), tajweed: { ...tjRules(), pace: pace(), seen: (k, hl, d) => { if (k < cu) seen[k] = [hl, d]; } }, letters: letRules() });
+      if (m.tjAt !== ai + ':' + m.w0) { m.tjAt = ai + ':' + m.w0; m.tjSeen = {}; m.letSeen = {}; }
+      const seen = m.tjSeen, lets = m.letSeen;
+      const st = Match.words(ex, sub, fin, last, { freeLead: m.lead, conf: m.conf.slice(c0, c0 + sub.length), alts: m.alts.slice(c0, c0 + sub.length), at: m.at?.slice(c0, c0 + sub.length), tajweed: { ...tjRules(), pace: pace(), seen: (k, hl, d) => { if (k < cu) seen[k] = [hl, d]; } }, letters: { ...letRules(), heard: (pk, k) => { if (k < cu) lets[k] = pk; } } });
       const n0 = cur.spans.length;
       const begun = nx != null && st.slice(n0, n0 + 2).some(x => x.state === 'ok' || x.state === 'err');
       muApply(st.slice(0, n0), begun, cur);
@@ -570,6 +570,7 @@ const Recite = (() => {
         break;
       }
       paceAdd(m.tjSeen); m.tjAt = null;
+      for (const pk of Object.values(m.letSeen || {})) (m.letPairs ||= {})[pk] = (m.letPairs[pk] || 0) + 1;
       m.cut += st[n0].at[0]; m.c++; m.w0 = 0; m.lead = false;
     }
     if (G.pos >= G.words.length) return G.chain ? chain() : finish();
@@ -1502,7 +1503,10 @@ const Recite = (() => {
     paceNow = null;
   }
   // letters told apart from their like (match.js: opt.letters)
-  const letRules = () => ({ heavy: setting('lHeavy'), near: setting('lNear') });
+  // (a letter said as its like not heard surely: marked once this reader has said it so LET_OFTEN
+  // times before in the session, in ayas already read)
+  const LET_OFTEN = 2;
+  const letRules = () => ({ heavy: setting('lHeavy'), near: setting('lNear'), often: pk => (G?.mu?.letPairs?.[pk] || 0) >= LET_OFTEN });
   const toggle = (id, label, sub) => {
     const on = setting(id);
     return `<button class="row rc-set" data-rc-set="${id}" role="switch" aria-checked="${on}">
