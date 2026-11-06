@@ -188,8 +188,10 @@ const Recite = (() => {
       prepStep('mic', 'doing', 'اسمح للتطبيق باستعمال الميكروفون، ونتأكد أن الصوت يصل');
       // the browser's question not answered after a while: it may not have shown at all (some
       // phones, Xiaomi among them, ask in the phone's settings first). How, and try again
-      const slow = setTimeout(() => {
-        if (!live()) return;
+      const slow = setTimeout(async () => {
+        let st = null;
+        try { st = (await Promise.race([navigator.permissions?.query({ name: 'microphone' }), new Promise(r => setTimeout(r, 500))]))?.state; } catch {}
+        if (!live() || st === 'granted') return; // allowed: still opening (asked again meanwhile)
         prepStep('mic', 'doing', 'لم يظهر طلب الإذن؟ اسمح للمتصفح بالميكروفون من إعدادات الهاتف: التطبيقات ← المتصفح (Chrome) ← الأذونات ← الميكروفون ← السماح، ثم أعد المحاولة');
         $('#rpGo').hidden = false; $('#rpGo').textContent = 'أعد المحاولة'; $('#rpGo').onclick = () => prep(then, intent);
       }, 8000);
@@ -197,12 +199,22 @@ const Recite = (() => {
       clearTimeout(slow);
       if (!live()) return;
       $('#rpGo').hidden = true;
+      // allowed, and the phone never gave the microphone: the page loaded again, once, by itself
+      // (it is given at once then), and on from here
+      let hung = null;
+      try { hung = sessionStorage.getItem('micHung'); r === 'hung' ? sessionStorage.setItem('micHung', '1') : sessionStorage.removeItem('micHung'); } catch {}
+      if (r === 'hung' && !hung) {
+        prepStep('mic', 'doing', 'سُمح به — نعيد تحميل التطبيق ليعمل');
+        return reloadApp(intent);
+      }
       if (r !== 'ok') {
         prepStep('mic', 'fail', r === 'denied' ? 'لم يُسمح به — اسمح به من إعدادات المتصفح ثم أعد المحاولة'
           : r === 'silent' ? 'لا يصل منه صوت — إن فصلت سماعة أو غيّرت الميكروفون فأعد تحميل التطبيق'
+          : r === 'hung' ? 'سمحتَ به، لكن الهاتف لم يُعطِ المتصفح الميكروفون. افتح إعدادات الهاتف ← التطبيقات ← المتصفح (Chrome) ← الأذونات ← الميكروفون ← «السماح أثناء استخدام التطبيق»، وأغلق أي تطبيق يستعمله (مكالمة، تسجيل، مساعد صوتي)، ثم أعد المحاولة'
           : 'تعذّر فتح الميكروفون — تأكد أن المتصفح مسموح له به في إعدادات الهاتف وأن تطبيقًا آخر لا يستعمله، ثم أعد تحميل التطبيق');
+        $('#recPrep [data-rp="mic"] small').textContent += ` (${r}·${Mu.micWhy() || '-'})`;
         $('#rpGo').hidden = false;
-        if (r === 'denied') { $('#rpGo').textContent = 'أعد المحاولة'; $('#rpGo').onclick = () => prep(then, intent); }
+        if (r === 'denied' || r === 'hung') { $('#rpGo').textContent = 'أعد المحاولة'; $('#rpGo').onclick = () => prep(then, intent); }
         else { $('#rpGo').textContent = 'أعد تحميل التطبيق'; $('#rpGo').onclick = () => reloadApp(intent); }
         return;
       }

@@ -280,23 +280,55 @@ const Mu = (() => {
     watch(mic);
   }
   // the microphone, raw if it can be (a new device may not take the settings: then as it comes)
-  async function openMic() {
+  async function ask() {
     try { return await navigator.mediaDevices.getUserMedia({ audio: RAW_MIC }); }
     catch (e) { if (e.name === 'NotAllowedError' || e.name === 'SecurityError') throw e; return navigator.mediaDevices.getUserMedia({ audio: true }); }
   }
+  // some phones never answer the ask once «allow» is pressed (left waiting for good): asked
+  // again as the permission turns to allowed, and every few seconds while it is, the first
+  // microphone to come used. Allowed and none after ms (or with no way to know, after 25 s): a
+  // 'TimeoutError'. Waited on for as long as the browser's question is up
+  let micErr = ''; // why it last failed, shown with the failure (a screenshot says it)
+  function openMic(ms = 9000) {
+    return new Promise(async (ok, no) => {
+      let done = false, out = 0, st = null, since = Date.now(), wait = 25e3;
+      const end = (f, v) => {
+        if (done) { if (f === ok) v.getTracks().forEach(t => t.stop()); return; }
+        done = true; clearInterval(iv); if (st) st.onchange = null;
+        f(v);
+      };
+      const go = () => {
+        out++;
+        ask().then(s => end(ok, s), e => { micErr = e.name || 'err'; if (--out === 0 && !(st?.state === 'granted' && e.name !== 'NotAllowedError')) end(no, e); });
+      };
+      const iv = setInterval(() => {
+        if (done) return;
+        if (st && st.state !== 'granted') { since = Date.now(); return; }
+        if (Date.now() - since > wait) return micErr = `wait${out}·${st?.state || '?'}`, end(no, Object.assign(new Error('no answer'), { name: 'TimeoutError' }));
+        if (st && out < 4) go();
+      }, 3000);
+      go();
+      try { st = await within(navigator.permissions?.query({ name: 'microphone' }), 1000, null); } catch {}
+      if (st && !done) { wait = ms; st.onchange = () => { since = Date.now(); if (st.state === 'granted') setTimeout(() => !done && out < 4 && go(), 600); }; }
+    });
+  }
   // the microphone, asked for and listened to: 'ok' once real sound comes in (a room is never
   // perfectly silent), 'denied', 'silent' (it opened but sends nothing: unplugged, taken by
-  // another app, a phone that lost it), or 'none' (no microphone found, or it can't be opened)
+  // another app, a phone that lost it), 'hung' (asked, never answered), or 'none' (no
+  // microphone found, or it can't be opened)
   const SILENT = 1e-6;
   async function micCheck(ms = 1500) {
     let stream;
     try { stream = await openMic(); }
-    catch (e) { return e.name === 'NotAllowedError' || e.name === 'SecurityError' ? 'denied' : 'none'; }
+    catch (e) { return e.name === 'NotAllowedError' || e.name === 'SecurityError' ? 'denied' : e.name === 'TimeoutError' ? 'hung' : 'none'; }
     try {
       if (!actx || actx.state === 'closed') context();
       // (an engine started outside a tap, or paused by the permission prompt, may never say it
       // started: not waited on for long; one not running is no fault of the microphone)
       await within(actx.resume().catch(() => {}), 1500);
+      // (just allowed, a phone may hold the track muted a moment)
+      const t = stream.getAudioTracks()[0];
+      if (t?.muted) await within(new Promise(r => t.addEventListener('unmute', r, { once: true })), 1500);
       if (stream.getAudioTracks().every(t => t.readyState === 'ended' || t.muted)) return 'silent';
       const src = actx.createMediaStreamSource(stream), an = actx.createAnalyser();
       an.fftSize = 2048; src.connect(an);
@@ -649,6 +681,6 @@ const Mu = (() => {
     CANDS, BASE_IDS, choice, mb, probe, saved, savedVariants, use, bench: () => store.get('mu.bench', null), remove, load, prime, start, listen, stop, sounds, expect, expect2, locate, opening,
     ready: () => ready, listening: () => !!mic, pace: () => ({ pace, near: refs ? refs.r.filter((_, i) => paceMask & 1 << i).map(([r]) => r) : [] }), lost: f => { onLost = f; }, sound: () => actx, info: () => info, recording,
     reprobe: () => { store.set('mu.choice', null); reset(); },
-    rate, setRate, warm, warmed: () => warmed, micCheck, toCpu, lighter, dead: f => { onDead = f; },
+    rate, setRate, warm, warmed: () => warmed, micCheck, micWhy: () => micErr, toCpu, lighter, dead: f => { onDead = f; },
   };
 })();
