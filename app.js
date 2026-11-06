@@ -810,6 +810,28 @@ function applyUpdate(resume) {
   setTimeout(() => location.reload(), 700);
 }
 
+// an update ready, offered over the page blurred: a tap anywhere applies it, «لاحقًا» puts it
+// off until the app is opened again (or a recitation is about to start: recite.js applies it)
+let updLater = false;
+function offerUpdate() {
+  if (!UPD.stale || UPD.busy() || updLater || !$('#updReady').hidden) return;
+  // not over a recitation's screens (its preparation, the place found, its summary)
+  if (['#recPrep', '#recFound', '#recDone'].some(q => $(q) && !$(q).hidden)) return;
+  $('#upVer').textContent = '';
+  fetch('sw.js', { cache: 'no-store' }).then(r => r.text()).then(t => {
+    const v = /quran-v(\d+)/.exec(t)?.[1];
+    if (v) $('#upVer').textContent = `النسخة ${ar(v)}`;
+  }).catch(() => {});
+  show($('#updReady'));
+}
+$('#updReady').addEventListener('click', e => {
+  if (e.target.closest('#upLater')) { updLater = true; hide($('#updReady')); return; }
+  hide($('#updReady'));
+  if (!UPD.busy()) applyUpdate({});
+});
+// a recitation going on when it came: offered once it is over
+setInterval(() => { if (UPD.stale && !updLater && !document.hidden) offerUpdate(); }, 3000);
+
 // what was open when the app went to the background (a panel and its tab, an aya's
 // actions, its tafsir): put back if the page is loaded again soon after (an update,
 // or a phone that closed it in the background to free memory)
@@ -2395,13 +2417,14 @@ $('#doneLater').onclick = () => hide($('#done'));
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) { hiddenAt = Date.now(); return; }
       if (hiddenAt && Date.now() - hiddenAt >= AWAY_MS && UPD.stale && !UPD.busy()) applyUpdate();
+      if (hiddenAt) updLater = false; // opened again: offered again
       navigator.serviceWorker.getRegistration().then(r => r?.update()).catch(() => {});
     });
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (!hadController && self.crossOriginIsolated) return;
       UPD.stale = true;
       if (!touched) applyUpdate();
-      else if (!UPD.busy()) toast('نسخة جديدة من التطبيق جاهزة — تُطبَّق قبل التسميع القادم');
+      else offerUpdate();
     });
     navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
   }

@@ -1832,6 +1832,14 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 }
 .rf-again:active { transform: scale(.97); }
 .rf-cancel { padding: 6px 16px; border-radius: 99px; font-size: 13px; color: var(--faint); }
+/* an update ready (app.js offerUpdate): the same blurred page, a tap anywhere updates */
+.up-ready { z-index: 60; }
+.up-card { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; animation: rfIn .5s cubic-bezier(.2,.9,.3,1); }
+.up-icon { width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center; font-size: 28px; color: var(--ink);
+  background: color-mix(in srgb, var(--surface) 85%, transparent); border: .5px solid var(--line); box-shadow: 0 1px 3px rgba(0, 0, 0, .08); }
+.up-title { font-size: 19px; font-weight: 700; color: var(--ink); }
+.up-ver { font-size: 13px; color: var(--muted); }
+.up-ver:empty { display: none; }
 .rc-found.landing { background-color: transparent; -webkit-backdrop-filter: blur(0) saturate(1); backdrop-filter: blur(0) saturate(1); cursor: default; }
 .rc-found.landing .rf-go, .rc-found.landing .rf-acts { opacity: 0; animation: none; }
 @media (prefers-reduced-motion: reduce) { .rf-go, .rf-aya { animation: none; } }
