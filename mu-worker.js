@@ -110,21 +110,21 @@ async function ids(x) {
   return o;
 }
 
-// frames -> text, with each character's confidence (the surest of its frames)
-// and the other sounds the model considered there
+// frames -> text, with each character's confidence (the surest of its frames), the other
+// sounds the model considered there, and the frame it starts on (at: how long a madd is held)
 function decode(list, probs, alts) {
   let out = '', prev = -1;
-  const conf = [], alt = [];
+  const conf = [], alt = [], at = [];
   for (let k = 0; k < list.length; k++) {
     const b = list[k];
-    if (b !== prev && b !== 0) { out += vocab[b]; conf.push(probs[k]); alt.push(alts[k] || ''); }
+    if (b !== prev && b !== 0) { out += vocab[b]; conf.push(probs[k]); alt.push(alts[k] || ''); at.push(k); }
     else if (b === prev && b !== 0) {
       conf[conf.length - 1] = Math.max(conf[conf.length - 1], probs[k]);
       for (const c of alts[k] || '') if (!alt[alt.length - 1].includes(c)) alt[alt.length - 1] += c;
     }
     prev = b;
   }
-  return { out, conf, alt };
+  return { out, conf, alt, at };
 }
 
 const written = () => Atomics.load(meta, 0);
@@ -166,7 +166,7 @@ async function step(final) {
   readUpTo = e / RATE;
   // lag: from when the newest sample read came in, to its letters being out
   const fin = decode(kept, keptP, keptA).out, all = decode(kept.concat(tent), keptP.concat(tentP), keptA.concat(tentA)); // together, so a letter on the seam isn't doubled
-  postMessage({ type: 'text', final: fin, tent: all.out.slice(fin.length), conf: all.conf, alts: all.alt, ms, lag: now() - heardAt, end: e / RATE });
+  postMessage({ type: 'text', final: fin, tent: all.out.slice(fin.length), conf: all.conf, alts: all.alt, at: all.at, ms, lag: now() - heardAt, end: e / RATE });
 }
 
 // before a session: each length of window it will read (step()) read once, so a GPU has

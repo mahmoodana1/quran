@@ -501,9 +501,9 @@ const Recite = (() => {
   const MU_TYPE = { haraka: 'haraka', letter: 'wrong', extra: 'wrong', skipped: 'skip', madd: 'madd', ghunna: 'ghunna', order: 'order', heavy: 'heavy', near: 'near', maddlong: 'maddlong', maddnone: 'maddnone' };
   function onMu(g, d) {
     if (G !== g) return;
-    if (g.done) { g.mu.final = d.final; g.mu.tent = d.tent; g.mu.conf = d.conf; g.mu.alts = d.alts; return; } // the last of it, read after «finish»: pause() applies it
+    if (g.done) { g.mu.final = d.final; g.mu.tent = d.tent; g.mu.conf = d.conf; g.mu.alts = d.alts; g.mu.at = d.at; return; } // the last of it, read after «finish»: pause() applies it
     const m = g.mu, grew = d.final.length + d.tent.length !== m.final.length + m.tent.length;
-    m.final = d.final; m.tent = d.tent; m.conf = d.conf; m.alts = d.alts;
+    m.final = d.final; m.tent = d.tent; m.conf = d.conf; m.alts = d.alts; m.at = d.at;
     if (grew && g.run) {
       g.lastAct = Date.now();
       if (!g.voice) { g.voice = true; paintBar(); }
@@ -555,7 +555,10 @@ const Recite = (() => {
       const cu = Match.units(cur.ph).length, su = Match.units(sub).length;
       if (m.late && su <= cu * 1.5 + 45) m.late = false;
       if (m.late) { const cc = Match.charAt(sub, Math.round(cu * 1.25) + 10); sub = sub.slice(0, cc); fin = Math.min(fin, cc); last = false; }
-      const st = Match.words(ex, sub, fin, last, { freeLead: m.lead, conf: m.conf.slice(c0, c0 + sub.length), alts: m.alts.slice(c0, c0 + sub.length), tajweed: tjRules(), letters: letRules() });
+      // (each natural madd of the aya as last heard: this reader's own length, taken in as it ends)
+      if (m.tjAt !== ai + ':' + m.w0) { m.tjAt = ai + ':' + m.w0; m.tjSeen = {}; }
+      const seen = m.tjSeen;
+      const st = Match.words(ex, sub, fin, last, { freeLead: m.lead, conf: m.conf.slice(c0, c0 + sub.length), alts: m.alts.slice(c0, c0 + sub.length), at: m.at?.slice(c0, c0 + sub.length), tajweed: { ...tjRules(), pace: pace(), seen: (k, hl, d) => { if (k < cu) seen[k] = [hl, d]; } }, letters: letRules() });
       const n0 = cur.spans.length;
       const begun = nx != null && st.slice(n0, n0 + 2).some(x => x.state === 'ok' || x.state === 'err');
       muApply(st.slice(0, n0), begun, cur);
@@ -566,6 +569,7 @@ const Recite = (() => {
         if (!done && muFar(st.slice(0, n0), all, c0)) return;
         break;
       }
+      paceAdd(m.tjSeen); m.tjAt = null;
       m.cut += st[n0].at[0]; m.c++; m.w0 = 0; m.lead = false;
     }
     if (G.pos >= G.words.length) return G.chain ? chain() : finish();
@@ -590,16 +594,16 @@ const Recite = (() => {
     const m = G.mu;
     if (m.c >= G.ayas.length || !m.conf) return;
     const heard = all ? m.final + m.tent : m.final;
-    const c0 = Match.charAt(heard, m.cut), sub = heard.slice(c0), conf = m.conf.slice(c0, c0 + sub.length), alts = m.alts.slice(c0, c0 + sub.length);
+    const c0 = Match.charAt(heard, m.cut), sub = heard.slice(c0), conf = m.conf.slice(c0, c0 + sub.length), alts = m.alts.slice(c0, c0 + sub.length), at = m.at?.slice(c0, c0 + sub.length);
     const cur = Mu.expect(G.ayas[m.c], m.w0);
     const tajweed = tjRules();
     const letters = letRules();
-    const st = Match.words(cur, sub, sub.length, false, { freeLead: m.lead, conf, alts, tajweed, letters });
+    const st = Match.words(cur, sub, sub.length, false, { freeLead: m.lead, conf, alts, at, tajweed, letters });
     const t = st.findLastIndex(x => x.state !== 'todo');
     if (t < 0) return;
     const part = { ph: cur.ph.slice(0, cur.spans[t][1]), spans: cur.spans.slice(0, t + 1), wasl: cur.wasl.filter(k => k <= t) };
     if (cur.tj) part.tj = cur.tj.filter(c => c < part.ph.length);
-    const fin = Match.words(part, sub, sub.length, true, { freeLead: m.lead, conf, alts, tajweed, letters });
+    const fin = Match.words(part, sub, sub.length, true, { freeLead: m.lead, conf, alts, at, tajweed, letters });
     muApply(fin.concat(st.slice(t + 1)), false, cur);
   }
 
@@ -1468,7 +1472,35 @@ const Recite = (() => {
   };
   const setting = id => !!store.get('recite.' + id, SET_ON[id] ?? false);
   // the tajweed rules checked while reciting (match.js)
-  const tjRules = () => ({ madd: setting('tjMadd'), ghunna: setting('tjGhunna'), munfasil: setting('tjMunfasil'), over: setting('tjOver') });
+  const tjRules = () => ({ madd: setting('tjMadd'), ghunna: setting('tjGhunna'), munfasil: setting('tjMunfasil'), over: setting('tjOver'), pace: pace() });
+  // how this reader holds a natural madd, from their own readings (match.js: rules.pace), in
+  // the model's letters and in time: how often each length in letters was heard (0 to 8, older
+  // readings counting less and less), and from it the length in the middle (u), how often heard
+  // as nothing (z), how many (n); and how long it is held (the last PACE_T, in frames of 40 ms):
+  // the middle (t), how many (tn). A madd is then judged against this reader's own natural one
+  let paceNow = null;
+  const PACE_T = 200;
+  const mid = a => { const s = a.slice().sort((x, y) => x - y); return s[s.length >> 1]; };
+  function pace() {
+    if (paceNow) return paceNow;
+    const h = store.get('mu.pace', null) || [], n = h.reduce((a, b) => a + b, 0), m = n - (h[0] || 0), ts = store.get('mu.paceT', null) || [];
+    let u = 2;
+    for (let l = 1, c = 0; l < h.length; l++) if ((c += h[l]) >= m / 2) { u = l; break; }
+    return paceNow = { u: m > 0 ? u : 2, z: n ? (h[0] || 0) / n : 0, n, t: ts.length ? mid(ts) : 0, tn: ts.length };
+  }
+  function paceAdd(seen) {
+    const ls = Object.values(seen || {});
+    if (!ls.length) return;
+    const h = store.get('mu.pace', null) || Array(9).fill(0), ts = store.get('mu.paceT', null) || [];
+    for (const [l, d] of ls) {
+      for (let i = 0; i < h.length; i++) h[i] *= 0.997;
+      h[Math.min(8, l)] += 1;
+      if (l > 0 && d > 0) ts.push(d);
+    }
+    store.set('mu.pace', h.map(x => +x.toFixed(3)));
+    store.set('mu.paceT', ts.slice(-PACE_T));
+    paceNow = null;
+  }
   // letters told apart from their like (match.js: opt.letters)
   const letRules = () => ({ heavy: setting('lHeavy'), near: setting('lNear') });
   const toggle = (id, label, sub) => {
@@ -1660,7 +1692,8 @@ const Recite = (() => {
         ${MU() ? `<div class="group-label">التجويد</div>
         ${toggle('tjMadd', 'المدّ', 'يُعلَّم المدّ الطبيعي إن قُصِر، والمتصل واللازم إن لم يُمَدّا')}
         ${setting('tjMadd') ? toggle('tjMunfasil', 'المدّ المنفصل أربع حركات', 'قراءة الشاطبية؛ إن تركتها مطفأة فالقصر جائز') : ''}
-        ${toggle('tjOver', 'المدّ الزائد', 'يُعلَّم المدّ الطبيعي إن زِيد فيه، والحرف القصير إن مُدّ')}
+        ${toggle('tjOver', 'المدّ الزائد', 'يُعلَّم المدّ الطبيعي إن زِيد فيه كثيرًا، والحرف القصير إن مُدّ')}
+        ${setting('tjMadd') || setting('tjOver') ? `<p class="note">يُقاس المدّ على قدر مدّك أنت، من قراءتك: ${pace().tn >= 30 ? `مدّك الطبيعي نحو ${ar((pace().t * 0.04).toFixed(2).replace('.', '٫'))} ثانية` : `يُقاس في أول قراءاتك (${ar(pace().tn)} من ${ar(30)})`}</p>` : ''}
         ${toggle('tjGhunna', 'الغنّة والإدغام', 'الإدغام والإخفاء والإقلاب والنون والميم المشددتان بغنّتها، والإدغام بلا غنّة')}
         <div class="group-label">الحروف</div>
         ${toggle('lHeavy', 'التفخيم والترقيق', 'س/ص، ت/ط، د/ض، ذ/ظ، ز/ظ، ق/ك: إن قُرئ أحدهما مكان الآخر')}
