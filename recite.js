@@ -559,6 +559,10 @@ const Recite = (() => {
       if (m.tjAt !== ai + ':' + m.w0) { m.tjAt = ai + ':' + m.w0; m.tjSeen = {}; m.letSeen = {}; }
       const seen = m.tjSeen, lets = m.letSeen;
       const st = Match.words(ex, sub, fin, last, { freeLead: m.lead, conf: m.conf.slice(c0, c0 + sub.length), alts: m.alts.slice(c0, c0 + sub.length), at: m.at?.slice(c0, c0 + sub.length), tajweed: { ...tjRules(), pace: pace(), seen: (k, hl, d) => { if (k < cu) seen[k] = [hl, d]; } }, letters: { ...letRules(), heard: (pk, k) => { if (k < cu) lets[k] = pk; } } });
+      // (a letter said as its like a second time: the first, in an aya before, marked too)
+      for (const [pk, ks] of Object.entries(m.letPairs || {})) if (Array.isArray(ks) && ks.length && Object.values(lets).includes(pk)) {
+        for (const gk of ks) if (!G.errs[gk]) { G.errs[gk] = Match.pairType(pk); G.heard[gk] ||= { got: pk[1], want: pk[0] }; }
+      }
       const n0 = cur.spans.length;
       const begun = nx != null && st.slice(n0, n0 + 2).some(x => x.state === 'ok' || x.state === 'err');
       muApply(st.slice(0, n0), begun, cur);
@@ -570,7 +574,13 @@ const Recite = (() => {
         break;
       }
       paceAdd(m.tjSeen); m.tjAt = null;
-      for (const pk of Object.values(m.letSeen || {})) (m.letPairs ||= {})[pk] = (m.letPairs[pk] || 0) + 1;
+      // (each one, at its word in the session)
+      for (const [k, pk] of Object.entries(m.letSeen || {})) {
+        const wi = ex._w ? ex._w.findIndex(([a, b]) => +k >= a && +k < b) : -1;
+        const lp = (m.letPairs ||= {});
+        if (!Array.isArray(lp[pk])) lp[pk] = [];
+        if (wi >= 0) lp[pk].push(m.starts[m.c] + m.w0 + wi);
+      }
       m.cut += st[n0].at[0]; m.c++; m.w0 = 0; m.lead = false;
     }
     if (G.pos >= G.words.length) return G.chain ? chain() : finish();
@@ -1503,10 +1513,14 @@ const Recite = (() => {
     paceNow = null;
   }
   // letters told apart from their like (match.js: opt.letters)
-  // (a letter said as its like not heard surely: marked once this reader has said it so LET_OFTEN
-  // times before in the session, in ayas already read)
+  // (a letter said as its like, not heard all but surely: marked once this reader says it so
+  // LET_OFTEN times in the session, the aya being said with the ones before)
   const LET_OFTEN = 2;
-  const letRules = () => ({ heavy: setting('lHeavy'), near: setting('lNear'), often: pk => (G?.mu?.letPairs?.[pk] || 0) >= LET_OFTEN });
+  const letRules = () => ({ heavy: setting('lHeavy'), near: setting('lNear'), often: pk => {
+    const m = G?.mu, now = m?.letSeen ? Object.values(m.letSeen).filter(x => x === pk).length : 0;
+    const before = m?.letPairs?.[pk];
+    return (Array.isArray(before) ? before.length : 0) + Math.max(now, 1) >= LET_OFTEN;
+  } });
   const toggle = (id, label, sub) => {
     const on = setting(id);
     return `<button class="row rc-set" data-rc-set="${id}" role="switch" aria-checked="${on}">
