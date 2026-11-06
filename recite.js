@@ -515,13 +515,17 @@ const Recite = (() => {
     atEnd(g);
   }
   // the last word of the session heard, and nothing more for a moment: it is judged as said (a stop
-  // drops its last vowel, and the last sounds are final only a second or more later) and the session ends
-  const END_QUIET = 600;
+  // drops its last vowel, and the last sounds are final only a second or more later) and the session ends.
+  // Not while the reader's voice goes on: a madd held at the end (الضَّاۤلِّينَ) adds no letters for a
+  // while, so the voice must have stopped END_VOICE too (but at most END_MAX after the last letter,
+  // in a room loud enough to sound like a voice all along)
+  const END_QUIET = 1000, END_VOICE = 700, END_MAX = 6000;
   function atEnd(g) {
     clearTimeout(g.endT);
     if (G !== g || !g.run || g.done || !g.mu || G.pos >= G.words.length || G.tent < G.words.length || g.mu.c !== G.ayas.length - 1) return;
-    const wait = END_QUIET - (Date.now() - (g.grewAt || 0));
-    if (wait > 0) { g.endT = setTimeout(() => atEnd(g), wait + 20); return; }
+    const since = Date.now() - (g.grewAt || 0);
+    const wait = Math.max(END_QUIET - since, since < END_MAX ? END_VOICE - Mu.quiet() : 0);
+    if (wait > 0) { g.endT = setTimeout(() => atEnd(g), Math.min(wait, 250) + 20); return; }
     muSettle(true);
     if (G.pos >= G.words.length) { paint(); G.chain ? chain() : finish(); }
   }
@@ -560,7 +564,7 @@ const Recite = (() => {
       const seen = m.tjSeen, lets = m.letSeen;
       const st = Match.words(ex, sub, fin, last, { freeLead: m.lead, conf: m.conf.slice(c0, c0 + sub.length), alts: m.alts.slice(c0, c0 + sub.length), at: m.at?.slice(c0, c0 + sub.length), tajweed: { ...tjRules(), pace: pace(), seen: (k, hl, d) => { if (k < cu) seen[k] = [hl, d]; } }, letters: { ...letRules(), heard: (pk, k) => { if (k < cu) lets[k] = pk; } } });
       // (a letter said as its like a second time: the first, in an aya before, marked too)
-      for (const [pk, ks] of Object.entries(m.letPairs || {})) if (Array.isArray(ks) && ks.length && Object.values(lets).includes(pk)) {
+      for (const [pk, ks] of Object.entries(m.letPairs || {})) if (Array.isArray(ks) && ks.length && Object.values(lets).includes(pk) && letTimes(pk) >= letNeed(pk)) {
         for (const gk of ks) if (!G.errs[gk]) { G.errs[gk] = Match.pairType(pk); G.heard[gk] ||= { got: pk[1], want: pk[0] }; }
       }
       const n0 = cur.spans.length;
@@ -1549,13 +1553,16 @@ const Recite = (() => {
   }
   // letters told apart from their like (match.js: opt.letters)
   // (a letter said as its like, not heard all but surely: marked once this reader says it so
-  // LET_OFTEN times in the session, the aya being said with the ones before)
+  // LET_OFTEN times in the session, the aya being said with the ones before; letters near in
+  // sound, as many times as match.js asks)
   const LET_OFTEN = 2;
-  const letRules = () => ({ heavy: setting('lHeavy'), near: setting('lNear'), often: pk => {
+  const letTimes = pk => {
     const m = G?.mu, now = m?.letSeen ? Object.values(m.letSeen).filter(x => x === pk).length : 0;
     const before = m?.letPairs?.[pk];
-    return (Array.isArray(before) ? before.length : 0) + Math.max(now, 1) >= LET_OFTEN;
-  } });
+    return (Array.isArray(before) ? before.length : 0) + now;
+  };
+  const letNeed = pk => Match.pairType(pk) === 'near' ? 3 : LET_OFTEN;
+  const letRules = () => ({ heavy: setting('lHeavy'), near: setting('lNear'), often: (pk, need = LET_OFTEN) => letTimes(pk) + (Object.values(G?.mu?.letSeen || {}).includes(pk) ? 0 : 1) >= need });
   const toggle = (id, label, sub) => {
     const on = setting(id);
     return `<button class="row rc-set" data-rc-set="${id}" role="switch" aria-checked="${on}">

@@ -355,12 +355,35 @@ const Mu = (() => {
     m.sound = Date.now(); // when sound last came in (not only samples: an unplugged microphone sends silence)
     node.port.onmessage = e => {
       m.fed = Date.now();
-      if (!shared) { const x = e.data.samples; for (let i = 0; i < x.length; i += 7) if (Math.abs(x[i]) > SILENT) { m.sound = Date.now(); break; } worker?.postMessage({ type: 'audio', samples: x, at: e.data.at }); }
+      if (!shared) { const x = e.data.samples; for (let i = 0; i < x.length; i += 7) if (Math.abs(x[i]) > SILENT) { m.sound = Date.now(); break; } loudness(m, x); worker?.postMessage({ type: 'audio', samples: x, at: e.data.at }); }
     };
     node.connect(actx.destination); // silent
     const src = actx.createMediaStreamSource(stream);
     src.connect(node);
     Object.assign(m, { stream, src, node });
+  }
+  // a voice heard: well above the room's own level (the quietest moment of the last 10 s or so).
+  // m.loud, when it last was. A madd held at the end has no new letters, but is still being said
+  function level(m, r, t) {
+    const L = (m.lv ||= new Float32Array(160).fill(Infinity));
+    L[m.lvi = ((m.lvi || 0) + 1) % L.length] = r;
+    let floor = Infinity;
+    for (const v of L) if (v < floor) floor = v;
+    if (r > Math.max(floor * 4, 0.004)) m.loud = t;
+  }
+  const rms = (x, a, b, L) => { let e = 0; for (let k = a; k < b; k += 4) { const v = x[k % L]; e += v * v; } return Math.sqrt(e / Math.ceil((b - a) / 4)); };
+  function loudness(m, x) { level(m, rms(x, 0, x.length, x.length), Date.now()); }
+  // how long since a voice was last heard (ms; the ring read up to now, 64 ms at a time)
+  function quiet() {
+    const m = mic;
+    if (!m?.on) return Infinity;
+    if (shared) {
+      const w = Atomics.load(shared.meta, 0), R = shared.ring, N = 1024;
+      let i = Math.max(m.qAt || 0, w - 16000 * 10);
+      for (; i + N <= w; i += N) level(m, rms(R, i, i + N, R.length), Date.now() - (w - i - N) / 16);
+      m.qAt = i;
+    }
+    return Date.now() - (m.loud || 0);
   }
   function release(m) {
     m.node?.port.postMessage('stop'); m.src?.disconnect(); m.node?.disconnect(); m.stream?.getTracks().forEach(t => t.stop());
@@ -679,7 +702,7 @@ const Mu = (() => {
 
   return {
     CANDS, BASE_IDS, choice, mb, probe, saved, savedVariants, use, bench: () => store.get('mu.bench', null), remove, load, prime, start, listen, stop, sounds, expect, expect2, locate, opening,
-    ready: () => ready, listening: () => !!mic, pace: () => ({ pace, near: refs ? refs.r.filter((_, i) => paceMask & 1 << i).map(([r]) => r) : [] }), lost: f => { onLost = f; }, sound: () => actx, info: () => info, recording,
+    ready: () => ready, listening: () => !!mic, quiet, pace: () => ({ pace, near: refs ? refs.r.filter((_, i) => paceMask & 1 << i).map(([r]) => r) : [] }), lost: f => { onLost = f; }, sound: () => actx, info: () => info, recording,
     reprobe: () => { store.set('mu.choice', null); reset(); },
     rate, setRate, warm, warmed: () => warmed, micCheck, micWhy: () => micErr, toCpu, lighter, dead: f => { onDead = f; },
   };
