@@ -149,6 +149,7 @@ const Recite = (() => {
   }
   async function prep(then, intent, after) {
     const run = ++prepRun;
+    prepThen = then; prepIntent = intent;
     ['update', 'mic', 'model', 'warm'].forEach(id => prepStep(id, ''));
     $('#rpGo').hidden = true;
     $('#rpLead').textContent = after && intent?.mic ? 'أُعيد تحميل التطبيق. نتأكد من الميكروفون ونكمل.'
@@ -167,15 +168,25 @@ const Recite = (() => {
     // heard working once since the app opened: not asked for again (some phones ask each time it is
     // opened), unless the permission was taken back; while reading, Mu watches that sound comes in
     let perm = null;
-    try { perm = (await navigator.permissions?.query({ name: 'microphone' }))?.state; } catch {}
+    // (some browsers never answer this: not waited on)
+    try { perm = (await Promise.race([navigator.permissions?.query({ name: 'microphone' }), new Promise(r => setTimeout(r, 1000))]))?.state; } catch {}
     if (!micOk || perm === 'denied') {
       prepStep('mic', 'doing', 'اسمح للتطبيق باستعمال الميكروفون، ونتأكد أن الصوت يصل');
+      // the browser's question not answered after a while: it may not have shown at all (some
+      // phones, Xiaomi among them, ask in the phone's settings first). How, and try again
+      const slow = setTimeout(() => {
+        if (!live()) return;
+        prepStep('mic', 'doing', 'لم يظهر طلب الإذن؟ اسمح للمتصفح بالميكروفون من إعدادات الهاتف: التطبيقات ← المتصفح (Chrome) ← الأذونات ← الميكروفون ← السماح، ثم أعد المحاولة');
+        $('#rpGo').hidden = false; $('#rpGo').textContent = 'أعد المحاولة'; $('#rpGo').onclick = () => prep(then, intent);
+      }, 8000);
       const r = await Mu.micCheck();
+      clearTimeout(slow);
       if (!live()) return;
+      $('#rpGo').hidden = true;
       if (r !== 'ok') {
         prepStep('mic', 'fail', r === 'denied' ? 'لم يُسمح به — اسمح به من إعدادات المتصفح ثم أعد المحاولة'
           : r === 'silent' ? 'لا يصل منه صوت — إن فصلت سماعة أو غيّرت الميكروفون فأعد تحميل التطبيق'
-          : 'لم نجد ميكروفونًا يعمل — صِل الميكروفون ثم أعد تحميل التطبيق');
+          : 'تعذّر فتح الميكروفون — تأكد أن المتصفح مسموح له به في إعدادات الهاتف وأن تطبيقًا آخر لا يستعمله، ثم أعد تحميل التطبيق');
         $('#rpGo').hidden = false;
         if (r === 'denied') { $('#rpGo').textContent = 'أعد المحاولة'; $('#rpGo').onclick = () => prep(then, intent); }
         else { $('#rpGo').textContent = 'أعد تحميل التطبيق'; $('#rpGo').onclick = () => reloadApp(intent); }
@@ -189,10 +200,10 @@ const Recite = (() => {
     if (!Mu.ready()) {
       prepStep('model', 'doing', 'يُحمَّل من جهازك…');
       try { await Promise.all([Mu.load(p => live() && prepStep('model', 'doing', `يُحمَّل من جهازك… ${ar(Math.round(p * 100))}٪`)), Mu.sounds()]); }
-      catch { if (live()) prepStep('model', 'fail', 'تعذر تحميله — أعد المحاولة'); return; }
+      catch { if (live()) modelFail(); return; }
     } else await Mu.sounds();
     if (!live()) return;
-    if (!Mu.ready()) { prepStep('model', 'fail', 'تعذر تحميله — أعد المحاولة'); return; }
+    if (!Mu.ready()) { modelFail(); return; }
     prepStep('model', 'done', `${MU_NAMES[Mu.choice()?.id] || ''} · يعمل`);
     // 4. prepared for every window it will read (the GPU); nothing to do on a CPU
     if (!Mu.warmed()) {
@@ -200,6 +211,7 @@ const Recite = (() => {
       await Mu.warm(p => live() && prepStep('warm', 'doing', `يُهيَّأ لقراءتك… ${ar(Math.round(p * 100))}٪`));
     }
     if (!live()) return;
+    if (!Mu.ready()) { modelFail(); return; }
     prepStep('warm', 'done', 'جاهز');
     // after an update the page has no tap yet to let sound and the microphone start: one is asked for
     if (after) { $('#rpGo').hidden = false; $('#rpGo').textContent = 'ابدأ التسميع'; $('#rpGo').onclick = () => { Mu.prime(); hide($('#recPrep')); then(); }; return; }
@@ -209,6 +221,13 @@ const Recite = (() => {
     then();
   }
   $('#rpCancel').onclick = () => { prepRun++; hide($('#recPrep')); };
+  // the model didn't load (or stopped answering): said so, with a way to try again
+  function modelFail() {
+    prepStep('model', 'fail', 'تعذّر تحميله على هذا الجهاز — أعد المحاولة، وإن تكرر فأغلق التطبيقات الأخرى وأعد فتح التطبيق');
+    $('#rpGo').hidden = false; $('#rpGo').textContent = 'أعد المحاولة';
+    $('#rpGo').onclick = () => { Mu.prime(); prep(prepThen, prepIntent); };
+  }
+  let prepThen = null, prepIntent = null;
   // the app loaded again, safely: what was being said is kept (it comes back paused), and what
   // was about to begin goes on after (prepResume): the way out when the microphone is lost
   function reloadApp(intent) {

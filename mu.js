@@ -34,6 +34,8 @@ const Mu = (() => {
   const rate = () => RATES.includes(store.get('mu.rate')) ? store.get('mu.rate') : 'auto';
   function setRate(r) { store.set('mu.rate', r); worker?.postMessage({ type: 'rate', rate: rate() }); }
   const now = () => performance.timeOrigin + performance.now();
+  // a promise given up on after ms (some phones never answer some calls): `or` instead
+  const within = (p, ms, or) => Promise.race([p, new Promise(r => setTimeout(() => r(or), ms))]);
 
   // the candidate chosen for this device: { id, ms } (ms: expected per update)
   const choice = () => {
@@ -50,7 +52,8 @@ const Mu = (() => {
 
   // ---- timing the candidates on this device
   async function gpuInfo() {
-    try { const a = navigator.gpu && await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }); return a ? { f16: a.features.has('shader-f16') } : null; } catch { return null; }
+    // (some Android drivers never answer: then as if there were no GPU)
+    try { const a = navigator.gpu && await within(navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }), 3000, null); return a ? { f16: a.features.has('shader-f16') } : null; } catch { return null; }
   }
   // onStep(done, total); resolves with the fastest 4-bit candidate, which becomes
   // the choice unless keep (a choice made by hand stays); all: the bigger ones too
@@ -59,15 +62,24 @@ const Mu = (() => {
     // fill its memory, and the test then times them fighting over it
     if (!mic) reset();
     const gpu = await gpuInfo();
-    const list = CANDS.filter(c => (all || BASE_IDS.includes(c.id)) && !(c.ep === 'webgpu' && (!gpu || (c.f16 && !gpu.f16))));
+    // (a GPU that failed here before is only tried again when everything is tested, by hand)
+    const noGpu = !gpu || (!all && store.get('mu.gpuFailed', false));
+    const list = CANDS.filter(c => (all || BASE_IDS.includes(c.id)) && !(c.ep === 'webgpu' && (noGpu || (c.f16 && !gpu.f16))));
     const res = {};
     await new Promise(resolve => {
       const w = new Worker('mu-worker.js', { type: 'module' });
+      // a candidate that hangs (a GPU that never answers) is given up after a while: the
+      // ones timed by then are what there is
+      let stall;
+      const end = () => { clearTimeout(stall); w.terminate(); resolve(); };
+      const wait = () => { clearTimeout(stall); stall = setTimeout(end, 60e3); };
+      wait();
       w.onmessage = ({ data: d }) => {
+        wait();
         if (d.type === 'probed') { res[d.id] = d; onStep?.(Object.keys(res).length, list.length); }
-        if (d.type === 'probedAll') { w.terminate(); resolve(); }
+        if (d.type === 'probedAll') end();
       };
-      w.onerror = () => { w.terminate(); resolve(); };
+      w.onerror = end;
       w.postMessage({ type: 'probe', list: list.map(({ id, variant, ep }) => ({ id, variant, ep })), threads: threads() });
     });
     const runs = list.filter(c => res[c.id] && !res[c.id].error), base = runs.filter(c => BASE_IDS.includes(c.id));
@@ -137,15 +149,44 @@ const Mu = (() => {
   }
   // every length of window it will read, read once (on a GPU: it prepares them all now,
   // not during the recitation); progress(0..1). On a CPU there is nothing to prepare.
+  // A GPU that stops answering while it prepares (some phones' drivers): the CPU instead,
+  // loaded now from the same files.
   function warm(progress) {
     if (warmed || !ready) return Promise.resolve();
     if (info?.ep !== 'webgpu') { warmed = true; return Promise.resolve(); }
-    return new Promise(r => { onWarm = progress; warmDone = r; worker.postMessage({ type: 'warm' }); });
+    return new Promise(r => {
+      let stall;
+      const wait = () => { clearTimeout(stall); stall = setTimeout(giveUp, 30e3); };
+      const giveUp = () => {
+        warmDone = onWarm = null;
+        if (!toCpu()) { warmed = true; r(); return; }
+        load(p => progress?.(p)).then(() => { warmed = true; r(); }, () => r());
+      };
+      onWarm = p => { wait(); progress?.(p); };
+      warmDone = () => { clearTimeout(stall); r(); };
+      wait();
+      worker.postMessage({ type: 'warm' });
+    });
   }
-  // download (first time) or load from the cache; progress(0..1)
+  // the same model on the CPU, for a GPU that fails or hangs (the same files: nothing to download)
+  function toCpu() {
+    const c = cand(), cpu = c && c.ep === 'webgpu' && CANDS.find(x => x.variant === c.variant && x.ep === 'wasm');
+    if (!cpu) return false;
+    console.warn('Muaalem: the GPU failed here, on the CPU from now on');
+    store.set('mu.gpuFailed', true);
+    use(cpu.id);
+    return true;
+  }
+  // download (first time) or load from the cache; progress(0..1). On a GPU that fails, the CPU.
   function load(progress) {
     if (ready) return Promise.resolve();
     if (loading) return loading;
+    return loading = load1(progress).catch(e => {
+      if (!toCpu()) throw e;
+      return load1(progress);
+    });
+  }
+  function load1(progress) {
     const c = cand();
     if (!c) return Promise.reject(new Error('no model chosen'));
     // (kept across a reload of the model, as the microphone writes into it)
@@ -154,7 +195,13 @@ const Mu = (() => {
       : null;
     return loading = new Promise((resolve, reject) => {
       worker = new Worker('mu-worker.js', { type: 'module' });
+      // nothing at all from the worker for this long while loading: it hangs (a phone's GPU, or
+      // short of memory), and is given up rather than leave the reader waiting
+      let stall;
+      const wait = () => { clearTimeout(stall); if (!ready) stall = setTimeout(() => { if (!ready) { reset(); reject(new Error('model load stalled')); } }, 90e3); };
+      wait();
       worker.onmessage = ({ data: d }) => {
+        wait();
         if (d.type === 'progress') progress?.(d.loaded / d.total);
         if (d.type === 'ready') { ready = true; info = d; resolve(); }
         if (d.type === 'warmed') { onWarm?.(d.done / d.total); if (d.done === d.total) { warmed = true; const f = warmDone; warmDone = null; f?.(); } }
@@ -167,7 +214,7 @@ const Mu = (() => {
           if (++fails >= 3) recover();
         }
       };
-      worker.onerror = e => { if (!ready) { reset(); reject(new Error(e.message || 'worker failed')); } };
+      worker.onerror = e => { if (!ready) { clearTimeout(stall); reset(); reject(new Error(e.message || 'worker failed')); } };
       worker.postMessage({ type: 'load', variant: c.variant, ep: c.ep, threads: threads(), shared });
       worker.postMessage({ type: 'rate', rate: rate() });
     });
@@ -238,7 +285,9 @@ const Mu = (() => {
     catch (e) { return e.name === 'NotAllowedError' || e.name === 'SecurityError' ? 'denied' : 'none'; }
     try {
       if (!actx || actx.state === 'closed') context();
-      await actx.resume().catch(() => {});
+      // (an engine started outside a tap, or paused by the permission prompt, may never say it
+      // started: not waited on for long; one not running is no fault of the microphone)
+      await within(actx.resume().catch(() => {}), 1500);
       if (stream.getAudioTracks().every(t => t.readyState === 'ended' || t.muted)) return 'silent';
       const src = actx.createMediaStreamSource(stream), an = actx.createAnalyser();
       an.fftSize = 2048; src.connect(an);
@@ -582,6 +631,6 @@ const Mu = (() => {
     CANDS, BASE_IDS, choice, mb, probe, saved, savedVariants, use, bench: () => store.get('mu.bench', null), remove, load, prime, start, listen, stop, sounds, expect, expect2, locate, opening,
     ready: () => ready, listening: () => !!mic, pace: () => ({ pace, near: refs ? refs.r.filter((_, i) => paceMask & 1 << i).map(([r]) => r) : [] }), lost: f => { onLost = f; }, sound: () => actx, info: () => info, recording,
     reprobe: () => { store.set('mu.choice', null); reset(); },
-    rate, setRate, warm, warmed: () => warmed, micCheck, dead: f => { onDead = f; },
+    rate, setRate, warm, warmed: () => warmed, micCheck, toCpu, dead: f => { onDead = f; },
   };
 })();
