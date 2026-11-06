@@ -270,7 +270,7 @@ const Recite = (() => {
     if (MU()) {
       const starts = [];
       words.forEach((w, k) => { if (w.wi === 0) starts.push(k); });
-      G.mu = { c: 0, w0: opts.w0 || 0, cut: opts.cut || 0, final: '', tent: '', starts, lead: true, open: true, stream: !!opts.stream };
+      G.mu = { c: 0, w0: opts.w0 || 0, cut: opts.cut || 0, final: '', tent: '', starts, lead: true, open: true, stream: !!opts.stream, late: !!opts.stream };
       G.pos = G.tent = G.mu.w0; // found by reciting from inside the aya: from that word
       G.heard = {}; // k -> { got, want }: what was heard for a word marked, and how it should sound
       if (opts.carry) Object.assign(G.mu, opts.carry, { lead: true, open: true }); // the reading of the surah before goes on
@@ -455,10 +455,12 @@ const Recite = (() => {
       let sub = all.slice(c0), fin = Math.max(0, m.final.length - c0), last = done;
       // a long stretch heard at once (the place found late, by the header mic or after the reader went
       // elsewhere) is taken as it was heard: the aya being said and a little after it, then on from the
-      // next, as when it came in (all of it at once is explained as sounds before the aya). A reading
-      // as it comes in never runs that far past the aya being said
+      // next, as when it came in (all of it at once is explained as sounds before the aya). Only
+      // until it has caught up: a reading as it comes in is never cut so (a short aya such as الم
+      // after an opening not set aside would never be found in what is left)
       const cu = Match.units(cur.ph).length, su = Match.units(sub).length;
-      if (su > cu * 1.5 + 45) { const cc = Match.charAt(sub, Math.round(cu * 1.25) + 10); sub = sub.slice(0, cc); fin = Math.min(fin, cc); last = false; }
+      if (m.late && su <= cu * 1.5 + 45) m.late = false;
+      if (m.late) { const cc = Match.charAt(sub, Math.round(cu * 1.25) + 10); sub = sub.slice(0, cc); fin = Math.min(fin, cc); last = false; }
       const st = Match.words(ex, sub, fin, last, { freeLead: m.lead, conf: m.conf.slice(c0, c0 + sub.length), alts: m.alts.slice(c0, c0 + sub.length), tajweed: tjRules(), letters: letRules() });
       const n0 = cur.spans.length;
       const begun = nx != null && st.slice(n0, n0 + 2).some(x => x.state === 'ok' || x.state === 'err');
