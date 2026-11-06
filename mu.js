@@ -177,6 +177,15 @@ const Mu = (() => {
     use(cpu.id);
     return true;
   }
+  // the phone closed the page while it read (short of memory): a lighter way to read, if there is
+  // one already on the device: the CPU instead of the GPU, or 4-bit instead of 8. Its id, or null
+  async function lighter() {
+    const c = cand();
+    if (!c) return null;
+    if (c.ep === 'webgpu') return toCpu() ? cand().id : null;
+    if (c.variant !== 'q4' && (await savedVariants()).q4) { use('q4-cpu'); return 'q4-cpu'; }
+    return null;
+  }
   // download (first time) or load from the cache; progress(0..1). On a GPU that fails, the CPU.
   function load(progress) {
     if (ready) return Promise.resolve();
@@ -440,6 +449,7 @@ const Mu = (() => {
   }
   const cache = new Map();
   // what aya ai should sound like from its word w0 on (as match.js takes it)
+  const STOP = /[\u06D6-\u06D8\u06DA\u06DB]/;
   function expect(ai, w0 = 0) {
     const key = ai + ':' + w0;
     if (cache.has(key)) return cache.get(key);
@@ -448,6 +458,14 @@ const Mu = (() => {
     for (let i = w0 * 2; i < sp.length; i += 2) spans.push([sp[i] - o, sp[i + 1] - o]);
     const e = { ph: ph.slice(o), spans, wasl: wasl.filter(k => k >= w0).map(k => k - w0) };
     if (tjSkip?.[ai]) e.tj = tjSkip[ai].filter(c => c >= o).map(c => c - o);
+    // the words with a stop sign (ۖ ۗ ۘ ۚ ۛ): the reader may stop there, so a madd before their last
+    // letter is free as at the aya's end (فِيهِۛ held long)
+    const t = typeof R !== 'undefined' && R.text?.[ai]?.replace(/\s*[٠-٩]+$/, '').split(' ');
+    if (t && t.length === sp.length / 2) {
+      const stops = [];
+      t.forEach((x, i) => { if (i >= w0 && i < t.length - 1 && STOP.test(x)) stops.push(i - w0); });
+      if (stops.length) e.ends = [...stops, spans.length - 1];
+    }
     const r = refs?.a[ai];
     if (r) {
       e.refs = [];
@@ -631,6 +649,6 @@ const Mu = (() => {
     CANDS, BASE_IDS, choice, mb, probe, saved, savedVariants, use, bench: () => store.get('mu.bench', null), remove, load, prime, start, listen, stop, sounds, expect, expect2, locate, opening,
     ready: () => ready, listening: () => !!mic, pace: () => ({ pace, near: refs ? refs.r.filter((_, i) => paceMask & 1 << i).map(([r]) => r) : [] }), lost: f => { onLost = f; }, sound: () => actx, info: () => info, recording,
     reprobe: () => { store.set('mu.choice', null); reset(); },
-    rate, setRate, warm, warmed: () => warmed, micCheck, toCpu, dead: f => { onDead = f; },
+    rate, setRate, warm, warmed: () => warmed, micCheck, toCpu, lighter, dead: f => { onDead = f; },
   };
 })();

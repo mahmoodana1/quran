@@ -804,6 +804,7 @@ const UPD = {
 };
 function applyUpdate(resume) {
   keepUI();
+  store.set('rec.alive', null); // (a reload of ours, not the phone closing the page: recite.js)
   if (resume) store.set('upd.resume', { t: Date.now(), ...resume });
   $('#loading').textContent = 'جارٍ تحديث التطبيق إلى نسخته الجديدة…';
   $('#loading').hidden = false;
@@ -1560,6 +1561,7 @@ function loadBackup() {
       const j = JSON.parse(await inp.files[0].text());
       if (j?.app !== 'quran' || !j.data) throw 0;
       for (const [k, v] of Object.entries(j.data)) if (k.startsWith('q.') && typeof v === 'string') localStorage.setItem(k, v);
+      store.set('rec.alive', null);
       $('#loading').textContent = 'استُعيدت بياناتك…';
       $('#loading').hidden = false;
       setTimeout(() => location.reload(), 600);

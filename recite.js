@@ -152,11 +152,25 @@ const Recite = (() => {
     prepThen = then; prepIntent = intent;
     ['update', 'mic', 'model', 'warm'].forEach(id => prepStep(id, ''));
     $('#rpGo').hidden = true;
-    $('#rpLead').textContent = after && intent?.mic ? 'أُعيد تحميل التطبيق. نتأكد من الميكروفون ونكمل.'
+    $('#rpLead').textContent = intent?.killed ? `أغلق الهاتف التطبيق أثناء القراءة ليوفّر الذاكرة${intent.light ? '، فاخترنا طريقة أخف لا تُثقل عليه' : ''}. نكمل من حيث توقفت.`
+      : intent?.fresh ? 'أنعشنا التطبيق قبل أن تبدأ، لتمضي القراءة دون انقطاع.'
+      : after && intent?.mic ? 'أُعيد تحميل التطبيق. نتأكد من الميكروفون ونكمل.'
       : after ? 'حُدِّث التطبيق إلى نسخته الجديدة. نكمل تجهيز التسميع.' : 'لحظات، نجهّز كل شيء قبل أن تبدأ، فلا يقطعك شيء أثناء القراءة.';
     show($('#recPrep'));
     const live = () => run === prepRun && !$('#recPrep').hidden;
-    // 1. an update waiting: applied now, the page loaded again, and on from here (prepResume)
+    // 1. an update waiting: applied now, the page loaded again, and on from here (prepResume).
+    // And on a phone that closed the page while it listened before: a page open a long while is
+    // loaded fresh now, before the reading (its memory all free for the model), not during it
+    if (!UPD.stale && !after && (intent?.start || intent?.find) && store.get('mu.kills', 0) && performance.now() > FRESH_MS) {
+      prepStep('update', 'doing', 'نُنعش التطبيق قبل أن تبدأ');
+      await new Promise(r => setTimeout(r, 600));
+      if (!live()) return;
+      keep(true);
+      store.set('upd.resume', { t: Date.now(), prep: { ...(intent || {}), fresh: true } });
+      $('#loading').textContent = 'لحظة…'; $('#loading').hidden = false;
+      setTimeout(() => location.reload(), 200);
+      return;
+    }
     if (UPD.stale) {
       prepStep('update', 'doing', 'نسخة جديدة جاهزة — تُطبَّق الآن ثم نكمل');
       await new Promise(r => setTimeout(r, 900));
@@ -213,8 +227,15 @@ const Recite = (() => {
     if (!live()) return;
     if (!Mu.ready()) { modelFail(); return; }
     prepStep('warm', 'done', 'جاهز');
-    // after an update the page has no tap yet to let sound and the microphone start: one is asked for
-    if (after) { $('#rpGo').hidden = false; $('#rpGo').textContent = 'ابدأ التسميع'; $('#rpGo').onclick = () => { Mu.prime(); hide($('#recPrep')); then(); }; return; }
+    // after a reload the page may have no tap yet to let sound and the microphone start: on at once
+    // if the browser lets it (the reading not paused at all), else one tap asked for
+    if (after) {
+      Mu.prime();
+      await new Promise(r => setTimeout(r, 250));
+      if (!live()) return;
+      if (Mu.sound()?.state === 'running') { hide($('#recPrep')); then(); return; }
+    }
+    if (after) { $('#rpGo').hidden = false; $('#rpGo').textContent = intent?.killed ? 'أكمل القراءة' : 'ابدأ التسميع'; $('#rpGo').onclick = () => { Mu.prime(); hide($('#recPrep')); then(); }; return; }
     await new Promise(r => setTimeout(r, 350));
     if (!live()) return;
     hide($('#recPrep'));
@@ -228,11 +249,13 @@ const Recite = (() => {
     $('#rpGo').onclick = () => { Mu.prime(); prep(prepThen, prepIntent); };
   }
   let prepThen = null, prepIntent = null;
+  const FRESH_MS = 15 * 60e3;
   // the app loaded again, safely: what was being said is kept (it comes back paused), and what
   // was about to begin goes on after (prepResume): the way out when the microphone is lost
   function reloadApp(intent) {
     if (G?.run) pause();
     keep(true);
+    store.set(ALIVE, null);
     store.set('upd.resume', { t: Date.now(), prep: { ...intent, mic: true } });
     $('#loading').textContent = 'جارٍ إعادة تحميل التطبيق…';
     $('#loading').hidden = false;
@@ -256,11 +279,43 @@ const Recite = (() => {
   });
   // the page loaded again for an update during a preparation: on with it
   function prepResume() {
+    const a = store.get(ALIVE, null);
+    store.set(ALIVE, null);
+    if (a && Date.now() - a.t < ALIVE_MS && !store.get('upd.resume', null) && MU() && Mu.choice()) { killed(a); return; }
     const u = store.get('upd.resume', null);
     store.set('upd.resume', null);
     if (!u?.prep || Date.now() - u.t > 3 * 60e3 || !MU() || !Mu.choice()) return;
     const s = u.prep.start;
     prep(s ? () => start(s[0], s[1], { ...s[2], checked: true }) : u.prep.find ? () => findMu(true) : () => restore(), u.prep, true);
+  }
+
+  // the phone closed the page while it listened (short of memory: the model and the microphone
+  // take a lot, and a phone frees it by closing the page, which opens again): a heartbeat while
+  // listening; the page loaded right after one, and not by a reload of ours, was closed so.
+  // A lighter way to read is chosen (so it isn't closed again), and the reading goes on from
+  // where it was, a tap away (the restored session, or begun again where it began)
+  const ALIVE = 'rec.alive', ALIVE_MS = 12e3, GRACE_MS = 20e3;
+  const graced = () => G?.grace && Date.now() < G.grace;
+  let aliveAt = 0;
+  function alive() {
+    if (Date.now() - aliveAt < 2000) return;
+    aliveAt = Date.now();
+    const g = G;
+    store.set(ALIVE, { t: aliveAt, find: !g && !!F,
+      at: g ? [g.review || g.test ? null : g.ayas[0], g.review || g.test ? g.ayas : null, { test: g.test }] : null });
+  }
+  async function killed(a) {
+    store.set('mu.kills', store.get('mu.kills', 0) + 1);
+    // the session as it was kept (the model is ready by then: it comes back at once) and on, listening
+    const then = () => {
+      if (!G) restore();
+      // (the words read meanwhile, unheard, aren't marked skipped: graced)
+      if (G && !G.done) { if (!G.run) { G.grace = Date.now() + GRACE_MS; resume(); toast('نكمل من حيث توقفت'); } }
+      else if (a.find) findMu(true);
+      else if (a.at) start(a.at[0], a.at[1], { ...a.at[2], checked: true });
+    };
+    const light = await Mu.lighter().catch(() => null);
+    prep(then, { mic: true, killed: true, light }, true);
   }
 
   // ---- session
@@ -344,6 +399,8 @@ const Recite = (() => {
   }
   function restore() {
     if (store.get('upd.resume', null)?.prep) return; // an update came mid-preparation: prepResume brings it back
+    const a = store.get(ALIVE, null);
+    if (a && Date.now() - a.t < ALIVE_MS) return; // the phone closed the page as it listened: prepResume (killed)
     const s = store.get(LIVE(), null);
     if (!s || Date.now() - s.t > 3 * 3600e3 || !s.pos || !s.ayas?.every(ai => R.ayas[ai])) return;
     start(null, s.ayas, { test: s.test, restore: s });
@@ -368,6 +425,7 @@ const Recite = (() => {
   function pause() {
     if (!G?.run) return;
     keep(true);
+    store.set(ALIVE, null);
     G.run = false; G.voice = false; G.secs += (Date.now() - G.t) / 1000;
     clearInterval(timer);
     if (MU()) {
@@ -538,6 +596,7 @@ const Recite = (() => {
       let decided = x.state === 'ok' || x.state === 'err', e = null;
       if (x.state === 'err') e = MU_TYPE[x.type] || (x.heard && x.heard.length > 1 ? 'wrong' : 'skip');
       else if (closing && !decided) { decided = true; e = 'skip'; }
+      if (e === 'skip' && graced()) e = null; // read while the page was away: taken as said
       if (decided) {
         pos = tent = k + 1;
         if (e) {
@@ -564,11 +623,16 @@ const Recite = (() => {
     const ok = states.filter(x => x.state === 'ok').length, bad = states.filter(x => x.state === 'err').length;
     // (or nothing of it heard, in all that was: everything taken for sounds before it)
     const from = early ? 0 : c0, text = all.slice(from), n = Match.units(text).length;
-    const lost = (bad >= (early ? 2 : 3) && ok <= bad && n >= 40) || (!ok && !bad && n >= 40);
+    // a session begun by the reader at an aya is taken to be there: only a long stretch heard that
+    // doesn't fit it moves it (a basmala or a pause before a short aya such as الم isn't one)
+    const least = G.found ? 40 : 90;
+    const lost = (bad >= (early ? 2 : 3) && ok <= bad && n >= least) || (!ok && !bad && n >= least);
     if (!lost || Date.now() - (m.farAt || 0) < FAR_EVERY) return false;
     m.farAt = Date.now();
     const r = locateMu(text, m.conf.slice(from), m.alts.slice(from));
     if (!r || r.fit - r.next < FAR_MARGIN) return false;
+    // a basmala heard (al-Fatiha's, or an-Naml 30's from its بسم): never where a reading went
+    if (r.ai === 0 || [0, 1, 2].some(w => Mu.expect(0, w).ph === Mu.expect(r.ai, r.w).ph)) return false;
     // where the session's own relocation looks (and the aya being said) is not elsewhere
     const near = G.ayas.slice(Math.max(0, m.c - 3), m.c + 9);
     if (near.includes(r.ai)) return false;
@@ -606,7 +670,9 @@ const Recite = (() => {
     if (best.j > m.c) {
       // what was heard for the aya left was the later one's: all of it is skipped
       const marks = [];
-      for (let k = from; k < m.starts[best.j]; k++) { if (G.errs[k] !== 'hint') G.errs[k] = 'skip'; delete G.heard[k]; marks.push([k, 'skip']); }
+      // (or, just back after the phone closed the page, read while it was away: taken as said)
+      const away = graced();
+      for (let k = from; k < m.starts[best.j]; k++) { if (away) delete G.errs[k]; else if (G.errs[k] !== 'hint') { G.errs[k] = 'skip'; marks.push([k, 'skip']); } delete G.heard[k]; }
       warnSkipped(marks);
     } else {
       for (let k = from; k < G.words.length && k < from + G.words[from].of; k++) { if (G.errs[k] !== 'hint') delete G.errs[k]; delete G.heard[k]; }
@@ -769,6 +835,7 @@ const Recite = (() => {
   function tick() {
     if (!G?.run) return;
     keep();
+    alive();
     if (G.hide && !G.peek && !G.voice && !G.busy && Date.now() - G.lastAct > HINT_AFTER) {
       G.peek = true;
       G.errs[Math.max(G.pos, G.tent)] ||= 'hint';
@@ -837,7 +904,7 @@ const Recite = (() => {
         f.d = d;
         if (!f.voice) { f.voice = true; syncBubble(); }
       }).then(() => {
-        if (F === f) f.timer = setInterval(() => { if (F !== f) clearInterval(f.timer); else checkFind(f); }, FIND_EVERY);
+        if (F === f) f.timer = setInterval(() => { if (F !== f) clearInterval(f.timer); else { alive(); checkFind(f); } }, FIND_EVERY);
       }, () => { stopFind(); toast('لا يمكن الوصول إلى الميكروفون — اسمح به من إعدادات المتصفح'); });
     };
     if (checked) go(); else withModel(go, { find: true });
