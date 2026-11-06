@@ -1165,6 +1165,8 @@ const Recite = (() => {
     G.done = true;
     hide($('#recBar')); hide($('#recWord'));
     paint();
+    const list = mistakes().filter(x => x.aya != null || G.errs[x.k] !== 'hint');
+    if (list.length) { G.walk = list; walk(0); return; }
     paintDone();
     show($('#recDone'));
   }
@@ -1289,20 +1291,53 @@ const Recite = (() => {
       haptic(back ? [10, 40, 10] : 8);
       return true;
     }
+    if (G.walk) return true;
     if (k == null || k >= G.pos || !G.errs[k] || G.gone.has(k)) return true;
     pause();
-    G.tap = { k, el };
-    $('#rwWord').textContent = wordText(G.words[k]);
-    $('#rwWord').style.fontFamily = R.font;
-    $('#rwType').textContent = TYPES[G.errs[k]];
+    wordCard(k, el);
+    if (!G.done) show($('#recWord'));
+    return true;
+  }
+  // a mistake's card (the word, how it was marked, what was heard); aya: the whole aya skipped
+  function wordCard(k, el, aya = null) {
+    G.tap = { k, el, aya };
+    $('#rwWord').textContent = aya != null ? ayaLabel(aya) : wordText(G.words[k]);
+    $('#rwWord').style.fontFamily = aya != null ? '' : R.font;
+    $('#rwType').textContent = aya != null ? 'تجاوزت الآية كلها' : TYPES[G.errs[k]];
     // what the model heard there, beside how the word should sound
     const h = G.heard?.[k];
     $('#rwHeard').hidden = !h;
     $('#rwCopy').hidden = !h;
     if (h) $('#rwHeard').innerHTML = `<span><small>سُمِع</small>${esc(h.got) || '—'}</span><span><small>المتوقَّع</small>${esc(h.want)}</span>`;
     $('#recWord').classList.toggle('three', !!h);
-    if (!G.done) show($('#recWord'));
-    return true;
+    $('#rwWalk').hidden = !G.walk;
+  }
+
+  // ---- the session finished: its mistakes, one card after another in order (each word shown on
+  // its page), then its summary
+  function wordEl(k) {
+    const w = G.words[k];
+    return document.querySelector(`.page[data-page="${w.p}"]`)?.querySelectorAll('.w:not(.end)')[w.n] || null;
+  }
+  function walk(i) {
+    document.querySelectorAll('.w.rc-walk').forEach(el => el.classList.remove('rc-walk'));
+    const list = G.walk;
+    if (!list || i >= list.length) { G.walk = null; G.tap = null; hide($('#recWord')); paintDone(); show($('#recDone')); return; }
+    G.walkI = i;
+    const { k, aya } = list[i], w = G.words[k];
+    if (S.focus !== w.ai) { S.focus = w.ai; drawBands(document); }
+    if (w.p !== S.page) goTo(w.p, { animate: Math.abs(w.p - S.page) === 1 });
+    $('#rwCount').textContent = `${ar(i + 1)} من ${ar(list.length)}`;
+    $('#rwNext').textContent = i + 1 < list.length ? 'التالي' : 'النتيجة';
+    // (the page drawn first)
+    setTimeout(() => {
+      if (!G || G.walk !== list || G.walkI !== i) return;
+      const el = wordEl(k);
+      el?.classList.add('rc-walk');
+      wordCard(k, el, aya);
+      show($('#recWord'));
+      keepClear();
+    }, w.p !== S.page ? 120 : 30);
   }
 
   // ---- a mistake, heard: two soft falling notes, like wood struck lightly, and
@@ -1912,8 +1947,15 @@ const Recite = (() => {
   $('#recWord').addEventListener('click', e => {
     const b = e.target.closest('[data-rw]');
     if (!b || !G?.tap) return;
-    const { k, el } = G.tap;
-    if (b.dataset.rw === 'say') speakWord(el);
+    const { k, el, aya } = G.tap;
+    if (b.dataset.rw === 'say') { if (el) speakWord(el); }
+    if (G.walk) {
+      // (going through them at the end: on to the next; the cross, straight to the summary)
+      if (b.dataset.rw === 'gone') { for (let i = 0; i < (aya != null ? G.words[k].of : 1); i++) G.gone.add(k + i); paint(); toast('أُزيلت من الأخطاء'); }
+      if (b.dataset.rw === 'gone' || b.dataset.rw === 'next') walk(G.walkI + 1);
+      if (b.dataset.rw === 'close') walk(G.walk.length);
+      if (b.dataset.rw !== 'copy') return;
+    }
     if (b.dataset.rw === 'gone') { G.gone.add(k); hide($('#recWord')); paint(); paintBar(); toast('أُزيلت من الأخطاء'); }
     if (b.dataset.rw === 'close') hide($('#recWord'));
     if (b.dataset.rw === 'copy') {
