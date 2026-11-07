@@ -28,7 +28,7 @@ const Recite = (() => {
     heavy: 'خلطت بين حرف مفخّم ونظيره المرقّق', near: 'أبدلت حرفًا بحرف قريب منه', maddlong: 'زدت في المدّ الطبيعي', maddnone: 'مددت حرفًا لا مدّ فيه' };
   const MASTER_DAYS = 3;
   const HINT_AFTER = 7000; // ms of silence on a hidden word before it shows
-  const CLS = ['rc-weak', 'rc-lead', 'rc-done', 'rc-now', 'rc-hid', 'rc-blind', 'rc-peek', 'rc-wrong', 'rc-haraka', 'rc-skip', 'rc-hint', 'rc-madd', 'rc-ghunna', 'rc-order', 'rc-heavy', 'rc-near', 'rc-maddlong', 'rc-maddnone'];
+  const CLS = ['rc-weak', 'rc-here', 'rc-done', 'rc-now', 'rc-hid', 'rc-blind', 'rc-peek', 'rc-wrong', 'rc-haraka', 'rc-skip', 'rc-hint', 'rc-madd', 'rc-ghunna', 'rc-order', 'rc-heavy', 'rc-near', 'rc-maddlong', 'rc-maddnone'];
   // hidden, and blind (a setting): no trace of the words ahead, their number or their ayas'
   const blind = () => !!G?.hide && !G.done && store.get('recite.blind', false);
   // Muaalem listens in Hafs (its phonetic script is Hafs's)
@@ -340,6 +340,7 @@ const Recite = (() => {
   // from an aya to the end of its surah, or just the ayas given (a review or a test);
   // opts.test hides the words, opts.seed is the phrase that found the aya (bubble)
   function start(from, review, opts = {}) {
+    if (MU()) Verify.load(); // (the second opinion on fast readings: downloaded in the background, once)
     // (a surah carried on into the next: the session goes on as it is, never prepared again)
     // a reading going on (into the next surah, found by reciting) or a session brought back paused only needs the
     // model; anything else the reader begins is checked first, on its screen (withModel → prep)
@@ -456,7 +457,15 @@ const Recite = (() => {
         if (G !== g || !g.mu) return;
         g.mu.tent = '';
         muFollow(false);
-        if (g.done) { muSettle(); paint(); paintDone(); return; }
+        if (g.done) {
+          muSettle(); paint(); paintDone();
+          const m = g.mu, all = m.final + m.tent, c0 = Match.charAt(all, m.cut);
+          // (to the end of its last word heard)
+          const ce = m.endAt > m.cut ? Math.min(m.at.length - 1, Match.charAt(all, m.endAt)) : m.at.length - 1;
+          (m.c < g.ayas.length && m.at?.length ? recheck(g, g.ayas[m.c], m.starts[m.c] + m.w0, g.words[m.starts[m.c]].of - m.w0, m.at[c0], m.at[ce] + 10) : Promise.resolve())
+            .finally(() => g.checked?.());
+          return;
+        }
         const m = g.mu;
         // stopped at the aya's end: its last word heard, but not yet decided (a stop drops its last
         // haraka or tanween, which may still have been coming), so it is judged now, as said; else
@@ -605,6 +614,7 @@ const Recite = (() => {
         break;
       }
       paceAdd(m.tjSeen); m.tjAt = null;
+      if (m.at) recheck(G, G.ayas[m.c], m.starts[m.c] + m.w0, n0, m.at[c0], m.at[c0 + Match.charAt(sub, st[n0].at[0])]);
       goneAdd(gones, m.goneAt, ex, st, cur, n0, wi => m.starts[m.c] + m.w0 + wi);
       // (each one, at its word in the session)
       for (const [k, pk] of Object.entries(m.letSeen || {})) {
@@ -620,6 +630,27 @@ const Recite = (() => {
     paint();
     paintBar();
   }
+  // a fast reading's aya, done: a word marked left out or another that the second model (verify.js)
+  // heard in its place is taken back. Its audio asked for at once (frames [from, to), as in `at`),
+  // before another stretch can begin
+  const RECHECK = ['skip', 'wrong'], RECHECK_PAD = 8, RECHECK_LEAD = 30; // (frames: 0.3 s after, 1.2 s before, where it is cut at a pause)
+  function recheck(g, ai, k0, n, from, to) {
+    if (!fast() || !Verify.ready() || from == null || to == null) return Promise.resolve();
+    const ks = [];
+    for (let k = k0; k < k0 + n; k++) if (RECHECK.includes(g.errs[k])) ks.push(k);
+    if (!ks.length) return Promise.resolve();
+    const f0 = Math.max(0, from - RECHECK_LEAD);
+    return Mu.clip(f0, to + RECHECK_PAD).then(a => Verify.hear(a, (from - f0) * 0.04)).then(text => {
+      if (G !== g || !text) return;
+      const said = Verify.heard(ayaTokens(ai), text);
+      let n = 0;
+      for (const k of ks) if (said.has(g.words[k].wi) && RECHECK.includes(g.errs[k])) { delete g.errs[k]; delete g.heard[k]; n++; }
+      if (!n) return;
+      paint(); paintBar();
+      if (g.done && !$('#recDone').hidden) paintDone();
+    });
+  }
+
   // the surah read to its end, in a session begun from an aya: kept, and the next
   // surah goes on at once, on the same reading (its basmala set aside), until the
   // reader stops
@@ -924,9 +955,9 @@ const Recite = (() => {
   }
   function showLead(k) {
     if (!G || G.leadAt === k) return;
-    if (G.leadAt != null) wordEl(G.leadAt)?.classList.remove('rc-lead');
+    if (G.leadAt != null) wordEl(G.leadAt)?.classList.remove('rc-here');
     G.leadAt = k;
-    if (k != null) wordEl(k)?.classList.add('rc-lead');
+    if (k != null) wordEl(k)?.classList.add('rc-here');
   }
 
   function tick() {
@@ -1199,7 +1230,7 @@ const Recite = (() => {
         if (k == null) return;
         const e = G.gone.has(k) ? null : G.errs[k];
         const cur = Math.max(G.pos, G.tent);
-        if (k === G.leadAt) el.classList.add('rc-lead');
+        if (k === G.leadAt) el.classList.add('rc-here');
         if (k < G.pos) el.classList.add(e ? 'rc-' + e : 'rc-done');
         else if (k < cur) el.classList.add('rc-done'); // heard, the phrase not yet finished
         else if (G.done) return;
@@ -1233,16 +1264,26 @@ const Recite = (() => {
 
   // ---- the end of a session
 
+  // (a fast reading: its last aya heard by the second model first, a few seconds at most)
+  const CHECK_WAIT = 8000;
   function finish() {
     if (!G || G.done) return;
+    const g = G, wait = MU() && fast() && Verify.ready() && g.run;
+    const checked = wait ? new Promise(r => { g.checked = r; setTimeout(r, CHECK_WAIT); }) : null;
     pause();
-    G.done = true;
+    g.done = true;
     hide($('#recBar')); hide($('#recWord'));
     paint();
-    const list = mistakes().filter(x => x.aya != null || G.errs[x.k] !== 'hint');
-    if (list.length) { G.walk = list; walk(0); return; }
-    paintDone();
-    show($('#recDone'));
+    const go = () => {
+      if (G !== g) return;
+      const list = mistakes().filter(x => x.aya != null || g.errs[x.k] !== 'hint');
+      if (list.length) { g.walk = list; walk(0); return; }
+      paintDone();
+      show($('#recDone'));
+    };
+    if (!checked) return go();
+    toast('يراجع القراءة…');
+    checked.then(() => { paint(); go(); });
   }
 
   function paintDone() {
@@ -1396,6 +1437,7 @@ const Recite = (() => {
   function walk(i) {
     document.querySelectorAll('.w.rc-walk').forEach(el => el.classList.remove('rc-walk'));
     const list = G.walk;
+    while (list && i < list.length && list[i].aya == null && !G.errs[list[i].k]) i++; // (taken back since: verify.js)
     if (!list || i >= list.length) { G.walk = null; G.tap = null; hide($('#recWord')); paintDone(); show($('#recDone')); return; }
     G.walkI = i;
     const { k, aya } = list[i], w = G.words[k];

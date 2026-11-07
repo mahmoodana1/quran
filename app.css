@@ -1162,7 +1162,7 @@ svg { fill: currentColor; }
 .w.rc-done { color: color-mix(in srgb, var(--ok) 70%, var(--ink)); }
 .w.rc-now { color: var(--accent); }
 /* where the reader is now (ahead of the model): a soft background, moving word to word */
-.w.rc-lead { background: color-mix(in srgb, var(--accent) 22%, transparent); border-radius: .35em; box-shadow: 0 0 0 .1em color-mix(in srgb, var(--accent) 22%, transparent); }
+.w.rc-here { background: color-mix(in srgb, var(--accent) 22%, transparent); border-radius: .35em; box-shadow: 0 0 0 .1em color-mix(in srgb, var(--accent) 22%, transparent); }
 .w { transition: color .35s ease, background-color .22s ease, box-shadow .22s ease; }
 .w.rc-hid { color: transparent; }
 .w.rc-hid::before {

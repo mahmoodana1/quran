@@ -1,9 +1,10 @@
 // Speech recognition for التسميع outside Hafs, off the main thread: Tarteel's
-// Whisper models fine-tuned on Quran recitation (ONNX), run by transformers.js.
+// Whisper models fine-tuned on Quran recitation (ONNX), run by transformers.js;
+// and in Hafs, deepdml's, a second opinion on fast readings (verify.js).
 // The model is downloaded once on request and kept in the browser's cache
 // ('transformers-cache'); after that it works offline and audio never leaves
 // the device.
-// Messages in: { type: 'load', model, dtype }, { type: 'run', id, audio: Float32Array (16 kHz) }
+// Messages in: { type: 'load', model, dtype }, { type: 'run', id, audio: Float32Array (16 kHz), opts? (generation) }
 // Messages out: progress { file, loaded, total }, ready { threads }, text { id, text, ms }, error { message }
 import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.5';
 
@@ -41,7 +42,7 @@ onmessage = async ({ data }) => {
     if (!asr) return;
     try {
       const t = performance.now();
-      const out = await asr(data.audio, { language: 'arabic', task: 'transcribe' });
+      const out = await asr(data.audio, { language: 'arabic', task: 'transcribe', ...data.opts });
       postMessage({ type: 'text', id: data.id, text: out.text || '', ms: performance.now() - t });
     } catch (e) {
       postMessage({ type: 'error', id: data.id, message: String(e?.message || e) });

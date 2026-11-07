@@ -187,13 +187,14 @@ async function warm() {
 // recording the reader can share when the recognition goes wrong
 const REC_MAX = 300;
 let rec = [], recLen = 0, recUpTo = 0; // blocks of samples, how many, and how far into the ring
+let recAll = 0, recGone = 0, recBase = 0;  // samples ever kept, and dropped since; where this recitation began in them
 function record() {
   const w = written(), from = Math.max(recUpTo, w - ring.length + 1);
   if (w > from) {
     const b = new Float32Array(w - from);
     for (let i = from; i < w; i++) b[i - from] = ring[i % ring.length];
-    rec.push(b); recLen += b.length;
-    while (recLen - rec[0].length > REC_MAX * RATE) recLen -= rec.shift().length;
+    rec.push(b); recLen += b.length; recAll += b.length;
+    while (recLen - rec[0].length > REC_MAX * RATE) { const n = rec.shift().length; recLen -= n; recGone += n; }
   }
   recUpTo = w;
 }
@@ -251,8 +252,21 @@ onmessage = async ({ data }) => {
     if (data.type === 'start') {
       live = false; await looping;
       recUpTo = Math.max(recUpTo, written()); // what came in while not listening isn't kept
-      base = written(); kept = []; keptP = []; keptA = []; readUpTo = 0;
+      base = written(); kept = []; keptP = []; keptA = []; readUpTo = 0; recBase = recAll;
       live = true; looping = loop();
+    }
+    // the recitation's frames [from, to) as heard (the audio of an aya, for another model to hear)
+    if (data.type === 'clip') {
+      record();
+      const a = Math.max(recGone, recBase + data.from * FRAME), b = Math.min(recAll, recBase + data.to * FRAME);
+      const out = new Float32Array(Math.max(0, b - a));
+      let at = recGone;
+      for (const x of rec) {
+        const lo = Math.max(a, at), hi = Math.min(b, at + x.length);
+        if (hi > lo) out.set(x.subarray(lo - at, hi - at), lo - a);
+        at += x.length;
+      }
+      postMessage({ type: 'clip', id: data.id, samples: out }, [out.buffer]);
     }
     if (data.type === 'audio') { // no shared memory: the page sends the samples
       const s = data.samples, w = written();
