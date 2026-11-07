@@ -355,7 +355,7 @@ const Recite = (() => {
     const words = ayas.flatMap(ayaWords);
     if (!words.length) return;
     G = { ayas, words, idx: new Map(words.map((w, k) => [w.p + ':' + w.n, k])), pos: 0, errs: {}, gone: new Set(),
-      hide: !!opts.test || (!opts.seed && store.get('recite.hide', false)), run: false, secs: 0, busy: 0,
+      hide: !!opts.test || (!opts.seed && store.get('recite.hide', false)), fast: setting('fastOn'), run: false, secs: 0, busy: 0,
       review: !!review && !opts.test, test: !!opts.test, lastP: null, miss: 0, tent: 0, found: !!opts.stream };
     // Muaalem: c = the aya being said (in G.ayas), w0 = its first word still to
     // match, cut = how much of the reading belongs to ayas already done
@@ -530,10 +530,10 @@ const Recite = (() => {
   }
   // how fast the reader reads: sounds a second over the last FAST_WIN s heard (each sound's time to
   // the next, a pause counted as at most 0.4 s). Fast reading turns the fast mode on by itself, past
-  // FAST_AT for FAST_ON_MS; slow reading off, under FAST_OFF for FAST_OFF_MS (in between, it stays as it
-  // is: readings at a usual pace measured 6.5 to 10.5, fast ones 13 to 14.6). The reader's own
-  // choice («سريع») is left alone FAST_OWN_MS
-  const FAST_WIN = 150, FAST_AT = 11, FAST_OFF = 9, FAST_ON_MS = 4000, FAST_OFF_MS = 6000, FAST_OWN_MS = 30000;
+  // FAST_AT for FAST_ON_MS; reading at a usual pace off, under FAST_OFF for FAST_OFF_MS (readings at a
+  // usual pace measured 6.5 to 10.5, fast ones 13 to 14.6: the usual pace never in fast mode). For this
+  // session only; the reader's own choice («سريع») is left alone FAST_OWN_MS
+  const FAST_WIN = 150, FAST_AT = 12, FAST_OFF = 10.5, FAST_ON_MS = 4000, FAST_OFF_MS = 4000, FAST_OWN_MS = 30000;
   function speed(g) {
     const m = g.mu, h = m.final + m.tent, at = m.at;
     if (!at || at.length !== h.length || !at.length) return;
@@ -553,7 +553,7 @@ const Recite = (() => {
     else if (fast() && g.slowAt && now - g.slowAt >= FAST_OFF_MS) setFast(false, 'عاد الفحص الكامل');
   }
   function setFast(on, say) {
-    store.set('recite.fast', on);
+    G.fast = on;
     if (G?.run) Mu.boost(on);
     toast(say);
     paintBar();
@@ -1648,7 +1648,8 @@ const Recite = (() => {
   const setting = id => !!store.get('recite.' + id, SET_ON[id] ?? false);
   // the tajweed rules checked while reciting (match.js)
   // (a fast reading, hadr: no tajweed checked, nor letters told from their like; match.js opt.fast)
-  const fast = () => setting('fast');
+  // (this session's: begun as the setting says, then as the reader's pace and «سريع» turn it)
+  const fast = () => G && !G.done ? !!G.fast : setting('fastOn');
   const tjRules = () => fast() ? { madd: false, ghunna: false, munfasil: false, over: false, pace: pace() }
     : { madd: setting('tjMadd'), ghunna: setting('tjGhunna'), munfasil: setting('tjMunfasil'), over: setting('tjOver'), pace: pace() };
   // how this reader holds a natural madd, from their own readings (match.js: rules.pace), in
@@ -1897,7 +1898,7 @@ const Recite = (() => {
         ${toggle('sound', 'صوت واهتزاز عند الخطأ', 'نغمة خفيفة واهتزاز حين تُعلَّم كلمة')}
         ${toggle('blind', 'تسميع أعمى', 'مع الإخفاء: لا أثر لما بعدك، فلا عدد للكلمات ولا أرقام للآيات')}
         ${toggle('weak', 'مواضع الضعف في المصحف', 'خط منقّط خفيف تحت كلمات أخطأت فيها')}
-        ${MU() ? toggle('fast', 'القراءة السريعة', 'يُعلَّم ما تجاوزته أو قرأته بكلمة أخرى فقط: لا تُفحص الحركات ولا المدّ ولا الغنّة ولا الحروف المتقاربة، فالتعرّف أضعف في السرعة · تعمل وحدها إن أسرعت، وتتوقف إن تمهّلت، أو بزر «سريع»') : ''}
+        ${MU() ? toggle('fastOn', 'القراءة السريعة', 'كل جلسة تبدأ بها. وتعمل وحدها إن أسرعت، وتتوقف إن عدت إلى قراءتك المعتادة، أو بزر «سريع»: يُعلَّم فيها ما تجاوزته أو قرأته بكلمة أخرى فقط، فلا تُفحص الحركات ولا المدّ ولا الغنّة ولا الحروف المتقاربة') : ''}
         ${MU() ? `<div class="group-label">التجويد</div>
         ${toggle('tjMadd', 'المدّ', 'يُعلَّم المدّ الطبيعي إن قُصِر، والمتصل واللازم إن لم يُمَدّا')}
         ${setting('tjMadd') ? toggle('tjMunfasil', 'المدّ المنفصل أربع حركات', 'قراءة الشاطبية؛ إن تركتها مطفأة فالقصر جائز') : ''}
@@ -2101,9 +2102,8 @@ const Recite = (() => {
   // a fast reading (hadr), turned on or off at any moment; what is said from then on is judged so
   $('#recFast').onclick = () => {
     if (!G) return;
-    store.set('recite.fast', !fast());
     G.ownAt = Date.now();
-    setFast(fast(), fast() ? 'القراءة السريعة: تُعلَّم الكلمات المتجاوزة والمبدلة فقط' : 'عاد الفحص الكامل');
+    setFast(!fast(), fast() ? 'القراءة السريعة: تُعلَّم الكلمات المتجاوزة والمبدلة فقط' : 'عاد الفحص الكامل');
   };
   $('#recStop').onclick = () => { if (!G) return; if (G.pos) finish(); else cancel(); };
 
