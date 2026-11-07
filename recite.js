@@ -529,9 +529,11 @@ const Recite = (() => {
     atEnd(g);
   }
   // how fast the reader reads: sounds a second over the last FAST_WIN s heard (each sound's time to
-  // the next, a pause counted as at most 0.4 s); past FAST_AT, «سريع» lights up (until under FAST_OFF),
-  // for the reader to turn it on
-  const FAST_WIN = 150, FAST_AT = 11, FAST_OFF = 9.5;
+  // the next, a pause counted as at most 0.4 s). Fast reading turns the fast mode on by itself, past
+  // FAST_AT for FAST_ON_MS; slow reading off, under FAST_OFF for FAST_OFF_MS (in between, it stays as it
+  // is: readings at a usual pace measured 6.5 to 10.5, fast ones 13 to 14.6). The reader's own
+  // choice («سريع») is left alone FAST_OWN_MS
+  const FAST_WIN = 150, FAST_AT = 11, FAST_OFF = 9, FAST_ON_MS = 4000, FAST_OFF_MS = 6000, FAST_OWN_MS = 30000;
   function speed(g) {
     const m = g.mu, h = m.final + m.tent, at = m.at;
     if (!at || at.length !== h.length || !at.length) return;
@@ -543,9 +545,18 @@ const Recite = (() => {
     }
     if (n < 30 || !t) return;
     g.speed = n / (t * 0.04);
-    const was = !!g.fastHint;
-    g.fastHint = !fast() && (g.speed > FAST_AT || (was && g.speed > FAST_OFF));
-    if (g.fastHint !== was) paintBar();
+    const now = Date.now();
+    g.fastAt = g.speed > FAST_AT ? g.fastAt || now : 0;
+    g.slowAt = g.speed < FAST_OFF ? g.slowAt || now : 0;
+    if (now - (g.ownAt || 0) < FAST_OWN_MS) return;
+    if (!fast() && g.fastAt && now - g.fastAt >= FAST_ON_MS) setFast(true, 'تقرأ بسرعة: الوضع السريع، تُعلَّم الكلمات المتجاوزة والمبدلة فقط');
+    else if (fast() && g.slowAt && now - g.slowAt >= FAST_OFF_MS) setFast(false, 'عاد الفحص الكامل');
+  }
+  function setFast(on, say) {
+    store.set('recite.fast', on);
+    if (G?.run) Mu.boost(on);
+    toast(say);
+    paintBar();
   }
 
   // the last word of the session heard, and nothing more for a moment: it is judged as said (a stop
@@ -1255,7 +1266,6 @@ const Recite = (() => {
     $('#recHide').classList.toggle('on', G.hide);
     $('#recFast').hidden = !MU();
     $('#recFast').classList.toggle('on', fast());
-    $('#recFast').classList.toggle('hint', !!G.fastHint && !fast());
     $('#recFast').setAttribute('aria-pressed', fast());
     $('#recHide').setAttribute('aria-pressed', G.hide);
     // this aya's share of the bar, like the player
@@ -1884,7 +1894,7 @@ const Recite = (() => {
         ${toggle('sound', 'صوت واهتزاز عند الخطأ', 'نغمة خفيفة واهتزاز حين تُعلَّم كلمة')}
         ${toggle('blind', 'تسميع أعمى', 'مع الإخفاء: لا أثر لما بعدك، فلا عدد للكلمات ولا أرقام للآيات')}
         ${toggle('weak', 'مواضع الضعف في المصحف', 'خط منقّط خفيف تحت كلمات أخطأت فيها')}
-        ${MU() ? toggle('fast', 'القراءة السريعة', 'يُعلَّم ما تجاوزته أو قرأته بكلمة أخرى فقط: لا تُفحص الحركات ولا المدّ ولا الغنّة ولا الحروف المتقاربة، فالتعرّف أضعف في السرعة · زر «سريع» أثناء القراءة') : ''}
+        ${MU() ? toggle('fast', 'القراءة السريعة', 'يُعلَّم ما تجاوزته أو قرأته بكلمة أخرى فقط: لا تُفحص الحركات ولا المدّ ولا الغنّة ولا الحروف المتقاربة، فالتعرّف أضعف في السرعة · تعمل وحدها إن أسرعت، وتتوقف إن تمهّلت، أو بزر «سريع»') : ''}
         ${MU() ? `<div class="group-label">التجويد</div>
         ${toggle('tjMadd', 'المدّ', 'يُعلَّم المدّ الطبيعي إن قُصِر، والمتصل واللازم إن لم يُمَدّا')}
         ${setting('tjMadd') ? toggle('tjMunfasil', 'المدّ المنفصل أربع حركات', 'قراءة الشاطبية؛ إن تركتها مطفأة فالقصر جائز') : ''}
@@ -2089,10 +2099,8 @@ const Recite = (() => {
   $('#recFast').onclick = () => {
     if (!G) return;
     store.set('recite.fast', !fast());
-    G.fastHint = false;
-    if (G.run) Mu.boost(fast());
-    toast(fast() ? 'القراءة السريعة: تُعلَّم الكلمات المتجاوزة والمبدلة فقط' : 'عاد الفحص الكامل');
-    paintBar();
+    G.ownAt = Date.now();
+    setFast(fast(), fast() ? 'القراءة السريعة: تُعلَّم الكلمات المتجاوزة والمبدلة فقط' : 'عاد الفحص الكامل');
   };
   $('#recStop').onclick = () => { if (!G) return; if (G.pos) finish(); else cancel(); };
 
