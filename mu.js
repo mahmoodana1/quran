@@ -32,7 +32,11 @@ const Mu = (() => {
   // how often the recitation is read: 'auto' (as often as the phone can at ease), 'fast', 'save' (mu-worker.js)
   const RATES = ['auto', 'fast', 'save'];
   const rate = () => RATES.includes(store.get('mu.rate')) ? store.get('mu.rate') : 'auto';
-  function setRate(r) { store.set('mu.rate', r); worker?.postMessage({ type: 'rate', rate: rate() }); }
+  // (a fast reading: read as often as the phone can, whatever the setting, so the words keep up)
+  let boosted = false;
+  const rateNow = () => boosted ? 'fast' : rate();
+  function setRate(r) { store.set('mu.rate', r); worker?.postMessage({ type: 'rate', rate: rateNow() }); }
+  function boost(on) { boosted = !!on; worker?.postMessage({ type: 'rate', rate: rateNow() }); }
   const now = () => performance.timeOrigin + performance.now();
   // a promise given up on after ms (some phones never answer some calls): `or` instead
   const within = (p, ms, or) => Promise.race([p, new Promise(r => setTimeout(() => r(or), ms))]);
@@ -225,7 +229,7 @@ const Mu = (() => {
       };
       worker.onerror = e => { if (!ready) { clearTimeout(stall); reset(); reject(new Error(e.message || 'worker failed')); } };
       worker.postMessage({ type: 'load', variant: c.variant, ep: c.ep, threads: threads(), shared });
-      worker.postMessage({ type: 'rate', rate: rate() });
+      worker.postMessage({ type: 'rate', rate: rateNow() });
     });
   }
 
@@ -704,6 +708,6 @@ const Mu = (() => {
     CANDS, BASE_IDS, choice, mb, probe, saved, savedVariants, use, bench: () => store.get('mu.bench', null), remove, load, prime, start, listen, stop, sounds, expect, expect2, locate, opening,
     ready: () => ready, listening: () => !!mic, quiet, pace: () => ({ pace, near: refs ? refs.r.filter((_, i) => paceMask & 1 << i).map(([r]) => r) : [] }), lost: f => { onLost = f; }, sound: () => actx, info: () => info, recording,
     reprobe: () => { store.set('mu.choice', null); reset(); },
-    rate, setRate, warm, warmed: () => warmed, micCheck, micWhy: () => micErr, toCpu, lighter, dead: f => { onDead = f; },
+    rate, setRate, boost, warm, warmed: () => warmed, micCheck, micWhy: () => micErr, toCpu, lighter, dead: f => { onDead = f; },
   };
 })();

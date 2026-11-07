@@ -431,6 +431,7 @@ const Recite = (() => {
     const g = G;
     const noMic = () => { if (G === g) { pause(); toast('لا يمكن الوصول إلى الميكروفون — اسمح به من إعدادات المتصفح'); } };
     if (MU()) {
+      Mu.boost(fast());
       const h = d => onMu(g, d);
       if (g.mu.stream && Mu.listening()) { g.mu.stream = false; Mu.listen(h); } // the reading that found the aya goes on
       else Mu.start(h).catch(noMic);
@@ -511,10 +512,31 @@ const Recite = (() => {
       clearTimeout(g.voiceT);
       g.voiceT = setTimeout(() => { if (G === g) { g.voice = false; paintBar(); } }, 900);
     }
+    if (grew) speed(g);
     muFollow(false);
     if (grew) g.grewAt = Date.now();
     atEnd(g);
   }
+  // how fast the reader reads: sounds a second over the last FAST_WIN s heard (each sound's time to
+  // the next, a pause counted as at most 0.4 s); past FAST_AT, «حدر» lights up (until under FAST_OFF),
+  // for the reader to turn it on
+  const FAST_WIN = 150, FAST_AT = 11, FAST_OFF = 9.5;
+  function speed(g) {
+    const m = g.mu, h = m.final + m.tent, at = m.at;
+    if (!at || at.length !== h.length || !at.length) return;
+    let n = 0, t = 0, next = null;
+    for (let c = h.length - 1; c >= 0 && at[h.length - 1] - at[c] < FAST_WIN; c--) {
+      if (c > 0 && h[c] === h[c - 1] && 'اۦۥں'.includes(h[c])) continue; // (a madd's run: one sound)
+      if (next != null) { t += Math.min(10, next - at[c]); n++; }
+      next = at[c];
+    }
+    if (n < 30 || !t) return;
+    g.speed = n / (t * 0.04);
+    const was = !!g.fastHint;
+    g.fastHint = !fast() && (g.speed > FAST_AT || (was && g.speed > FAST_OFF));
+    if (g.fastHint !== was) paintBar();
+  }
+
   // the last word of the session heard, and nothing more for a moment: it is judged as said (a stop
   // drops its last vowel, and the last sounds are final only a second or more later) and the session ends.
   // Not while the reader's voice goes on: a madd held at the end (الضَّاۤلِّينَ) adds no letters for a
@@ -563,7 +585,7 @@ const Recite = (() => {
       // (each natural madd of the aya as last heard: this reader's own length, taken in as it ends)
       if (m.tjAt !== ai + ':' + m.w0) { m.tjAt = ai + ':' + m.w0; m.tjSeen = {}; m.letSeen = {}; }
       const seen = m.tjSeen, lets = m.letSeen, gones = m.goneSeen = {};
-      const st = Match.words(ex, sub, fin, last, { freeLead: m.lead, conf: m.conf.slice(c0, c0 + sub.length), alts: m.alts.slice(c0, c0 + sub.length), at: m.at?.slice(c0, c0 + sub.length), tajweed: { ...tjRules(), pace: pace(), seen: (k, hl, d) => { if (k < cu) seen[k] = [hl, d]; }, ...goneRules(gones, m.goneAt ||= [], cu) }, letters: { ...letRules(), heard: (pk, k) => { if (k < cu) lets[k] = pk; } } });
+      const st = Match.words(ex, sub, fin, last, { fast: fast(), freeLead: m.lead, conf: m.conf.slice(c0, c0 + sub.length), alts: m.alts.slice(c0, c0 + sub.length), at: m.at?.slice(c0, c0 + sub.length), tajweed: { ...tjRules(), pace: pace(), seen: (k, hl, d) => { if (k < cu && !fast()) seen[k] = [hl, d]; }, ...goneRules(gones, m.goneAt ||= [], cu) }, letters: { ...letRules(), heard: (pk, k) => { if (k < cu) lets[k] = pk; } } });
       // (a madd not heard a second time: the first, in an aya before, marked too)
       goneMark(gones, m.goneAt, (gk, got, want) => { if (!G.errs[gk]) { G.errs[gk] = 'madd'; G.heard[gk] ||= { got, want }; } });
       // (a letter said as its like a second time: the first, in an aya before, marked too)
@@ -617,12 +639,12 @@ const Recite = (() => {
     const cur = Mu.expect(G.ayas[m.c], m.w0);
     const gones = {}, tajweed = { ...tjRules(), ...goneRules(gones, m.goneAt ||= [], Match.units(cur.ph).length) };
     const letters = letRules();
-    const st = Match.words(cur, sub, sub.length, false, { freeLead: m.lead, conf, alts, at, tajweed, letters });
+    const st = Match.words(cur, sub, sub.length, false, { fast: fast(), freeLead: m.lead, conf, alts, at, tajweed, letters });
     const t = st.findLastIndex(x => x.state !== 'todo');
     if (t < 0) return;
     const part = { ph: cur.ph.slice(0, cur.spans[t][1]), spans: cur.spans.slice(0, t + 1), wasl: cur.wasl.filter(k => k <= t) };
     if (cur.tj) part.tj = cur.tj.filter(c => c < part.ph.length);
-    const fin = Match.words(part, sub, sub.length, true, { freeLead: m.lead, conf, alts, at, tajweed, letters });
+    const fin = Match.words(part, sub, sub.length, true, { fast: fast(), freeLead: m.lead, conf, alts, at, tajweed, letters });
     muApply(fin.concat(st.slice(t + 1)), false, cur);
     goneMark(gones, m.goneAt, (gk, got, want) => { if (!G.errs[gk]) { G.errs[gk] = 'madd'; G.heard[gk] ||= { got, want }; } });
   }
@@ -940,6 +962,7 @@ const Recite = (() => {
       F = { voice: false, d: null, n: 0, grew: 0, same: 0, last: null };
       syncBubble();
       const f = F;
+      Mu.boost(fast());
       Mu.start(d => {
         if (F !== f) return;
         f.d = d;
@@ -998,7 +1021,7 @@ const Recite = (() => {
         let sub = h.slice(c0);
         if (Match.units(sub).length > cu * 1.5 + 45) sub = sub.slice(0, Match.charAt(sub, Math.round(cu * 1.25) + 10));
         const gs = {};
-        const st = Match.words(ex, sub, sub.length, false, { freeLead: !guard, conf: conf.slice(c0, c0 + sub.length), alts: alts.slice(c0, c0 + sub.length), tajweed: { ...tjRules(), ...goneRules(gs, gone, cu) }, letters: letRules() });
+        const st = Match.words(ex, sub, sub.length, false, { fast: fast(), freeLead: !guard, conf: conf.slice(c0, c0 + sub.length), alts: alts.slice(c0, c0 + sub.length), tajweed: { ...tjRules(), ...goneRules(gs, gone, cu) }, letters: letRules() });
         const n0 = cur.spans.length, begun = more.length && st.slice(n0, n0 + 2).some(x => x.state === 'ok' || x.state === 'err');
         const upto = begun ? n0 : st.slice(0, n0).findLastIndex(x => x.state === 'ok' || x.state === 'err') + 1;
         goneMark(gs, gone, (k, got, want) => { if (!errs.some(x => x[0] === k)) errs.push([k, 'madd', got, want]); });
@@ -1164,6 +1187,10 @@ const Recite = (() => {
     $('#recToggle').classList.toggle('live', G.run);
     $('#recToggle').setAttribute('aria-label', G.run ? 'إيقاف مؤقت' : 'متابعة');
     $('#recHide').classList.toggle('on', G.hide);
+    $('#recFast').hidden = !MU();
+    $('#recFast').classList.toggle('on', fast());
+    $('#recFast').classList.toggle('hint', !!G.fastHint && !fast());
+    $('#recFast').setAttribute('aria-pressed', fast());
     $('#recHide').setAttribute('aria-pressed', G.hide);
     // this aya's share of the bar, like the player
     $('#recProg').style.transform = `scaleX(${bl ? 0 : G.pos >= G.words.length ? 1 : w.wi / w.of})`;
@@ -1530,7 +1557,10 @@ const Recite = (() => {
   };
   const setting = id => !!store.get('recite.' + id, SET_ON[id] ?? false);
   // the tajweed rules checked while reciting (match.js)
-  const tjRules = () => ({ madd: setting('tjMadd'), ghunna: setting('tjGhunna'), munfasil: setting('tjMunfasil'), over: setting('tjOver'), pace: pace() });
+  // (a fast reading, hadr: no tajweed checked, nor letters told from their like; match.js opt.fast)
+  const fast = () => setting('fast');
+  const tjRules = () => fast() ? { madd: false, ghunna: false, munfasil: false, over: false, pace: pace() }
+    : { madd: setting('tjMadd'), ghunna: setting('tjGhunna'), munfasil: setting('tjMunfasil'), over: setting('tjOver'), pace: pace() };
   // how this reader holds a natural madd, from their own readings (match.js: rules.pace), in
   // the model's letters and in time: how often each length in letters was heard (0 to 8, older
   // readings counting less and less), and from it the length in the middle (u), how often heard
@@ -1590,7 +1620,7 @@ const Recite = (() => {
     }
   };
   const letNeed = pk => Match.pairType(pk) === 'near' ? 3 : LET_OFTEN;
-  const letRules = () => ({ heavy: setting('lHeavy'), near: setting('lNear'), often: (pk, need = LET_OFTEN) => letTimes(pk) + (Object.values(G?.mu?.letSeen || {}).includes(pk) ? 0 : 1) >= need });
+  const letRules = () => ({ heavy: setting('lHeavy') && !fast(), near: setting('lNear') && !fast(), often: (pk, need = LET_OFTEN) => letTimes(pk) + (Object.values(G?.mu?.letSeen || {}).includes(pk) ? 0 : 1) >= need });
   const toggle = (id, label, sub) => {
     const on = setting(id);
     return `<button class="row rc-set" data-rc-set="${id}" role="switch" aria-checked="${on}">
@@ -1777,6 +1807,7 @@ const Recite = (() => {
         ${toggle('sound', 'صوت واهتزاز عند الخطأ', 'نغمة خفيفة واهتزاز حين تُعلَّم كلمة')}
         ${toggle('blind', 'تسميع أعمى', 'مع الإخفاء: لا أثر لما بعدك، فلا عدد للكلمات ولا أرقام للآيات')}
         ${toggle('weak', 'مواضع الضعف في المصحف', 'خط منقّط خفيف تحت كلمات أخطأت فيها')}
+        ${MU() ? toggle('fast', 'قراءة الحدر (سريعة)', 'لا يُفحص المدّ ولا الغنّة ولا الحروف المتقاربة، ويُتسامح فيما يخفى من الكلمات · زر «حدر» أثناء القراءة') : ''}
         ${MU() ? `<div class="group-label">التجويد</div>
         ${toggle('tjMadd', 'المدّ', 'يُعلَّم المدّ الطبيعي إن قُصِر، والمتصل واللازم إن لم يُمَدّا')}
         ${setting('tjMadd') ? toggle('tjMunfasil', 'المدّ المنفصل أربع حركات', 'قراءة الشاطبية؛ إن تركتها مطفأة فالقصر جائز') : ''}
@@ -1976,6 +2007,15 @@ const Recite = (() => {
     G.hide = !G.hide;
     store.set('recite.hide', G.hide);
     paint(); paintBar();
+  };
+  // a fast reading (hadr), turned on or off at any moment; what is said from then on is judged so
+  $('#recFast').onclick = () => {
+    if (!G) return;
+    store.set('recite.fast', !fast());
+    G.fastHint = false;
+    if (G.run) Mu.boost(fast());
+    toast(fast() ? 'قراءة الحدر: لا يُفحص المدّ ولا الغنّة ولا الحروف المتقاربة، ويُتسامح فيما يخفى من الكلمات' : 'عاد الفحص الكامل');
+    paintBar();
   };
   $('#recStop').onclick = () => { if (!G) return; if (G.pos) finish(); else cancel(); };
 
