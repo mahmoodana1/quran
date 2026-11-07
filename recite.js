@@ -247,7 +247,7 @@ const Recite = (() => {
     prepStep('warm', 'done', 'جاهز');
     // 5. the second model, which hears each aya again once said (verify.js): needed, downloaded once
     if (!Verify.ready()) {
-      const first = !(await Verify.saved());
+      const first = !(await Verify.saved()) && !Verify.loadedBefore();
       if (!live()) return;
       const say = p => first ? `يُنزَّل مرة واحدة (${ar(Verify.MB)} م.ب)، ولا غنى عنه: يراجع كل آية بعد قراءتها… ${ar(Math.round(p * 100))}٪` : `يُحمَّل من جهازك… ${ar(Math.round(p * 100))}٪`;
       prepStep('check', 'doing', say(0));
@@ -1990,9 +1990,11 @@ const Recite = (() => {
   async function paintVerify(p) {
     const s = $('#rcVerifyS'), b = $('#rcVerifyB');
     if (!s) return;
-    const have = Verify.ready() || await Verify.saved();
+    const kept = await Verify.saved(), have = kept || Verify.ready() || Verify.loadedBefore();
     s.textContent = p != null ? `يُنزَّل… ${ar(Math.round(p * 100))}٪`
-      : (have ? `على جهازك · ${ar(Verify.MB)} م.ب` : `غير منزّل · ${ar(Verify.MB)} م.ب · يُنزَّل قبل التسميع، ولا غنى عنه`)
+      : (kept ? `على جهازك · ${ar(Verify.MB)} م.ب`
+        : have ? `يعمل · لم يحفظه المتصفح (مساحته ممتلئة؟) فيُنزَّل مع كل فتح للتطبيق · ${ar(Verify.MB)} م.ب`
+        : `غير منزّل · ${ar(Verify.MB)} م.ب · يُنزَّل قبل التسميع، ولا غنى عنه`)
         + ' · يسمع كل آية بعد قراءتها مرة أخرى، فيُسقط ما عُلِّم خطأً ويكشف تقديم الكلمات وتأخيرها';
     b.innerHTML = have || p != null ? '' : '<button class="rc-not">تنزيل</button>';
     b.firstChild && (b.firstChild.onclick = () => Verify.load(x => paintVerify(x)).then(() => paintVerify(), () => { paintVerify(); toast('تعذّر تنزيله — تأكد من الاتصال بالإنترنت'); }));

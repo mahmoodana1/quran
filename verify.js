@@ -34,7 +34,7 @@ const Verify = (() => {
         const v = Object.values(files), got = v.reduce((s, x) => s + x[0], 0), all = v.reduce((s, x) => s + x[1], 0);
         onProgress?.(Math.min(1, got / Math.max(all, MB * 1e6)));
       }
-      if (d.type === 'ready') { ready = true; loading?.resolve(); }
+      if (d.type === 'ready') { ready = true; store.set('verify.ok', MODEL); loading?.resolve(); }
       if (d.type === 'error') {
         if (d.id != null && waiting.has(d.id)) { waiting.get(d.id)(''); waiting.delete(d.id); }
         else if (!ready) {
@@ -49,13 +49,16 @@ const Verify = (() => {
     worker.postMessage({ type: 'load', model: MODEL, dtype: DTYPE });
     return promise;
   }
-  // is it saved in this browser?
+  // is it saved in this browser? (its two model files, looked for in every cache)
+  const BASE = 'https://mahmoodana1.github.io/quran-models/whisper/' + MODEL + '/onnx/';
   async function saved() {
     try {
-      const keys = await (await caches.open('transformers-cache')).keys();
-      return keys.filter(r => r.url.includes('/whisper/' + MODEL + '/') && r.url.endsWith('.onnx')).length >= 2;
+      const got = await Promise.all(['encoder_model.onnx', 'decoder_model_merged_quantized.onnx'].map(f => caches.match(BASE + f)));
+      return got.every(Boolean);
     } catch { return false; }
   }
+  // loaded whole on this device before (whether the browser kept it or not)
+  const loadedBefore = () => store.get('verify.ok', null) === MODEL;
 
   // its text for 16 kHz audio ('' when not ready, or it failed); one at a time, in order
   // the voice in it, without the quiet either side (on silence it writes text of its own)
@@ -148,5 +151,5 @@ const Verify = (() => {
     }
     return out;
   }
-  return { load, saved, hear, heard, swapped, norm, ready: () => ready, busy: () => waiting.size, MB };
+  return { load, saved, loadedBefore, hear, heard, swapped, norm, ready: () => ready, busy: () => waiting.size, MB };
 })();
