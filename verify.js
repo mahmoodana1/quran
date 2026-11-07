@@ -3,30 +3,58 @@
 // A second opinion in Hafs: the phonetic model (mu.js) hears a fast reading poorly
 // (and a reader may hurry for a few words at any pace), swallowing whole words;
 // deepdml's Quran Whisper tiny hears it far better, as words (without harakat). Each
-// aya with a word marked left out or another is heard by it too, once done, and such
-// a word that it heard in its place is not a mistake. It never marks anything itself: it writes the text it
-// knows when unsure, so it is trusted only to say a word was there.
-// Downloaded in the background when a recitation begins (about 110 MB, once), in its
-// own worker (asr-worker.js), off the main thread; until it is ready, nothing is checked.
+// aya is heard by it too, once done: a word marked left out or another that it heard
+// in its place is not a mistake, and two words it heard clearly the other way round
+// are (heard()/swapped()). It writes the text it knows when unsure, so it is never
+// trusted to say a word was missing.
+// Downloaded once (about 110 MB) as a recitation is prepared, a step of its own there
+// that the recitation waits for; run in its own worker (asr-worker.js), off the main
+// thread; kept in the browser's cache ('transformers-cache'), so offline after that.
 const Verify = (() => {
   const MODEL = 'deepdml/whisper-tiny-ar-quran-mix-norm';
   const DTYPE = { encoder_model: 'fp32', decoder_model_merged: 'q8' };
   const SURE = 0.6; // how like the word it heard must be (1 - edit distance / length)
-  let worker = null, ready = false, failed = false, nextId = 0;
-  const waiting = new Map();
+  const MB = 111;
+  let worker = null, ready = false, loading = null, onProgress = null, nextId = 0;
+  const waiting = new Map(), files = {};
 
-  function load() {
-    if (worker || failed) return;
+  // downloaded (the first time) or loaded from the cache; progress(0..1); a failure rejects,
+  // and the next call tries again
+  function load(progress) {
+    onProgress = progress;
+    if (ready) return Promise.resolve();
+    if (loading) return loading.promise;
+    let resolve, reject;
+    const promise = new Promise((a, b) => { resolve = a; reject = b; });
+    loading = { promise, resolve, reject };
     worker = new Worker('asr-worker.js', { type: 'module' });
     worker.onmessage = ({ data: d }) => {
-      if (d.type === 'ready') ready = true;
+      if (d.type === 'progress') {
+        files[d.file] = [d.loaded, d.total];
+        const v = Object.values(files), got = v.reduce((s, x) => s + x[0], 0), all = v.reduce((s, x) => s + x[1], 0);
+        onProgress?.(Math.min(1, got / Math.max(all, MB * 1e6)));
+      }
+      if (d.type === 'ready') { ready = true; loading?.resolve(); }
       if (d.type === 'error') {
         if (d.id != null && waiting.has(d.id)) { waiting.get(d.id)(''); waiting.delete(d.id); }
-        else { failed = true; worker?.terminate(); worker = null; waiting.forEach(r => r('')); waiting.clear(); }
+        else if (!ready) {
+          const l = loading; loading = null;
+          worker?.terminate(); worker = null;
+          waiting.forEach(r => r('')); waiting.clear();
+          l?.reject(new Error(d.message));
+        }
       }
       if (d.type === 'text' && waiting.has(d.id)) { waiting.get(d.id)(d.text); waiting.delete(d.id); }
     };
     worker.postMessage({ type: 'load', model: MODEL, dtype: DTYPE });
+    return promise;
+  }
+  // is it saved in this browser?
+  async function saved() {
+    try {
+      const keys = await (await caches.open('transformers-cache')).keys();
+      return keys.filter(r => r.url.includes('/whisper/' + MODEL + '/') && r.url.endsWith('.onnx')).length >= 2;
+    } catch { return false; }
   }
 
   // its text for 16 kHz audio ('' when not ready, or it failed); one at a time, in order
@@ -108,5 +136,17 @@ const Verify = (() => {
     return out;
   }
 
-  return { load, hear, heard, norm, ready: () => ready };
+  // which neighbouring words (by the first's index) it heard clearly the other way round, and never
+  // in their order: a reader who swapped two words (the phonetic model may line them up as said)
+  const CLEAR = 0.85;
+  function swapped(words, text) {
+    const E = words.map(norm), H = text.split(/\s+/).map(norm).filter(Boolean), out = [];
+    const at = (a, b) => H.some((h, j) => j + 1 < H.length && like(a, h) >= CLEAR && like(b, H[j + 1]) >= CLEAR);
+    for (let i = 0; i + 1 < E.length; i++) {
+      if (E[i].length < 3 || E[i + 1].length < 3 || like(E[i], E[i + 1]) >= CLEAR) continue;
+      if (at(E[i + 1], E[i]) && !at(E[i], E[i + 1])) out.push(i);
+    }
+    return out;
+  }
+  return { load, saved, hear, heard, swapped, norm, ready: () => ready, busy: () => waiting.size, MB };
 })();

@@ -156,7 +156,7 @@ const Recite = (() => {
   async function prep(then, intent, after) {
     const run = ++prepRun;
     prepThen = then; prepIntent = intent;
-    ['update', 'mic', 'model', 'warm'].forEach(id => prepStep(id, ''));
+    ['update', 'mic', 'model', 'warm', 'check'].forEach(id => prepStep(id, ''));
     $('#rpGo').hidden = true;
     $('#rpLead').textContent = intent?.killed ? `أغلق الهاتف التطبيق أثناء القراءة ليوفّر الذاكرة${intent.light ? '، فاخترنا طريقة أخف لا تُثقل عليه' : ''}. نكمل من حيث توقفت.`
       : intent?.fresh ? 'أنعشنا التطبيق قبل أن تبدأ، لتمضي القراءة دون انقطاع.'
@@ -245,6 +245,23 @@ const Recite = (() => {
     if (!live()) return;
     if (!Mu.ready()) { modelFail(); return; }
     prepStep('warm', 'done', 'جاهز');
+    // 5. the second model, which hears each aya again once said (verify.js): needed, downloaded once
+    if (!Verify.ready()) {
+      const first = !(await Verify.saved());
+      if (!live()) return;
+      const say = p => first ? `يُنزَّل مرة واحدة (${ar(Verify.MB)} م.ب)، ولا غنى عنه: يراجع كل آية بعد قراءتها… ${ar(Math.round(p * 100))}٪` : `يُحمَّل من جهازك… ${ar(Math.round(p * 100))}٪`;
+      prepStep('check', 'doing', say(0));
+      if (first) reveal();
+      try { await Verify.load(p => live() && prepStep('check', 'doing', say(p))); }
+      catch {
+        if (!live()) return;
+        prepStep('check', 'fail', 'تعذّر تنزيله — تأكد من الاتصال بالإنترنت ثم أعد المحاولة؛ لا يبدأ التسميع دونه');
+        ask('أعد المحاولة', () => prep(then, intent, after));
+        return;
+      }
+      if (!live()) return;
+    }
+    prepStep('check', 'done', 'جاهز');
     // after a reload the page may have no tap yet to let sound and the microphone start: on at once
     // if the browser lets it (the reading not paused at all), else one tap asked for
     if (after) {
@@ -285,7 +302,7 @@ const Recite = (() => {
     if (F) stopFind();
     if (G?.run) pause();
     prepRun++;
-    ['update', 'mic', 'model', 'warm'].forEach(id => prepStep(id, ''));
+    ['update', 'mic', 'model', 'warm', 'check'].forEach(id => prepStep(id, ''));
     prepStep('update', 'done', '');
     prepStep('mic', 'fail', 'لا يصل منه صوت — إن فصلت سماعة أو غيّرت الميكروفون، أعد تحميل التطبيق، وتعود جلستك كما هي');
     $('#rpLead').textContent = 'توقف الميكروفون عن إرسال الصوت، فأوقفنا التسميع مؤقتًا.';
@@ -340,7 +357,7 @@ const Recite = (() => {
   // from an aya to the end of its surah, or just the ayas given (a review or a test);
   // opts.test hides the words, opts.seed is the phrase that found the aya (bubble)
   function start(from, review, opts = {}) {
-    if (MU()) Verify.load(); // (the second opinion on fast readings: downloaded in the background, once)
+    if (MU()) Verify.load().catch(() => {}); // (a session not prepared again, brought back or carried on: loaded now)
     // (a surah carried on into the next: the session goes on as it is, never prepared again)
     // a reading going on (into the next surah, found by reciting) or a session brought back paused only needs the
     // model; anything else the reader begins is checked first, on its screen (withModel → prep)
@@ -432,7 +449,6 @@ const Recite = (() => {
     const g = G;
     const noMic = () => { if (G === g) { pause(); toast('لا يمكن الوصول إلى الميكروفون — اسمح به من إعدادات المتصفح'); } };
     if (MU()) {
-      Mu.boost(fast());
       const h = d => onMu(g, d);
       if (g.mu.stream && Mu.listening()) { g.mu.stream = false; Mu.listen(h); } // the reading that found the aya goes on
       else Mu.start(h).catch(noMic);
@@ -462,7 +478,8 @@ const Recite = (() => {
           const m = g.mu, all = m.final + m.tent, c0 = Match.charAt(all, m.cut);
           // (to the end of its last word heard)
           const ce = m.endAt > m.cut ? Math.min(m.at.length - 1, Match.charAt(all, m.endAt)) : m.at.length - 1;
-          (m.c < g.ayas.length && m.at?.length ? recheck(g, g.ayas[m.c], m.starts[m.c] + m.w0, g.words[m.starts[m.c]].of - m.w0, m.at[c0], m.at[ce] + 10) : Promise.resolve())
+          (m.c < g.ayas.length && m.at?.length ? recheck(g, g.ayas[m.c], m.starts[m.c] + m.w0, g.words[m.starts[m.c]].of - m.w0, m.at[c0], m.at[ce] + 10,
+            heardHow(m.conf.slice(c0, ce + 1), Match.units(all.slice(c0, ce + 1)).length, Match.units(Mu.expect(g.ayas[m.c], m.w0).ph).length)) : Promise.resolve())
             .finally(() => g.checked?.());
           return;
         }
@@ -554,7 +571,6 @@ const Recite = (() => {
   }
   function setFast(on, say) {
     G.fast = on;
-    if (G?.run) Mu.boost(on);
     toast(say);
     paintBar();
   }
@@ -625,7 +641,7 @@ const Recite = (() => {
         break;
       }
       paceAdd(m.tjSeen); m.tjAt = null;
-      if (m.at) recheck(G, G.ayas[m.c], m.starts[m.c] + m.w0, n0, m.at[c0], m.at[c0 + Match.charAt(sub, st[n0].at[0])]);
+      if (m.at) { const c1 = c0 + Match.charAt(sub, st[n0].at[0]); recheck(G, G.ayas[m.c], m.starts[m.c] + m.w0, n0, m.at[c0], m.at[c1], heardHow(m.conf.slice(c0, c1), Match.units(all.slice(c0, c1)).length, Match.units(cur.ph).length)); }
       goneAdd(gones, m.goneAt, ex, st, cur, n0, wi => m.starts[m.c] + m.w0 + wi);
       // (each one, at its word in the session)
       for (const [k, pk] of Object.entries(m.letSeen || {})) {
@@ -641,23 +657,44 @@ const Recite = (() => {
     paint();
     paintBar();
   }
-  // an aya done (at any pace: a reader may hurry for a few words): a word marked left out or another
-  // that the second model (verify.js) heard in its place is taken back. Its audio asked for at once
-  // (frames [from, to), as in `at`), before another stretch can begin; from 1.2 s before it, cut there
-  // at the pause before the aya. Each aya alone: that model, taught on single ayas, writes the first
-  // aya it hears and stops (two together, or the end of the one before, and this one goes unheard)
-  const RECHECK = ['skip', 'wrong'], RECHECK_PAD = 8, RECHECK_LEAD = 30;
-  function recheck(g, ai, k0, n, from, to) {
+  // an aya done that the phonetic model heard poorly (heardHow(): at any pace, a reader may hurry
+  // for a few words), or with a word marked left out or another, heard again by the second model
+  // (verify.js): a word marked left out or another that it heard in its place is taken back, and two
+  // words it heard clearly the other way round marked so. Its audio asked for at once (frames
+  // [from, to), as in `at`), before another stretch can begin; from 1.2 s before it, cut there at the
+  // pause before the aya. Each aya alone: that model, taught on single ayas, writes the first aya it
+  // hears and stops (two together, or the end of the one before, and this one goes unheard). On a
+  // device it keeps waiting (RECHECK_BUSY ayas), only those with a word marked
+  const RECHECK = ['skip', 'wrong'], RECHECK_PAD = 8, RECHECK_LEAD = 30, RECHECK_BUSY = 2;
+  // how well the phonetic model heard an aya: how sure it was of its sounds (on average, and how
+  // many it was unsure of), and how many of the aya's sounds it heard. Readings at a usual pace:
+  // 0.93 to 0.99 sure, at most 8% unsure, all heard; fast ones mostly 0.78 to 0.90, 11 to 36% unsure.
+  // Under these, the aya is heard again (with a word marked left out or another, always)
+  const SURE_MEAN = 0.92, SURE_LOW = 0.1, SURE_COVER = 0.9;
+  function heardHow(conf, got, want) {
+    if (!conf?.length) return { weak: true };
+    let t = 0, low = 0;
+    for (const c of conf) { t += c; if (c < 0.75) low++; }
+    const mean = t / conf.length, unsure = low / conf.length, cover = got / Math.max(1, want);
+    return { mean, unsure, cover, weak: mean < SURE_MEAN || unsure > SURE_LOW || cover < SURE_COVER };
+  }
+  function recheck(g, ai, k0, n, from, to, how) {
     if (!Verify.ready() || from == null || to == null) return Promise.resolve();
-    const ks = [];
-    for (let k = k0; k < k0 + n; k++) if (RECHECK.includes(g.errs[k])) ks.push(k);
-    if (!ks.length) return Promise.resolve();
+    const ks = [], at = new Map();
+    for (let k = k0; k < k0 + n; k++) { at.set(g.words[k].wi, k); if (RECHECK.includes(g.errs[k])) ks.push(k); }
+    if (!ks.length && (!how?.weak || Verify.busy() >= RECHECK_BUSY)) return Promise.resolve();
     const f0 = Math.max(0, from - RECHECK_LEAD);
     return Mu.clip(f0, to + RECHECK_PAD).then(a => Verify.hear(a, (from - f0) * 0.04)).then(text => {
       if (G !== g || !text) return;
-      const said = Verify.heard(ayaTokens(ai), text);
-      let n = 0;
+      const words = ayaTokens(ai), said = Verify.heard(words, text);
+      let n = 0, added = false;
       for (const k of ks) if (said.has(g.words[k].wi) && RECHECK.includes(g.errs[k])) { delete g.errs[k]; delete g.heard[k]; n++; }
+      for (const i of Verify.swapped(words, text)) {
+        const a = at.get(i), b = at.get(i + 1);
+        if (a == null || b == null || (g.errs[a] && g.errs[a] !== 'order') || (g.errs[b] && g.errs[b] !== 'order')) continue;
+        for (const k of [a, b]) if (g.errs[k] !== 'order') { g.errs[k] = 'order'; g.heard[k] = { got: words[i + 1] + ' ' + words[i], want: words[i] + ' ' + words[i + 1] }; n++; added = true; }
+      }
+      if (added && !g.done) chime();
       if (!n) return;
       paint(); paintBar();
       if (g.done && !$('#recDone').hidden) paintDone();
@@ -1040,7 +1077,6 @@ const Recite = (() => {
       F = { voice: false, d: null, n: 0, grew: 0, same: 0, last: null };
       syncBubble();
       const f = F;
-      Mu.boost(fast());
       Mu.start(d => {
         if (F !== f) return;
         f.d = d;
@@ -1649,7 +1685,9 @@ const Recite = (() => {
   // the tajweed rules checked while reciting (match.js)
   // (a fast reading, hadr: no tajweed checked, nor letters told from their like; match.js opt.fast)
   // (this session's: begun as the setting says, then as the reader's pace and «سريع» turn it)
-  const fast = () => G && !G.done ? !!G.fast : setting('fastOn');
+  // (the session's own to its end, the last aya judged at «إنهاء» too; and an aya found by the header
+  // mic after one, read at that one's pace)
+  const fast = () => G ? !!G.fast : setting('fastOn');
   const tjRules = () => fast() ? { madd: false, ghunna: false, munfasil: false, over: false, pace: pace() }
     : { madd: setting('tjMadd'), ghunna: setting('tjGhunna'), munfasil: setting('tjMunfasil'), over: setting('tjOver'), pace: pace() };
   // how this reader holds a natural madd, from their own readings (match.js: rules.pace), in
@@ -1916,6 +1954,7 @@ const Recite = (() => {
           <span class="rc-chips">${[['auto', 'تلقائي'], ['fast', 'الأسرع'], ['save', 'موفّر']].map(([k, t]) => `<button data-rc-rate="${k}"${Mu.rate() === k ? ' class="on"' : ''}>${t}</button>`).join('')}</span></div>` : ''}
         <div class="row rc-model"><span class="main"><span class="t">نموذج التعرّف على التلاوة</span><span class="s" id="rcModelS">…</span></span><span id="rcModelB"></span></div>
         ${MU() ? `<div class="rc-models" id="rcModels"></div>
+        <div class="row rc-model"><span class="main"><span class="t">نموذج المراجعة</span><span class="s" id="rcVerifyS">…</span></span><span id="rcVerifyB"></span></div>
         <div class="row rc-model" id="rcDiag" hidden><span class="main"><span class="t">تسجيل آخر جلسة</span><span class="s">إن أخطأ التعرّف، شارك هذا التسجيل (آخر ٥ دقائق) لنحسّنه</span></span><button class="rc-not" data-rc-diag>مشاركة</button></div>` : ''}
       </div>` + helpHTML();
     }
@@ -1947,8 +1986,21 @@ const Recite = (() => {
     });
   }
 
+  // the second model's row (verify.js): saved or not, and downloaded from here too
+  async function paintVerify(p) {
+    const s = $('#rcVerifyS'), b = $('#rcVerifyB');
+    if (!s) return;
+    const have = Verify.ready() || await Verify.saved();
+    s.textContent = p != null ? `يُنزَّل… ${ar(Math.round(p * 100))}٪`
+      : (have ? `على جهازك · ${ar(Verify.MB)} م.ب` : `غير منزّل · ${ar(Verify.MB)} م.ب · يُنزَّل قبل التسميع، ولا غنى عنه`)
+        + ' · يسمع كل آية بعد قراءتها مرة أخرى، فيُسقط ما عُلِّم خطأً ويكشف تقديم الكلمات وتأخيرها';
+    b.innerHTML = have || p != null ? '' : '<button class="rc-not">تنزيل</button>';
+    b.firstChild && (b.firstChild.onclick = () => Verify.load(x => paintVerify(x)).then(() => paintVerify(), () => { paintVerify(); toast('تعذّر تنزيله — تأكد من الاتصال بالإنترنت'); }));
+  }
+
   // the Muaalem models, each with how fast it ran in this device's test
   async function paintModels(testing) {
+    paintVerify();
     const box = $('#rcModels'), s = $('#rcModelS'), b = $('#rcModelB');
     if (!box) return;
     const have = await Mu.savedVariants(), bench = Mu.bench(), c = Mu.choice();
