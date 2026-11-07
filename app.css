@@ -1161,6 +1161,9 @@ svg { fill: currentColor; }
 /* words: said, now, hidden, and the three kinds of mistake */
 .w.rc-done { color: color-mix(in srgb, var(--ok) 70%, var(--ink)); }
 .w.rc-now { color: var(--accent); }
+/* where the reader is now (ahead of the model): a soft background, moving word to word */
+.w.rc-lead { background: color-mix(in srgb, var(--accent) 22%, transparent); border-radius: .35em; box-shadow: 0 0 0 .1em color-mix(in srgb, var(--accent) 22%, transparent); }
+.w { transition: color .35s ease, background-color .22s ease, box-shadow .22s ease; }
 .w.rc-hid { color: transparent; }
 .w.rc-hid::before {
   content: ""; position: absolute; left: 8%; right: 8%; top: 44%; height: .16em;
@@ -1225,7 +1228,7 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 }
 .rec-hide svg { width: 17px; height: 17px; }
 .rec-hide.on { background: var(--accent); color: var(--on-accent); }
-/* «حدر»: lit while reading fast, for the reader to turn it on */
+/* «سريع»: lit while reading fast, for the reader to turn it on */
 .rec-fast[hidden] { display: none; }
 .rec-fast.hint { box-shadow: inset 0 0 0 1.5px var(--accent); color: var(--accent); animation: recFastHint 1.6s ease-in-out infinite; }
 @keyframes recFastHint { 50% { background: color-mix(in srgb, var(--accent) 18%, transparent); } }

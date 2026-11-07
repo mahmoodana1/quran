@@ -28,7 +28,7 @@ const Recite = (() => {
     heavy: 'خلطت بين حرف مفخّم ونظيره المرقّق', near: 'أبدلت حرفًا بحرف قريب منه', maddlong: 'زدت في المدّ الطبيعي', maddnone: 'مددت حرفًا لا مدّ فيه' };
   const MASTER_DAYS = 3;
   const HINT_AFTER = 7000; // ms of silence on a hidden word before it shows
-  const CLS = ['rc-weak', 'rc-done', 'rc-now', 'rc-hid', 'rc-blind', 'rc-peek', 'rc-wrong', 'rc-haraka', 'rc-skip', 'rc-hint', 'rc-madd', 'rc-ghunna', 'rc-order', 'rc-heavy', 'rc-near', 'rc-maddlong', 'rc-maddnone'];
+  const CLS = ['rc-weak', 'rc-lead', 'rc-done', 'rc-now', 'rc-hid', 'rc-blind', 'rc-peek', 'rc-wrong', 'rc-haraka', 'rc-skip', 'rc-hint', 'rc-madd', 'rc-ghunna', 'rc-order', 'rc-heavy', 'rc-near', 'rc-maddlong', 'rc-maddnone'];
   // hidden, and blind (a setting): no trace of the words ahead, their number or their ayas'
   const blind = () => !!G?.hide && !G.done && store.get('recite.blind', false);
   // Muaalem listens in Hafs (its phonetic script is Hafs's)
@@ -42,7 +42,7 @@ const Recite = (() => {
 
   // the session: words in order { ai, p, n (word on its page), wi (word in its aya), of (aya length), nt (normalised) },
   // idx 'page:n' -> word, pos = next word to say, errs[k] = type, gone = mistakes taken back
-  let G = null, dirty = false, timer = 0;
+  let G = null, dirty = false, timer = 0, leadTimer = 0;
 
   // ---- mistakes, per riwaya: { ayas: { ai: { n, last, words: { wi: type }, ok: [day], done } }, sessions,
   // stats: { ai: { r: times read right, w: times with mistakes, h: [[time, mistakes (-1: skipped)]] (the last
@@ -439,6 +439,8 @@ const Recite = (() => {
       .catch(noMic);
     clearInterval(timer);
     timer = setInterval(tick, 500);
+    clearInterval(leadTimer);
+    leadTimer = setInterval(lead, LEAD_EVERY);
     paintBar();
   }
   function pause() {
@@ -446,7 +448,7 @@ const Recite = (() => {
     keep(true);
     store.set(ALIVE, null);
     G.run = false; G.voice = false; G.secs += (Date.now() - G.t) / 1000;
-    clearInterval(timer);
+    clearInterval(timer); clearInterval(leadTimer); showLead(null);
     if (MU()) {
       // what was read to the end counts; the next stretch is matched from the first word not yet said
       const g = G;
@@ -476,7 +478,7 @@ const Recite = (() => {
     store.set(LIVE(), null);
     if (!G) return;
     save(); // what was said is kept, however the session ends (another begun, the audio played, the riwaya changed)
-    clearInterval(timer);
+    clearInterval(timer); clearInterval(leadTimer);
     if (!G.keepMic) { if (G.mu) Mu.stop(); else Listen.stop(); }
     G = null; S.focus = null;
     ['#recBar', '#recWord', '#recDone'].forEach(s => hide($(s)));
@@ -518,7 +520,7 @@ const Recite = (() => {
     atEnd(g);
   }
   // how fast the reader reads: sounds a second over the last FAST_WIN s heard (each sound's time to
-  // the next, a pause counted as at most 0.4 s); past FAST_AT, «حدر» lights up (until under FAST_OFF),
+  // the next, a pause counted as at most 0.4 s); past FAST_AT, «سريع» lights up (until under FAST_OFF),
   // for the reader to turn it on
   const FAST_WIN = 150, FAST_AT = 11, FAST_OFF = 9.5;
   function speed(g) {
@@ -895,6 +897,38 @@ const Recite = (() => {
   }
 
   // every half second: the clock, and a hidden word that has kept the reader silent
+  // ---- where the reader is now, ahead of the model (which hears a word only a moment after it is
+  // said): a soft background that moves on from the last word heard at the reader's own pace, while
+  // their voice is heard, LEAD_MAX words ahead at most; the model's word, once it is further, at once
+  const LEAD_MAX = 2, LEAD_EVERY = 100, LEAD_GAP = 600; // (LEAD_GAP: ms of quiet still within the reading: the gaps between words)
+  const wordUnits = k => {
+    const w = G.words[k], ex = Mu.expect(w.ai), sp = ex.spans[w.wi];
+    return w.u ??= sp ? Math.max(2, Match.units(ex.ph.slice(...sp)).length) : 4;
+  };
+  function lead() {
+    const g = G;
+    if (!g || g.done || !g.run || !MU() || blind()) return showLead(null);
+    const cur = Math.min(Math.max(g.pos, g.tent), g.words.length - 1), now = Date.now();
+    if (g.leadK == null || g.leadK < cur || g.leadK > cur + LEAD_MAX) { g.leadK = cur; g.leadU = 0; }
+    const dt = Math.min(0.5, (now - (g.leadT || now)) / 1000);
+    g.leadT = now;
+    // (sounds a second: this reader's, once measured; a little under, so it waits rather than runs ahead)
+    if (Mu.quiet() < LEAD_GAP) {
+      let budget = dt * (g.speed || 8) * 0.75;
+      while (budget > 0 && g.leadK < Math.min(cur + LEAD_MAX, g.words.length - 1)) {
+        const left = wordUnits(g.leadK) - g.leadU;
+        if (budget < left) { g.leadU += budget; budget = 0; } else { budget -= left; g.leadK++; g.leadU = 0; }
+      }
+    }
+    showLead(g.leadK);
+  }
+  function showLead(k) {
+    if (!G || G.leadAt === k) return;
+    if (G.leadAt != null) wordEl(G.leadAt)?.classList.remove('rc-lead');
+    G.leadAt = k;
+    if (k != null) wordEl(k)?.classList.add('rc-lead');
+  }
+
   function tick() {
     if (!G?.run) return;
     keep();
@@ -1165,6 +1199,7 @@ const Recite = (() => {
         if (k == null) return;
         const e = G.gone.has(k) ? null : G.errs[k];
         const cur = Math.max(G.pos, G.tent);
+        if (k === G.leadAt) el.classList.add('rc-lead');
         if (k < G.pos) el.classList.add(e ? 'rc-' + e : 'rc-done');
         else if (k < cur) el.classList.add('rc-done'); // heard, the phrase not yet finished
         else if (G.done) return;
@@ -1807,7 +1842,7 @@ const Recite = (() => {
         ${toggle('sound', 'صوت واهتزاز عند الخطأ', 'نغمة خفيفة واهتزاز حين تُعلَّم كلمة')}
         ${toggle('blind', 'تسميع أعمى', 'مع الإخفاء: لا أثر لما بعدك، فلا عدد للكلمات ولا أرقام للآيات')}
         ${toggle('weak', 'مواضع الضعف في المصحف', 'خط منقّط خفيف تحت كلمات أخطأت فيها')}
-        ${MU() ? toggle('fast', 'قراءة الحدر (سريعة)', 'يُعلَّم ما تجاوزته أو قرأته بكلمة أخرى فقط: لا تُفحص الحركات ولا المدّ ولا الغنّة ولا الحروف المتقاربة، فالتعرّف أضعف في الحدر · زر «حدر» أثناء القراءة') : ''}
+        ${MU() ? toggle('fast', 'القراءة السريعة', 'يُعلَّم ما تجاوزته أو قرأته بكلمة أخرى فقط: لا تُفحص الحركات ولا المدّ ولا الغنّة ولا الحروف المتقاربة، فالتعرّف أضعف في السرعة · زر «سريع» أثناء القراءة') : ''}
         ${MU() ? `<div class="group-label">التجويد</div>
         ${toggle('tjMadd', 'المدّ', 'يُعلَّم المدّ الطبيعي إن قُصِر، والمتصل واللازم إن لم يُمَدّا')}
         ${setting('tjMadd') ? toggle('tjMunfasil', 'المدّ المنفصل أربع حركات', 'قراءة الشاطبية؛ إن تركتها مطفأة فالقصر جائز') : ''}
@@ -2014,7 +2049,7 @@ const Recite = (() => {
     store.set('recite.fast', !fast());
     G.fastHint = false;
     if (G.run) Mu.boost(fast());
-    toast(fast() ? 'قراءة الحدر: تُعلَّم الكلمات المتجاوزة والمبدلة فقط' : 'عاد الفحص الكامل');
+    toast(fast() ? 'القراءة السريعة: تُعلَّم الكلمات المتجاوزة والمبدلة فقط' : 'عاد الفحص الكامل');
     paintBar();
   };
   $('#recStop').onclick = () => { if (!G) return; if (G.pos) finish(); else cancel(); };
