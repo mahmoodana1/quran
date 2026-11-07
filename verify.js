@@ -1,10 +1,10 @@
 'use strict';
 
-// A second opinion on a fast reading (hadr) in Hafs: the phonetic model (mu.js) hears
-// a fast reading poorly, swallowing whole words; deepdml's Quran Whisper tiny hears it
-// far better, as words (without harakat). Each aya read fast is heard by it too, once
-// done, and a word the phonetic model marked left out or another, that it heard in
-// its place, is not a mistake. It never marks anything itself: it writes the text it
+// A second opinion in Hafs: the phonetic model (mu.js) hears a fast reading poorly
+// (and a reader may hurry for a few words at any pace), swallowing whole words;
+// deepdml's Quran Whisper tiny hears it far better, as words (without harakat). Each
+// aya with a word marked left out or another is heard by it too, once done, and such
+// a word that it heard in its place is not a mistake. It never marks anything itself: it writes the text it
 // knows when unsure, so it is trusted only to say a word was there.
 // Downloaded in the background when a recitation begins (about 110 MB, once), in its
 // own worker (asr-worker.js), off the main thread; until it is ready, nothing is checked.

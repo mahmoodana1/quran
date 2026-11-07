@@ -641,12 +641,14 @@ const Recite = (() => {
     paint();
     paintBar();
   }
-  // a fast reading's aya, done: a word marked left out or another that the second model (verify.js)
-  // heard in its place is taken back. Its audio asked for at once (frames [from, to), as in `at`),
-  // before another stretch can begin
-  const RECHECK = ['skip', 'wrong'], RECHECK_PAD = 8, RECHECK_LEAD = 30; // (frames: 0.3 s after, 1.2 s before, where it is cut at a pause)
+  // an aya done (at any pace: a reader may hurry for a few words): a word marked left out or another
+  // that the second model (verify.js) heard in its place is taken back. Its audio asked for at once
+  // (frames [from, to), as in `at`), before another stretch can begin; from 1.2 s before it, cut there
+  // at the pause before the aya. Each aya alone: that model, taught on single ayas, writes the first
+  // aya it hears and stops (two together, or the end of the one before, and this one goes unheard)
+  const RECHECK = ['skip', 'wrong'], RECHECK_PAD = 8, RECHECK_LEAD = 30;
   function recheck(g, ai, k0, n, from, to) {
-    if (!fast() || !Verify.ready() || from == null || to == null) return Promise.resolve();
+    if (!Verify.ready() || from == null || to == null) return Promise.resolve();
     const ks = [];
     for (let k = k0; k < k0 + n; k++) if (RECHECK.includes(g.errs[k])) ks.push(k);
     if (!ks.length) return Promise.resolve();
@@ -1274,11 +1276,11 @@ const Recite = (() => {
 
   // ---- the end of a session
 
-  // (a fast reading: its last aya heard by the second model first, a few seconds at most)
+  // (its last aya heard by the second model first, a few seconds at most)
   const CHECK_WAIT = 8000;
   function finish() {
     if (!G || G.done) return;
-    const g = G, wait = MU() && fast() && Verify.ready() && g.run;
+    const g = G, wait = MU() && Verify.ready() && g.run;
     const checked = wait ? new Promise(r => { g.checked = r; setTimeout(r, CHECK_WAIT); }) : null;
     pause();
     g.done = true;
@@ -1292,8 +1294,9 @@ const Recite = (() => {
       show($('#recDone'));
     };
     if (!checked) return go();
-    toast('يراجع القراءة…');
-    checked.then(() => { paint(); go(); });
+    let over = false;
+    setTimeout(() => { if (!over) toast('يراجع القراءة…'); }, 400); // (said only if it takes a while)
+    checked.then(() => { over = true; paint(); go(); });
   }
 
   function paintDone() {
