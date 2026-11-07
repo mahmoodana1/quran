@@ -384,6 +384,7 @@ const Recite = (() => {
     if (opts.said?.n && G.mu) {
       const k0 = G.mu.w0;
       for (const [i, e, got, want] of opts.said.errs) if (k0 + i < words.length) { G.errs[k0 + i] = e; G.heard[k0 + i] = { got, want }; }
+      G.mu.goneAt = (opts.said.gone || []).filter(x => k0 + x.k < words.length).map(x => ({ ...x, k: k0 + x.k })); // (a madd not heard there: counted on)
       G.pos = G.tent = Math.min(words.length, k0 + opts.said.n);
       const m = G.mu;
       if (opts.stream) { m.cut = opts.said.at || 0; m.lead = false; } // the reading goes on from where it got to
@@ -561,8 +562,10 @@ const Recite = (() => {
       if (m.late) { const cc = Match.charAt(sub, Math.round(cu * 1.25) + 10); sub = sub.slice(0, cc); fin = Math.min(fin, cc); last = false; }
       // (each natural madd of the aya as last heard: this reader's own length, taken in as it ends)
       if (m.tjAt !== ai + ':' + m.w0) { m.tjAt = ai + ':' + m.w0; m.tjSeen = {}; m.letSeen = {}; }
-      const seen = m.tjSeen, lets = m.letSeen;
-      const st = Match.words(ex, sub, fin, last, { freeLead: m.lead, conf: m.conf.slice(c0, c0 + sub.length), alts: m.alts.slice(c0, c0 + sub.length), at: m.at?.slice(c0, c0 + sub.length), tajweed: { ...tjRules(), pace: pace(), seen: (k, hl, d) => { if (k < cu) seen[k] = [hl, d]; } }, letters: { ...letRules(), heard: (pk, k) => { if (k < cu) lets[k] = pk; } } });
+      const seen = m.tjSeen, lets = m.letSeen, gones = m.goneSeen = {};
+      const st = Match.words(ex, sub, fin, last, { freeLead: m.lead, conf: m.conf.slice(c0, c0 + sub.length), alts: m.alts.slice(c0, c0 + sub.length), at: m.at?.slice(c0, c0 + sub.length), tajweed: { ...tjRules(), pace: pace(), seen: (k, hl, d) => { if (k < cu) seen[k] = [hl, d]; }, ...goneRules(gones, m.goneAt ||= [], cu) }, letters: { ...letRules(), heard: (pk, k) => { if (k < cu) lets[k] = pk; } } });
+      // (a madd not heard a second time: the first, in an aya before, marked too)
+      goneMark(gones, m.goneAt, (gk, got, want) => { if (!G.errs[gk]) { G.errs[gk] = 'madd'; G.heard[gk] ||= { got, want }; } });
       // (a letter said as its like a second time: the first, in an aya before, marked too)
       for (const [pk, ks] of Object.entries(m.letPairs || {})) if (Array.isArray(ks) && ks.length && Object.values(lets).includes(pk) && letTimes(pk) >= letNeed(pk)) {
         for (const gk of ks) if (!G.errs[gk]) { G.errs[gk] = Match.pairType(pk); G.heard[gk] ||= { got: pk[1], want: pk[0] }; }
@@ -578,6 +581,7 @@ const Recite = (() => {
         break;
       }
       paceAdd(m.tjSeen); m.tjAt = null;
+      goneAdd(gones, m.goneAt, ex, st, cur, n0, wi => m.starts[m.c] + m.w0 + wi);
       // (each one, at its word in the session)
       for (const [k, pk] of Object.entries(m.letSeen || {})) {
         const wi = ex._w ? ex._w.findIndex(([a, b]) => +k >= a && +k < b) : -1;
@@ -611,7 +615,7 @@ const Recite = (() => {
     const heard = all ? m.final + m.tent : m.final;
     const c0 = Match.charAt(heard, m.cut), sub = heard.slice(c0), conf = m.conf.slice(c0, c0 + sub.length), alts = m.alts.slice(c0, c0 + sub.length), at = m.at?.slice(c0, c0 + sub.length);
     const cur = Mu.expect(G.ayas[m.c], m.w0);
-    const tajweed = tjRules();
+    const gones = {}, tajweed = { ...tjRules(), ...goneRules(gones, m.goneAt ||= [], Match.units(cur.ph).length) };
     const letters = letRules();
     const st = Match.words(cur, sub, sub.length, false, { freeLead: m.lead, conf, alts, at, tajweed, letters });
     const t = st.findLastIndex(x => x.state !== 'todo');
@@ -620,6 +624,7 @@ const Recite = (() => {
     if (cur.tj) part.tj = cur.tj.filter(c => c < part.ph.length);
     const fin = Match.words(part, sub, sub.length, true, { freeLead: m.lead, conf, alts, at, tajweed, letters });
     muApply(fin.concat(st.slice(t + 1)), false, cur);
+    goneMark(gones, m.goneAt, (gk, got, want) => { if (!G.errs[gk]) { G.errs[gk] = 'madd'; G.heard[gk] ||= { got, want }; } });
   }
 
   // the words of the aya being said, from w0 (cur: how they should sound):
@@ -979,7 +984,7 @@ const Recite = (() => {
   // how far the reading went from where it was found (it may have gone on into the next ayas while
   // the search made sure): { n words said, errs: [[i, type, got, want]] } in the session's words from there
   function reached(r, h, conf, alts) {
-    const errs = [], s0 = R.ayas[r.ai][0];
+    const errs = [], s0 = R.ayas[r.ai][0], gone = [];
     let n = 0, cut = 0, a = r.ai, w0 = r.w, at = 0;
     try {
       // aya by aya, as a session follows a reading (muFollow): the aya and the two after it lined up
@@ -992,9 +997,12 @@ const Recite = (() => {
         const c0 = Match.charAt(h, cut), cu = Match.units(cur.ph).length;
         let sub = h.slice(c0);
         if (Match.units(sub).length > cu * 1.5 + 45) sub = sub.slice(0, Match.charAt(sub, Math.round(cu * 1.25) + 10));
-        const st = Match.words(ex, sub, sub.length, false, { freeLead: !guard, conf: conf.slice(c0, c0 + sub.length), alts: alts.slice(c0, c0 + sub.length), tajweed: tjRules(), letters: letRules() });
+        const gs = {};
+        const st = Match.words(ex, sub, sub.length, false, { freeLead: !guard, conf: conf.slice(c0, c0 + sub.length), alts: alts.slice(c0, c0 + sub.length), tajweed: { ...tjRules(), ...goneRules(gs, gone, cu) }, letters: letRules() });
         const n0 = cur.spans.length, begun = more.length && st.slice(n0, n0 + 2).some(x => x.state === 'ok' || x.state === 'err');
         const upto = begun ? n0 : st.slice(0, n0).findLastIndex(x => x.state === 'ok' || x.state === 'err') + 1;
+        goneMark(gs, gone, (k, got, want) => { if (!errs.some(x => x[0] === k)) errs.push([k, 'madd', got, want]); });
+        goneAdd(gs, gone, ex, st, cur, upto, wi => n + wi);
         for (let i = 0; i < upto; i++) if (st[i].state === 'err') errs.push([n + i, MU_TYPE[st[i].type] || (st[i].heard?.length > 1 ? 'wrong' : 'skip'), st[i].heard || '', cur.ph.slice(...cur.spans[i])]);
         n += upto;
         at = upto && st[upto - 1].at ? cut + st[upto - 1].at[1] : cut;
@@ -1002,7 +1010,7 @@ const Recite = (() => {
         cut += st[n0].at[0]; a++; w0 = 0; at = cut;
       }
     } catch { /* what was reached so far */ }
-    return { n, errs, at };
+    return { n, errs, at, gone };
   }
   function found(ai, w = 0, said = { n: 0, errs: [] }) {
     const p = R.ayas[ai][2], turn = p !== S.page;
@@ -1560,6 +1568,26 @@ const Recite = (() => {
     const m = G?.mu, now = m?.letSeen ? Object.values(m.letSeen).filter(x => x === pk).length : 0;
     const before = m?.letPairs?.[pk];
     return (Array.isArray(before) ? before.length : 0) + now;
+  };
+  // a madd not heard at all (a fatha where an alif should be: match.js rules.gone), marked once this
+  // reader is heard so MADD_OFTEN times, here or in the ayas before (at: those, each { k, got, want }
+  // at its word); now: the ones in the aya being matched (its first cu units), by unit
+  const MADD_OFTEN = 2;
+  const goneRules = (now, at, cu) => ({
+    gone: k => { if (k < cu) now[k] = 1; },
+    goneOften: k => at.length + Object.keys(now).length + (now[k] ? 0 : 1) >= MADD_OFTEN,
+  });
+  // (once often: those before, each marked by mark(k, got, want))
+  const goneMark = (now, at, mark) => {
+    if (!Object.keys(now).length || at.length + Object.keys(now).length < MADD_OFTEN) return;
+    for (const x of at) mark(x.k, x.got, x.want);
+  };
+  // the aya done: its ones kept, at their words (key(wi): a word of cur, as the caller counts words)
+  const goneAdd = (now, at, ex, st, cur, n0, key) => {
+    for (const k of Object.keys(now)) {
+      const wi = ex._w ? ex._w.findIndex(([a, b]) => +k >= a && +k < b) : -1;
+      if (wi >= 0 && wi < n0 && !at.some(x => x.k === key(wi))) at.push({ k: key(wi), got: st[wi]?.heard || '', want: cur.ph.slice(...cur.spans[wi]) });
+    }
   };
   const letNeed = pk => Match.pairType(pk) === 'near' ? 3 : LET_OFTEN;
   const letRules = () => ({ heavy: setting('lHeavy'), near: setting('lNear'), often: (pk, need = LET_OFTEN) => letTimes(pk) + (Object.values(G?.mu?.letSeen || {}).includes(pk) ? 0 : 1) >= need });
