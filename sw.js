@@ -3,10 +3,13 @@
 // requests data with ?v=N, so bumping DATA_VERSION there fetches new copies.
 // Hafs page fonts (verses.quran.foundation) are cached as pages are opened.
 // Recitation audio: see audioResponse below.
-const VERSION = 'quran-v121';
+const VERSION = 'quran-v122';
 const TAFSIR = 'tafsir-saadi';
-// recitation files saved by the app (or while listening); kept across versions
+// recitation files saved by the app (or while listening); kept across versions.
+// Hafs: aya files from everyayah.com; the other riwayat: surah files from
+// mp3quran.net, saved only by the download in the settings
 const AUDIO = 'audio-yasser-128';
+const RIWAYA_AUDIO = 'audio-riwayat';
 // the speech recogniser's code (transformers.js and its ONNX runtime, pinned
 // versions from jsDelivr), kept across versions so التسميع works offline; the
 // model itself is cached by transformers.js
@@ -30,7 +33,7 @@ self.addEventListener('install', e => {
 
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys()
-    .then(keys => Promise.all(keys.filter(k => k !== VERSION && k !== FONTS && k !== ASR && k !== AUDIO && k !== TAFSIR && k !== MUSHAF && !MODELS.includes(k)).map(k => caches.delete(k))))
+    .then(keys => Promise.all(keys.filter(k => k !== VERSION && k !== FONTS && k !== ASR && k !== AUDIO && k !== RIWAYA_AUDIO && k !== TAFSIR && k !== MUSHAF && !MODELS.includes(k)).map(k => caches.delete(k))))
     .then(() => self.clients.claim()));
 });
 
@@ -39,6 +42,11 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   if (url.hostname === 'everyayah.com') {
     e.respondWith(audioResponse(e.request));
+    return;
+  }
+  if (url.hostname === 'cdn.mp3quran.net') {
+    // the app reads one aya at a time with a range of the surah's file
+    e.respondWith(caches.open(RIWAYA_AUDIO).then(c => c.match(e.request.url)).then(hit => hit ? ranged(hit, e.request) : fetch(e.request)));
     return;
   }
   if (url.hostname === 'cdn.jsdelivr.net' && /^\/npm\/(@huggingface\/transformers|onnxruntime-web)@/.test(url.pathname)) {
@@ -124,16 +132,23 @@ async function audioResponse(req) {
     if (res.ok) cache.put(req.url, res.clone());
     return res;
   }
+  return ranged(hit, req);
+}
+
+// the part of a saved file a Range request asks for (a slice of its Blob,
+// so a whole surah's file is not read into memory for one aya)
+async function ranged(hit, req) {
   const range = req.headers.get('range');
   if (!range) return hit;
-  const buf = await hit.arrayBuffer();
-  const size = buf.byteLength;
+  const blob = await hit.blob();
+  const size = blob.size;
   const m = /bytes=(\d*)-(\d*)/.exec(range) || [];
   let start = m[1] ? +m[1] : 0;
   let end = m[2] ? +m[2] : size - 1;
   if (!m[1] && m[2]) { start = size - +m[2]; end = size - 1; } // suffix range
   end = Math.min(end, size - 1);
-  return new Response(buf.slice(start, end + 1), {
+  if (start > end) return new Response(null, { status: 416, headers: { 'Content-Range': `bytes */${size}` } });
+  return new Response(blob.slice(start, end + 1), {
     status: 206,
     headers: {
       'Content-Type': 'audio/mpeg',
