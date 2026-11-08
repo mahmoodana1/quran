@@ -1542,16 +1542,19 @@ async function downloadMushaf() {
 }
 
 // ---------------------------------------------------------------- offline audio
-// The recitation of the riwaya being read can be saved on the device: Hafs
-// aya by aya (≈1.5 GB for all 6236 ayat), the others surah by surah (their
-// sizes are in data/audio/). The service worker answers playback from these
-// caches, ranges included.
+// Each riwaya's recitation can be saved on the device, only when asked: from
+// the recitation card (the riwaya being read) or the button beside each riwaya
+// in the settings. Hafs aya by aya (≈1.5 GB for all 6236 ayat; also part of
+// «تحميل الكل»), the others surah by surah (their sizes are in data/audio/).
+// The service worker answers playback from these caches, ranges included.
 
 const AUDIO_CACHE = 'audio-yasser-128', RIWAYA_AUDIO_CACHE = 'audio-riwayat';
 const AUDIO_TOTAL_MB = 1500;
-// rid: the riwaya whose recitation the panel shows (or is downloading); done,
-// total: files; mb, doneMB: their size
-const DL = { running: false, rid: 'hafs', done: 0, total: 0, mb: AUDIO_TOTAL_MB, doneMB: 0, failed: 0, wake: null };
+// what of each recitation is on the device: rid -> { total, done (files), mb,
+// doneMB }; the one downloading is updated as it goes
+const AS = {};
+// the download running (one at a time): its riwaya and failures
+const DL = { running: false, rid: null, failed: 0, wake: null };
 const allAudioUrls = () => META.hafs.map((_, h) => hafsUrl(h));
 
 // the files of a riwaya's recitation, with their sizes in MB (Hafs: by count)
@@ -1572,6 +1575,21 @@ async function audioCachedSet(name = AUDIO_CACHE) {
   return new Set((await c.keys()).map(r => r.url));
 }
 
+async function audioStatus(rid, sets = {}) {
+  const f = await audioFiles(rid), set = await (sets[f.cache] ||= audioCachedSet(f.cache));
+  const have = f.urls.map(u => set.has(u));
+  return { total: f.urls.length, done: have.filter(Boolean).length, mb: sumMB(f.mb), doneMB: sumMB(f.mb.filter((_, i) => have[i])) };
+}
+// every riwaya's (the one downloading keeps its live count)
+async function refreshAudioStatus() {
+  const sets = {};
+  await Promise.all(META.riwayat.map(async r => {
+    if (DL.running && DL.rid === r.id) return;
+    try { AS[r.id] = await audioStatus(r.id, sets); } catch {}
+  }));
+}
+const audioDone = st => st?.total > 0 && st.done >= st.total;
+
 const ICO = {
   theme: '<path d="M12 3.5a8.5 8.5 0 100 17 8.5 8.5 0 000-17zM12 3.5v17"/><path d="M12 3.5a8.5 8.5 0 010 17z" fill="currentColor" stroke="none"/>',
   book: '<path d="M5 4.5h3.5v15H5zM10.5 4.5H14v15h-3.5zM15.6 5.6l3.3-.9 3.4 14.2-3.3.9z"/>',
@@ -1589,7 +1607,8 @@ function settingsHTML() {
   const riwayat = META.riwayat.map((r, k) => {
     const letter = r.name.replace(/^ال/, '')[0];
     return `<button class="row" data-riwaya="${r.id}"><span class="num">${letter}</span>
-      <span class="main"><span class="t">${r.name}</span><span class="s">${ar(r.ayas)} آية · بصوت ${RECITERS[r.id]}</span></span>${r.id === R.id ? '<span class="check">✓</span>' : ''}</button>`;
+      <span class="main"><span class="t">${r.name}</span><span class="s">${ar(r.ayas)} آية · بصوت ${RECITERS[r.id]}</span></span>${r.id === R.id ? '<span class="check">✓</span>' : ''}
+      <span class="rw-dl" data-dl="rw" data-rid="${r.id}" role="button" hidden></span></button>`;
   }).join('');
   return `
     ${typeof Install !== 'undefined' ? Install.settingsHTML() : ''}
@@ -1716,52 +1735,95 @@ async function refreshAudioPanel() {
   if (!$('#dlCard')) return;
   if (!TF.running) TF.done = await tafsirStatus();
   paintTafsirCard();
-  if (!DL.running) {
-    try {
-      const f = await audioFiles(R.id), set = await audioCachedSet(f.cache);
-      const have = f.urls.map(u => set.has(u));
-      Object.assign(DL, { rid: R.id, total: f.urls.length, done: have.filter(Boolean).length, mb: sumMB(f.mb), doneMB: sumMB(f.mb.filter((_, i) => have[i])) });
-    } catch { Object.assign(DL, { rid: R.id, total: 0, done: 0, doneMB: 0 }); }
-  }
+  await refreshAudioStatus();
   paintAudioPanel();
 }
 
+// the card shows the riwaya being read (or the one downloading)
 function paintAudioPanel() {
+  paintRiwayaDl();
   if (!$('#dlCard')) return;
-  const pct = DL.mb ? Math.min(1, DL.doneMB / DL.mb) : 0, hafs = DL.rid === 'hafs';
+  const rid = DL.running ? DL.rid : R.id, st = AS[rid] || { total: 0, done: 0, mb: 0, doneMB: 0 }, hafs = rid === 'hafs';
+  const running = DL.running && DL.rid === rid;
+  const pct = st.mb ? Math.min(1, st.doneMB / st.mb) : 0;
   $('#dlBar').style.width = (pct * 100).toFixed(1) + '%';
   $('#dlPct').textContent = ar(Math.floor(pct * 100)) + '٪';
-  $('#dlTitle').textContent = `التلاوة · ${RECITERS[DL.rid]}`;
-  const complete = DL.done >= DL.total && DL.total > 0;
+  $('#dlTitle').textContent = `التلاوة · ${RECITERS[rid]}`;
+  const complete = audioDone(st);
   $('#dlText').textContent = complete
     ? `التلاوة كاملة محفوظة على جهازك ✓`
-    : !DL.total ? 'تعذّر الفحص — تحقق من الاتصال'
-    : `${ar(DL.done)} من ${ar(DL.total)} ${hafs ? 'آية' : 'سورة'} · ${ar(Math.round(DL.doneMB))} من ${ar(Math.round(DL.mb))} م.ب${DL.running ? ' · جارٍ التحميل…' : ''}${DL.failed ? ` · تعذّر ${ar(DL.failed)}` : ''}`;
-  $('#dlActions').innerHTML = (complete || ALL.running || !DL.total ? '' : DL.running
+    : !st.total ? 'تعذّر الفحص — تحقق من الاتصال'
+    : `${ar(st.done)} من ${ar(st.total)} ${hafs ? 'آية' : 'سورة'} · ${ar(Math.round(st.doneMB))} من ${ar(Math.round(st.mb))} م.ب${running ? ' · جارٍ التحميل…' : ''}${running && DL.failed ? ` · تعذّر ${ar(DL.failed)}` : ''}`;
+  $('#dlActions').innerHTML = (complete || ALL.running || !st.total ? '' : running
     ? '<button data-dl="pause">إيقاف مؤقت</button>'
-    : `<button data-dl="start" class="primary">${DL.done ? 'متابعة التحميل' : 'تحميل التلاوة كاملة'}</button>`)
-    + (DL.done && !DL.running && !ALL.running ? '<button data-dl="clear" class="danger">حذف التحميلات</button>' : '');
+    : `<button data-dl="start" class="primary">${st.done ? 'متابعة التحميل' : 'تحميل التلاوة كاملة'}</button>`)
+    + (st.done && !running && !ALL.running ? `<button data-dl="clear" data-rid="${rid}" class="danger">حذف التحميلات</button>` : '');
   $('#dlNote').textContent = (hafs
-    ? `يُحفظ صوت كل آية (قرابة ${gbText(DL.mb)}) والتفسير على جهازك لتستعملهما دون إنترنت.`
-    : `تُحفظ تلاوة ${RECITERS[DL.rid]} سورةً سورة (قرابة ${gbText(DL.mb)}) والتفسير على جهازك لتستعملهما دون إنترنت.`)
-    + ' أبقِ التطبيق مفتوحًا أثناء التحميل، ويمكنك الإيقاف والمتابعة لاحقًا.' + (hafs ? ' الآيات التي تستمع إليها تُحفظ تلقائيًا.' : '');
+    ? `يُحفظ صوت كل آية (قرابة ${gbText(st.mb || AUDIO_TOTAL_MB)}) والتفسير على جهازك لتستعملهما دون إنترنت.`
+    : `تُحفظ تلاوة ${RECITERS[rid]} سورةً سورة (قرابة ${gbText(st.mb)}) والتفسير على جهازك لتستعملهما دون إنترنت.`)
+    + ' أبقِ التطبيق مفتوحًا أثناء التحميل، ويمكنك الإيقاف والمتابعة لاحقًا.'
+    + (hafs ? ' الآيات التي تستمع إليها تُحفظ تلقائيًا.' : '')
+    + ' تلاوة كل رواية اختيارية: تُحمَّل من زرّها بجانب الرواية في قائمة الرواية أدناه.';
   paintAllCard();
 }
 
-// the current riwaya's recitation, file by file; the progress of a surah
-// file counts as it arrives
-async function startAudioDownload() {
+// the button beside each riwaya in the settings: its size and a download
+// arrow; its progress (tap to pause) while downloading; a check once saved
+// (tapped twice, deleted)
+const DL_ICO = {
+  get: '<svg viewBox="0 0 24 24"><path d="M12 4.5v10M7.8 10.6l4.2 4.2 4.2-4.2M5 19.5h14"/></svg>',
+  pause: '<svg viewBox="0 0 24 24"><path d="M9 7v10M15 7v10"/></svg>',
+  done: '<svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9"/></svg>',
+};
+function paintRiwayaDl() {
+  for (const el of document.querySelectorAll('[data-dl="rw"]')) {
+    const rid = el.dataset.rid, st = AS[rid];
+    const running = DL.running && DL.rid === rid;
+    const pct = st?.mb ? Math.floor(Math.min(1, st.doneMB / st.mb) * 100) : 0;
+    el.hidden = !st;
+    if (!st || el.dataset.armed) continue;
+    const state = running ? 'run' : audioDone(st) ? 'done' : st.done ? 'part' : 'none';
+    el.className = `rw-dl ${state}`;
+    el.style.setProperty('--p', pct + '%');
+    el.setAttribute('aria-label', running ? 'إيقاف التحميل مؤقتًا' : state === 'done' ? 'التلاوة محفوظة — اضغط مرتين للحذف' : `تحميل التلاوة (${gbText(st.mb)})`);
+    el.innerHTML = running ? `${DL_ICO.pause}<span>${ar(pct)}٪</span>`
+      : state === 'done' ? `${DL_ICO.done}<span>محفوظة</span>`
+      : `${DL_ICO.get}<span>${state === 'part' ? ar(pct) + '٪' : gbText(st.mb).replace(' غيغابايت', ' غ.ب')}</span>`;
+  }
+}
+async function riwayaDlTap(el) {
+  const rid = el.dataset.rid, st = AS[rid];
+  if (!st) return;
+  if (DL.running && DL.rid === rid) { DL.running = false; return; }
+  if (audioDone(st)) {
+    if (!el.dataset.armed) {
+      el.dataset.armed = '1';
+      el.className = 'rw-dl del';
+      el.innerHTML = '<span>حذف؟</span>';
+      setTimeout(() => { if (el.isConnected && el.dataset.armed) { delete el.dataset.armed; paintRiwayaDl(); } }, 2500);
+      return;
+    }
+    delete el.dataset.armed;
+    return clearRecitation(rid);
+  }
+  if (DL.running || ALL.running) { toast(`يجري تحميل ${DL.rid ? 'تلاوة ' + RECITERS[DL.rid] : 'آخر'} — أوقفه أولًا`); return; }
+  startAudioDownload(rid);
+}
+
+// a riwaya's recitation, file by file; the progress of a surah file counts as
+// it arrives
+async function startAudioDownload(rid = R.id) {
   if (DL.running) return;
-  DL.running = true; DL.failed = 0; DL.rid = R.id;
+  Object.assign(DL, { running: true, rid, failed: 0 });
   paintAudioPanel();
   try { await navigator.storage?.persist?.(); } catch {}
   try { DL.wake = await navigator.wakeLock?.request('screen'); } catch {}
   let f;
-  try { f = await audioFiles(DL.rid); } catch { DL.running = false; paintAudioPanel(); if (!ALL.running) toast('تعذّر التحميل — تحقق من الاتصال'); return; }
+  try { f = await audioFiles(rid); } catch { DL.running = false; paintAudioPanel(); if (!ALL.running) toast('تعذّر التحميل — تحقق من الاتصال'); return; }
   const cache = await caches.open(f.cache);
   const have = await audioCachedSet(f.cache);
   const todo = f.urls.map((u, i) => i).filter(i => !have.has(f.urls[i])); // 001001 doubles as the basmala
-  Object.assign(DL, { total: f.urls.length, done: f.urls.length - todo.length, mb: sumMB(f.mb), doneMB: sumMB(f.mb.filter((_, i) => have.has(f.urls[i]))) });
+  const st = AS[rid] = { total: f.urls.length, done: f.urls.length - todo.length, mb: sumMB(f.mb), doneMB: sumMB(f.mb.filter((_, i) => have.has(f.urls[i]))) };
   let next = 0, lastPaint = 0;
   const paint = () => { if (performance.now() - lastPaint > 400) { lastPaint = performance.now(); paintAudioPanel(); } };
   const worker = async () => {
@@ -1774,39 +1836,42 @@ async function startAudioDownload() {
           const res = await fetch(u, { mode: 'cors' });
           if (!res.ok) throw 0;
           const body = res.body.pipeThrough(new TransformStream({
-            transform(c, ctl) { got += c.length; DL.doneMB += c.length / 1e6; paint(); ctl.enqueue(c); },
+            transform(c, ctl) { got += c.length; st.doneMB += c.length / 1e6; paint(); ctl.enqueue(c); },
           }));
           await cache.put(u, new Response(body, { headers: res.headers }));
           ok = true;
         } catch { await new Promise(r => setTimeout(r, 800 * (attempt + 1))); }
-        DL.doneMB += ok ? f.mb[i] - got / 1e6 : -got / 1e6;
+        st.doneMB += ok ? f.mb[i] - got / 1e6 : -got / 1e6;
       }
-      if (ok) DL.done++;
+      if (ok) st.done++;
       else if (DL.running) DL.failed++;
       paint();
     }
   };
-  await Promise.all(Array.from({ length: DL.rid === 'hafs' ? 6 : 3 }, worker));
+  await Promise.all(Array.from({ length: rid === 'hafs' ? 6 : 3 }, worker));
   const finished = DL.running;
   DL.running = false;
   try { await DL.wake?.release(); } catch {}
   DL.wake = null;
   await refreshAudioPanel();
+  paintAudioPanel();
   if (ALL.running) return;
-  if (finished && !DL.failed) toast('اكتمل تحميل التلاوة');
-  else if (finished) toast(`تعذّر تحميل بعض ${DL.rid === 'hafs' ? 'الآيات' : 'السور'} — اضغط متابعة`);
+  if (finished && !DL.failed) toast(`اكتمل تحميل تلاوة ${RECITERS[rid]}`);
+  else if (finished) toast(`تعذّر تحميل بعض ${rid === 'hafs' ? 'الآيات' : 'السور'} — اضغط متابعة`);
 }
 
 // ---------------------------------------------------------------- everything offline
-// One button for the mushaf, tafsir, adhkar and (optionally) the recitation,
-// one after the other, with a single progress bar weighted by size.
+// One button for the mushaf, tafsir, adhkar and (optionally) the recitation of
+// Hafs, one after the other, with a single progress bar weighted by size. The
+// other riwayat's recitations are never part of it: each has its own button.
 
 const ALL = { running: false, audio: true, stop: false, stage: '' };
 const SIZE_MB = { mushaf: 112, tafsir: 6 };
 
 function allProgress(audio) {
   const parts = [[SIZE_MB.mushaf, MQ.total ? MQ.done / MQ.total : 0], [SIZE_MB.tafsir, TF.done / 114]];
-  if (audio) parts.push([DL.mb, DL.mb ? DL.doneMB / DL.mb : 0]);
+  const h = AS.hafs || { mb: AUDIO_TOTAL_MB, doneMB: 0 };
+  if (audio) parts.push([h.mb, h.mb ? h.doneMB / h.mb : 0]);
   return parts.reduce((s, [w, f]) => s + w * Math.min(1, f), 0) / parts.reduce((s, [w]) => s + w, 0);
 }
 
@@ -1823,9 +1888,9 @@ function allCardHTML() {
 function paintAllCard() {
   if (!$('#allCard')) return;
   const textDone = MQ.total > 0 && MQ.done >= MQ.total && TF.done >= 114;
-  const audioDone = DL.total > 0 && DL.done >= DL.total;
+  const h = AS.hafs || { mb: AUDIO_TOTAL_MB, doneMB: 0 }, hafsDone = audioDone(AS.hafs);
   const card = $('#allCard');
-  card.classList.toggle('done', textDone && audioDone);
+  card.classList.toggle('done', textDone && hafsDone);
   $('#allProg').hidden = !ALL.running;
   if (ALL.running) {
     const pct = allProgress(ALL.audio);
@@ -1833,19 +1898,19 @@ function paintAllCard() {
     $('#allT').textContent = `جارٍ التحميل… ${ar(Math.floor(pct * 100))}٪`;
     $('#allS').textContent = `${ALL.stage} · أبقِ التطبيق مفتوحًا حتى يكتمل`;
     $('#allActions').innerHTML = '<button data-dl="all-pause" class="all-btn ghost">إيقاف مؤقت</button>';
-  } else if (textDone && audioDone) {
+  } else if (textDone && hafsDone) {
     $('#allT').textContent = 'التطبيق كاملًا محفوظ على جهازك ✓';
-    $('#allS').textContent = 'المصحف بكل رواياته، والتفسير، والأذكار، والتلاوة تعمل دون إنترنت';
+    $('#allS').textContent = 'المصحف بكل رواياته، والتفسير، والأذكار، وتلاوة حفص تعمل دون إنترنت';
     $('#allActions').innerHTML = '';
   } else if (textDone) {
     $('#allT').textContent = 'المصحف والتفسير والأذكار محفوظة ✓';
-    $('#allS').textContent = `بقيت تلاوة ${RECITERS[DL.rid]} · قرابة ${gbText(DL.mb - DL.doneMB)}`;
-    $('#allActions').innerHTML = '<button data-dl="all" class="all-btn">تحميل التلاوة أيضًا</button>';
+    $('#allS').textContent = `بقيت تلاوة حفص (${RECITERS.hafs}) · قرابة ${gbText(h.mb - h.doneMB)}`;
+    $('#allActions').innerHTML = '<button data-dl="all" class="all-btn">تحميل تلاوة حفص أيضًا</button>';
   } else {
     const started = store.get('dlAll', false);
     $('#allT').textContent = 'استعمل التطبيق كاملًا دون إنترنت';
-    $('#allS').textContent = 'المصحف بكل رواياته وخطوطه، والتفسير، والأذكار، والتلاوة كاملة';
-    $('#allActions').innerHTML = `<button data-dl="all" class="all-btn">${started ? 'متابعة تحميل الكل' : 'تحميل الكل'} <small>قرابة ${gbText(DL.mb + SIZE_MB.mushaf + SIZE_MB.tafsir)}</small></button>
+    $('#allS').textContent = 'المصحف بكل رواياته وخطوطه، والتفسير، والأذكار، وتلاوة حفص كاملة';
+    $('#allActions').innerHTML = `<button data-dl="all" class="all-btn">${started ? 'متابعة تحميل الكل' : 'تحميل الكل'} <small>قرابة ${gbText(h.mb + SIZE_MB.mushaf + SIZE_MB.tafsir)}</small></button>
       <button data-dl="all-text" class="all-link">أو دون التلاوة · قرابة ١٢٠ م.ب</button>`;
   }
 }
@@ -1858,7 +1923,7 @@ async function downloadAll(audio) {
   try { await navigator.storage?.persist?.(); } catch {}
   await downloadMushaf();
   if (!ALL.stop) { ALL.stage = 'تفسير السعدي'; paintAllCard(); await downloadTafsir(); }
-  if (!ALL.stop && audio) { ALL.stage = 'التلاوة'; paintAllCard(); await startAudioDownload(); }
+  if (!ALL.stop && audio && !DL.running) { ALL.stage = 'تلاوة حفص'; paintAllCard(); await startAudioDownload('hafs'); }
   ALL.running = false;
   await refreshAudioPanel();
   await refreshMushafCard();
@@ -1889,15 +1954,20 @@ async function clearAudioDownload(btn) {
     setTimeout(() => { if (btn.isConnected) { delete btn.dataset.armed; btn.textContent = 'حذف التحميلات'; } }, 2500);
     return;
   }
-  // this riwaya's recitation only (the riwayat other than Hafs share a cache)
-  if (DL.rid === 'hafs') await caches.delete(AUDIO_CACHE);
+  await clearRecitation(btn.dataset.rid || R.id);
+}
+
+// one riwaya's saved recitation (the riwayat other than Hafs share a cache)
+async function clearRecitation(rid) {
+  if (rid === 'hafs') await caches.delete(AUDIO_CACHE);
   else {
-    const f = await audioFiles(DL.rid), c = await caches.open(f.cache);
+    const f = await audioFiles(rid), c = await caches.open(f.cache);
     await Promise.all(f.urls.map(u => c.delete(u)));
   }
-  DL.done = 0; DL.doneMB = 0;
+  delete AS[rid];
   await refreshAudioPanel();
-  toast('حُذفت التحميلات');
+  paintAudioPanel();
+  toast(`حُذفت تلاوة ${RECITERS[rid]}`);
 }
 
 // ---------------------------------------------------------------- search
@@ -2305,7 +2375,8 @@ $('#sheetBody').addEventListener('click', async e => {
   const dl = e.target.closest('[data-dl]');
   if (dl) {
     const a = dl.dataset.dl;
-    if (a === 'start') startAudioDownload();
+    if (a === 'rw') { e.stopPropagation(); riwayaDlTap(dl); }
+    else if (a === 'start') startAudioDownload(R.id);
     else if (a === 'pause') DL.running = false;
     else if (a === 'clear') clearAudioDownload(dl);
     else if (a === 'tafsir') downloadTafsir();
