@@ -270,6 +270,11 @@ svg { fill: currentColor; }
 }
 .x-btn svg { width: 16px; height: 16px; }
 .x-btn:active { background: var(--tint-2); }
+/* a small gear beside a bar's close button: the settings of التسميع */
+.gear-btn svg { width: 17px; height: 17px; }
+.acts-head .gear-btn { margin-inline-start: auto; margin-inline-end: 8px; }
+#recBar .gear-btn { width: 34px; height: 34px; }
+@media (max-width: 380px) { #recBar .gear-btn { width: 30px; height: 30px; } #recBar .rec-stop span { display: none; } #recBar .rec-stop { padding: 0 10px; } }
 
 /* aya actions */
 .acts { padding: 12px 14px 12px; display: flex; flex-direction: column; gap: 12px; }

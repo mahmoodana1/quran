@@ -21,7 +21,7 @@
 // followed from there.
 // Uses $, store, ar, esc, show, hide, toast, R, S, isEnd, norm,
 // lev, wordSim, buildIndex, ayaScore, goTo, pageInfo, paintMarks, closeActions,
-// stopAudio, speakWord, suraName, ayaLabel, openRecite, renderSheet,
+// stopAudio, speakWord, suraName, ayaLabel, openRecite, openReciteSettings, renderSheet,
 // closeSheet and flashAya from app.js at call time.
 const Recite = (() => {
   const TYPES = { wrong: 'قرأتها بكلمة أخرى', haraka: 'أخطأت في حركتها', skip: 'تجاوزتها', hint: 'احتجت تلميحًا', madd: 'لم تعطِ المدّ حقّه', ghunna: 'أخطأت في الغنّة أو الإدغام', order: 'قدّمتها أو أخّرتها عن جارتها',
@@ -2160,6 +2160,8 @@ const Recite = (() => {
     setFast(!fast(), !fast() ? 'القراءة السريعة: بلا فحص للمدّ والغنّة' : 'عاد الفحص الكامل');
   };
   $('#recStop').onclick = () => { if (!G) return; if (G.pos) finish(); else cancel(); };
+  // the settings, the session paused while they are changed (resumed from the bar)
+  $('#recSet').onclick = () => { if (G?.run) pause(); openReciteSettings(); };
 
   $('#recWord').addEventListener('click', e => {
     const b = e.target.closest('[data-rw]');

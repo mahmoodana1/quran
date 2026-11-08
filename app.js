@@ -932,6 +932,7 @@ $('#ayaBar').addEventListener('click', async e => {
   if (b.dataset.act === 'bookmark') { toggleSave(i); closeActions(); }
   if (b.dataset.act === 'tafsir') openTafsir(i);
   if (b.dataset.act === 'close') closeActions();
+  if (b.dataset.act === 'rc-set') openReciteSettings();
 });
 
 // a short buzz: the Vibration API where there is one; iPhones have none, but
@@ -2074,6 +2075,15 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyThe
 
 let tab = 'suras';
 function openRecite() { openSheet('recite'); }
+// the same panel, on its settings («الإعدادات»)
+function openReciteSettings() {
+  store.set('recite.seg', 'set');
+  openSheet('recite');
+  requestAnimationFrame(() => {
+    const nav = $('#sheetBody .rc-seg');
+    if (nav) $('#sheetBody').scrollTop += nav.getBoundingClientRect().top - $('#sheetBody').getBoundingClientRect().top - 8;
+  });
+}
 function openSheet(t = tab) {
   tab = t;
   $('#sheetTitle').textContent = 'اللوحات';
