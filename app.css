@@ -904,38 +904,48 @@ svg { fill: currentColor; }
 
 #sheetBody { padding-top: 4px; }
 
-/* ---- the panels' side rail: each panel an icon and its name, the one open a small green plate
-   ringed in gold (as the mushaf's surah cartouches); put away by the button in the head (rail-off),
-   the panel then the whole width. Beside the words on a wide screen */
-.sheet-main { flex: 1; min-height: 0; display: flex; }
+/* ---- the panels' side rail: each panel an icon and its name, the open one a small green plate
+   ringed in gold (as the mushaf's surah cartouches). On a phone it comes over the panel from the button
+   beside it (rail-open), the panel dimmed, and goes once a panel is chosen; on a wide screen it stays */
+.sheet-main { position: relative; flex: 1; min-height: 0; display: flex; }
 .sheet-main #sheetBody { flex: 1; min-width: 0; }
 .rail {
-  flex: none; width: 70px; display: flex; flex-direction: column; gap: 4px; overflow: hidden auto;
-  padding: 6px 6px calc(64px + env(safe-area-inset-bottom)); border-inline-end: 1px solid var(--p-rule);
-  transition: width .28s cubic-bezier(.2,.9,.3,1), padding .28s ease, opacity .2s ease, border-color .2s ease;
+  flex: none; display: flex; flex-direction: column; gap: 4px; overflow: hidden auto;
+  padding: 8px 10px calc(64px + env(safe-area-inset-bottom)); border-inline-end: 1px solid var(--p-rule);
 }
 .rail button {
-  position: relative; flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px;
-  padding: 10px 2px 8px; border-radius: 14px; color: var(--muted); font-size: 11.5px; font-weight: 600; white-space: nowrap;
+  position: relative; flex: none; display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px; border-radius: 14px; color: var(--muted); font-size: 15px; font-weight: 600; white-space: nowrap;
 }
-.rail button svg { width: 23px; height: 23px; }
-.rail button:active { transform: scale(.94); }
+.rail button svg { width: 23px; height: 23px; flex: none; }
+.rail button:active { transform: scale(.97); }
 .rail button.on {
   color: var(--p-on); font-weight: 700;
   background: var(--p-pattern) 0 0 / 22px 22px, linear-gradient(160deg, var(--p-green), var(--p-green-2));
   box-shadow: inset 0 0 0 1px var(--p-gold), inset 0 0 0 2.5px var(--p-green-2), inset 0 0 0 3.2px color-mix(in srgb, var(--p-gold) 45%, transparent), 0 3px 10px rgba(30, 20, 5, .2);
 }
-.rail button.on svg { stroke: var(--p-on); }
 .rail .rail-set { margin-top: auto; }
 .searching .rail button.on { background: none; box-shadow: none; color: var(--muted); }
-#sheet.rail-off .rail { width: 0; padding-inline: 0; opacity: 0; border-color: transparent; pointer-events: none; }
 .rail-btn.on { color: var(--p-ink); background: color-mix(in srgb, var(--p-green) 12%, transparent); }
 .rail-btn svg { width: 22px; height: 22px; }
-@media (min-width: 760px) {
-  .rail { width: 196px; padding-inline: 10px; }
-  .rail button { flex-direction: row; gap: 12px; padding: 11px 14px; font-size: 14.5px; }
+.sheet-head > .rail-btn { justify-self: start; }
+.rail-veil { display: none; }
+@media (max-width: 759px) {
+  .rail {
+    position: absolute; z-index: 3; top: 0; bottom: 0; inset-inline-start: 0; width: min(230px, 72vw);
+    background: var(--sheet); box-shadow: -10px 0 30px rgba(20, 12, 4, .22);
+    transform: translateX(110%); visibility: hidden;
+    transition: transform .3s cubic-bezier(.2,.9,.3,1), visibility 0s linear .3s;
+  }
+  .rail-open .rail { transform: none; visibility: visible; transition: transform .3s cubic-bezier(.2,.9,.3,1); }
+  .rail-veil {
+    display: block; position: absolute; inset: 0; z-index: 2; background: rgba(15, 10, 4, .32);
+    opacity: 0; pointer-events: none; transition: opacity .25s ease;
+  }
+  .rail-open .rail-veil { opacity: 1; pointer-events: auto; }
 }
-@media (prefers-reduced-motion: reduce) { .rail { transition: none; } }
+@media (min-width: 760px) { .rail { width: 196px; } .rail-btn { display: none; } }
+@media (prefers-reduced-motion: reduce) { .rail, .rail-veil { transition: none; } }
 
 /* sections: flat, ruled like an index page */
 .group { background: none; border: 0; border-radius: 0; box-shadow: none; margin-bottom: 8px; overflow: visible; }

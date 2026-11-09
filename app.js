@@ -2214,7 +2214,7 @@ function openReciteSettings() {
 }
 function openSheet(t = tab) {
   tab = t;
-  $('#sheetTitle').textContent = 'اللوحات';
+  railOpen(false);
   $('#sheetSub').textContent = `${K.name} · ${META.riwayat.find(r => r.id === R.id)?.name || ''} · صفحة ${ar(S.page)}`;
   closeActions();
   show($('#sheet'));
@@ -2224,19 +2224,22 @@ function openSheet(t = tab) {
 }
 function closeSheet() { hide($('#sheet')); $('#q').blur(); }
 $('#sheetClose').onclick = closeSheet;
-// the side rail of the panels: shown or put away (remembered)
-const railOff = () => !!store.get('panels.railOff', false);
-function paintRail() {
-  $('#sheet').classList.toggle('rail-off', railOff());
-  $('#railBtn').classList.toggle('on', !railOff());
+// the side rail of the panels: on a phone it comes over the panel from the button beside it, and
+// goes once a panel is chosen (or the panel is touched); on a wide screen it stays
+const wide = matchMedia('(min-width: 760px)');
+function railOpen(on) {
+  $('#sheet').classList.toggle('rail-open', !!on);
+  $('#railBtn').classList.toggle('on', !!on);
 }
-$('#railBtn').onclick = () => { store.set('panels.railOff', !railOff()); paintRail(); haptic(6); };
-paintRail();
+$('#railBtn').onclick = () => { railOpen(!$('#sheet').classList.contains('rail-open')); haptic(6); };
+$('#railVeil').onclick = () => railOpen(false);
+const TAB_NAMES = { suras: 'السور', recite: 'التسميع', adhkar: 'الأذكار', marks: 'العلامات', prayer: 'الصلاة', settings: 'الإعدادات' };
 $('#tabs').addEventListener('click', e => {
   const b = e.target.closest('[data-tab]');
   if (!b) return;
   tab = b.dataset.tab;
   $('#q').value = '';
+  if (!wide.matches) railOpen(false);
   renderSheet();
   $('#sheetBody').scrollTop = 0;
 });
@@ -2317,6 +2320,7 @@ function renderSheet() {
   const body = $('#sheetBody');
   const q = $('#q').value;
   $('#sheet').classList.toggle('searching', !!q.trim());
+  $('#sheetTitle').textContent = q.trim() ? 'البحث' : TAB_NAMES[tab] || 'اللوحات';
   $('#q').placeholder = 'ابحث: سورة، آية، صفحة، جزء، ذكر، أو إعداد…';
   let html = '';
 
