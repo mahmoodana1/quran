@@ -27,7 +27,23 @@ const Install = (() => {
     : /Safari/.test(ua) ? 'safari'
     : 'other';
 
-  const installed = () => matchMedia('(display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui)').matches || navigator.standalone === true;
+  // ---- the Android app (android/, released from the repository as an APK): the site in it
+  // knows so by ?src=apk (its start address) for the visit; in Android's browsers it is
+  // offered in a big card on the fifth visit, then five visits after each «لاحقًا»
+  const APK_URL = 'https://github.com/mahmoodana1/quran/releases/latest/download/quran.apk';
+  const IN_APK = (() => {
+    try {
+      const u = new URL(location.href);
+      if (u.searchParams.get('src') === 'apk' || document.referrer.startsWith('android-app://')) sessionStorage.setItem('apk', '1');
+      if (u.searchParams.has('src')) { u.searchParams.delete('src'); history.replaceState(history.state, '', u.pathname + u.search + u.hash); }
+      return sessionStorage.getItem('apk') === '1';
+    } catch { return false; }
+  })();
+  const installed = () => IN_APK || matchMedia('(display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui)').matches || navigator.standalone === true;
+  const APK = ANDROID && !installed();  // (in a browser on Android)
+  if (APK) try {
+    if (!sessionStorage.getItem('apk.seen')) { sessionStorage.setItem('apk.seen', '1'); store.set('apk.visits', store.get('apk.visits', 0) + 1); }
+  } catch {}
   let deferred = null;   // the browser's own install dialog, once it offers one
   // browsers that have one (it comes as beforeinstallprompt once the app qualifies)
   const NATIVE = (ANDROID && ['chrome', 'edge', 'samsung'].includes(BROWSER)) || (OS === 'desktop' && ['chrome', 'edge'].includes(BROWSER));
@@ -163,6 +179,7 @@ const Install = (() => {
 
   async function open(byItself = false) {
     if (installed()) { toast('التطبيق مثبّت على جهازك'); return; }
+    if (APK) { apkOpen(); return; }
     if (deferred && !byItself && await nativeAsk(false)) return;
     auto = byItself;
     view = OS;
@@ -192,7 +209,7 @@ const Install = (() => {
   // ---- when to offer it on its own: after a little reading, not over anything else,
   // then again a week after «لاحقًا», at most three times in all
   function due() {
-    if (installed() || store.get('install.done', false)) return false;
+    if (APK || installed() || store.get('install.done', false)) return false;  // (Android: the app instead)
     const asked = store.get('install.asked', 0), last = store.get('install.later', 0);
     return asked < 3 && Date.now() - last > 7 * 864e5;
   }
@@ -231,12 +248,32 @@ const Install = (() => {
     setTimeout(t, ms);
   }
 
+  // ---- the Android app's card
+  function apkOpen() { show($('#apk')); }
+  function apkLater() {
+    store.set('apk.next', store.get('apk.visits', 0) + 5);
+    hide($('#apk'));
+  }
+  $('#apkGo').href = APK_URL;
+  $('#apkGo').onclick = () => {
+    store.set('apk.got', true);
+    $('#apk').classList.add('got');
+    toast('يُحمَّل التطبيق — افتح الملف حين يكتمل');
+  };
+  $('#apkLater').onclick = apkLater;
+  $('#apk').addEventListener('click', e => { if (e.target === $('#apk')) apkLater(); });
+  if (APK && !store.get('apk.got', false) && store.get('apk.visits', 0) >= store.get('apk.next', 5)) {
+    let tries = 0;
+    const t = () => { if (busy() && ++tries < 40) setTimeout(t, 4000); else if (!busy()) apkOpen(); };
+    setTimeout(t, 2500);
+  }
+
   // ---- settings: a row to open it, while it isn't installed
   function settingsHTML() {
     if (installed()) return '';
     return `<button class="in-row" data-install>
       <span class="in-row-ico"><img src="icons/icon-192.png" alt=""></span>
-      <span class="in-row-txt"><b>ثبّت التطبيق على جهازك</b><small>يفتح من شاشتك الرئيسية ويعمل دون إنترنت</small></span>
+      <span class="in-row-txt"><b>${APK ? 'حمّل تطبيق أندرويد' : 'ثبّت التطبيق على جهازك'}</b><small>${APK ? 'القرآن بملء الشاشة، يتحدّث مع الموقع وحده' : 'يفتح من شاشتك الرئيسية ويعمل دون إنترنت'}</small></span>
       <svg viewBox="0 0 24 24" class="go"><path d="M14.5 6l-6 6 6 6"/></svg>
     </button>`;
   }

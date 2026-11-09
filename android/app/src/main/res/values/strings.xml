@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">القرآن</string>
+    <!-- ?src=apk: the site knows it is in the app (no "download the app" card there) -->
+    <string name="start_url">https://mahmoodana1.github.io/quran/?src=apk</string>
+    <string name="asset_statements" translatable="false">[{\"relation\": [\"delegate_permission/common.handle_all_urls\"], \"target\": {\"namespace\": \"web\", \"site\": \"https://mahmoodana1.github.io\"}}]</string>
+</resources>

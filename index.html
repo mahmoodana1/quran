@@ -361,6 +361,32 @@
   </div>
 </section>
 
+<!-- the Android app, offered in Android's browsers (install.js) -->
+<section id="apk" class="modal" hidden>
+  <div class="card in-card apk-card">
+    <div class="in-hero apk-hero">
+      <span class="in-icon"><img src="icons/icon-192.png" alt=""></span>
+      <small class="apk-kicker">تطبيق أندرويد</small>
+      <h2>القرآن الكريم، تطبيقًا على هاتفك</h2>
+      <p>حمّله مجانًا، وافتحه من بين تطبيقاتك بملء الشاشة، بلا شريط متصفح ولا متجر.</p>
+      <div class="in-perks">
+        <span><svg viewBox="0 0 24 24"><rect x="3" y="3.5" width="18" height="17" rx="2.5"/><path d="M3 8h18"/></svg>بملء الشاشة</span>
+        <span><svg viewBox="0 0 24 24"><path d="M13 3L5.5 13.5H12l-1 7.5 7.5-10.5H12z"/></svg>يفتح فورًا</span>
+        <span><svg viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 0113-5.1M19.5 12a7.5 7.5 0 01-13 5.1"/><path d="M17.5 3.5v3.4h-3.4M6.5 20.5v-3.4h3.4"/></svg>يتحدّث وحده</span>
+      </div>
+    </div>
+    <ol class="in-list apk-steps">
+      <li><i>١</i><span>اضغط <b class="in-q">«حمّل التطبيق»</b> وانتظر اكتمال التنزيل</span></li>
+      <li><i>٢</i><span>افتح الملف <b class="in-q">quran.apk</b> من الإشعار أو من التنزيلات</span></li>
+      <li><i>٣</i><span>إن سُئلت فاسمح بالتثبيت من هذا المصدر، ثم اضغط <b class="in-q">«تثبيت»</b></span></li>
+    </ol>
+    <div class="actions">
+      <a id="apkGo" class="primary apk-go" download="quran.apk"><svg viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5L12 15l4.5-4.5M5 19.5h14"/></svg>حمّل التطبيق</a>
+      <button id="apkLater">لاحقًا</button>
+    </div>
+  </div>
+</section>
+
 <!-- always-visible switcher: reader / recitation (once used) / all other panels -->
 <nav id="dock" aria-label="التنقل">
   <button id="dockQuran" class="on" aria-label="القرآن"><svg viewBox="0 0 24 24"><path d="M12 6.5C10 5 7 4.5 3.5 5v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5zM12 6.5v13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></button>

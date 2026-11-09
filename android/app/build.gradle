@@ -1,0 +1,38 @@
+// The Android app: the site (https://mahmoodana1.github.io/quran/) opened full screen by the
+// phone's Chrome as a Trusted Web Activity, so it is the same app and updates with the site.
+// Built and released by .github/workflows/android.yml; signed by the key in its secrets.
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'io.github.mahmoodana1.quran'
+    compileSdk 34
+    defaultConfig {
+        applicationId 'io.github.mahmoodana1.quran'
+        minSdk 21
+        targetSdk 34
+        versionCode((System.getenv('VERSION_CODE') ?: '1') as int)
+        versionName(System.getenv('VERSION_NAME') ?: '1.0')
+    }
+    signingConfigs {
+        release {
+            storeFile file(System.getenv('KEYSTORE') ?: 'quran.jks')
+            storePassword System.getenv('KEY_PASSWORD')
+            keyAlias 'quran'
+            keyPassword System.getenv('KEY_PASSWORD')
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
+}

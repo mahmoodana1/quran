@@ -1,0 +1,63 @@
+# The Android app (android/: the site full screen in Chrome, a Trusted Web Activity): built,
+# signed and released as quran.apk, the latest always at
+# https://github.com/mahmoodana1/quran/releases/latest/download/quran.apk (what the site links to).
+# Runs when android/ changes on main, or by hand. The app shows the live site, so the site's
+# updates need no new APK; this is only for the app's own shell (icon, name, full screen...).
+# Signed by the key in the secrets ANDROID_KEYSTORE (base64) and ANDROID_KEY_PASSWORD; its
+# fingerprint must be the one in mahmoodana1.github.io's /.well-known/assetlinks.json, or Chrome
+# shows its bar (checked below).
+name: android
+on:
+  push:
+    branches: [main]
+    paths: ['android/**', '.github/workflows/android.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: android
+  cancel-in-progress: false
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Key
+        env:
+          KS: ${{ secrets.ANDROID_KEYSTORE }}
+        run: |
+          if [ -z "$KS" ]; then echo "::error::the secret ANDROID_KEYSTORE is missing"; exit 1; fi
+          echo "$KS" | base64 -d > "$RUNNER_TEMP/quran.jks"
+      - name: Build
+        working-directory: android
+        env:
+          KEYSTORE: ${{ runner.temp }}/quran.jks
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          VERSION_CODE: ${{ github.run_number }}
+          VERSION_NAME: 1.${{ github.run_number }}
+        run: gradle --no-daemon assembleRelease
+      - name: Check the signature against the site's asset links
+        run: |
+          APK=android/app/build/outputs/apk/release/app-release.apk
+          BT=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          "$BT/apksigner" verify --print-certs "$APK" | tee certs.txt
+          got=$(grep -m1 'SHA-256 digest' certs.txt | awk '{print toupper($NF)}' | sed 's/../&:/g; s/:$//')
+          want=$(curl -fsSL https://mahmoodana1.github.io/.well-known/assetlinks.json | grep -oE '([0-9A-F]{2}:){31}[0-9A-F]{2}')
+          echo "apk $got"; echo "site $want"
+          [ "$got" = "$want" ] || { echo "::error::the APK's key is not the one in assetlinks.json"; exit 1; }
+          cp "$APK" quran.apk
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=android-v1.${{ github.run_number }}
+          gh release create "$tag" quran.apk --latest --title "تطبيق أندرويد ١.${{ github.run_number }}" --notes "حمّل quran.apk وثبّته (اسمح بالتثبيت من هذا المصدر إن سُئلت). التطبيق يفتح القرآن بملء الشاشة، ويتحدّث مع الموقع من تلقاء نفسه.
+
+Download quran.apk and install it (allow installing from this source if asked). The app opens the Quran full screen and updates with the site by itself."
