@@ -1886,7 +1886,21 @@ const Recite = (() => {
   const pen = s => `<span class="pp-pen" data-rc-edit="${s}" role="button" aria-label="عدّل ${suraName(s)}">${ICONS.fix}</span>`;
   // a name as typed: no harakat, one alif
   const simple = t => t.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED\u0640]/g, '').replace(/[ٱأإآ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه');
-  let rangeAt = null; // the surah page: the aya a stretch begins at, while one is chosen
+  // the surah page in its edit mode: { s, pend: Map ai -> memorized, range: the aya a stretch begins at
+  // (-1: none tapped yet; null: not choosing one), sure: the save tapped once }
+  let suraEdit = null;
+  const rerender = () => { const y = $('#sheetBody').scrollTop; renderSheet(); $('#sheetBody').scrollTop = y; };
+  // the surah page's mutashabihat: how many of its ayas have one, once the list has come
+  function fillSim() {
+    const el = document.querySelector('[data-sim-of]');
+    if (!el || typeof similarOf !== 'function') return;
+    const x = +el.dataset.simOf;
+    Promise.all(suraAyas(x).map(ai => similarOf(ai))).then(r => {
+      if (!el.isConnected) return;
+      const n = r.filter(q => q.n).length;
+      el.textContent = n ? `${ar(n)} من آياتها` : 'لا شيء يُذكر';
+    });
+  }
   // ayas marked memorized (known already: not today's new ones) or not
   function markSaid(list, on) {
     const l = log();
@@ -1897,9 +1911,7 @@ const Recite = (() => {
     }
     store.set(key(), l);
     weakMap = null;
-    const y = $('#sheetBody').scrollTop;
-    renderSheet();
-    $('#sheetBody').scrollTop = y;
+    rerender();
   }
   const suraAyas = x => Array.from({ length: suraSizes()[x] }, (_, i) => R.suraStart[x] + i);
 
@@ -2163,20 +2175,47 @@ const Recite = (() => {
         <p class="pp-none" hidden>لا سورة بهذا الاسم</p>`;
     }
 
-    // ---- a surah's own page (its edit button): how much of it is memorized, its revision, and each of its
-    // ayas, a tap to mark it memorized (known already) or not (to memorize again); all of it at once, or
-    // a stretch from one aya to another; its progress wiped; made the plan; revised; opened in the mushaf
+    // ---- a surah's own page (its edit button): how much of it is memorized and its revision; its
+    // numbers from the sessions (how often, how right, its words most missed, the time it takes); what
+    // is good to know of it (where revealed, its words and letters, pages, its ayas that have
+    // mutashabihat); and its ayas, memorized or not. Read only: changing what is memorized is done in
+    // an edit mode of its own, each change pending until confirmed (twice: what changes said first)
     function suraHTML(x) {
       if (!sizes[x]) return '';
       const a0 = R.suraStart[x], N = sizes[x], k = got[x], f = k / N, pl0 = store.get(planKey(), null)?.s;
-      const weakSet = new Set(weak.map(([ai]) => ai)), rv = revisions(l).find(r => r.s === x), range = rangeAt != null;
+      const ayas = Array.from({ length: N }, (_, i) => a0 + i), inS = ai => ai >= a0 && ai < a0 + N;
+      const weakIn = weak.filter(([ai]) => inS(ai)).map(([ai]) => ai), weakSet = new Set(weakIn);
+      const rv = revisions(l).find(r => r.s === x), ed = suraEdit?.s === x ? suraEdit : null;
+      const [, , , , place] = META.suras[x - 1];
+      // the sessions that went over it, and its mistakes in them
+      const ss = l.sessions.filter(q => (q.from != null && q.to != null && q.from <= a0 + N - 1 && q.to >= a0) || (q.list || []).some(([ai]) => inS(ai)));
+      const errsIn = ss.flatMap(q => (q.list || []).filter(([ai]) => inS(ai)));
+      const wordsIn = ss.reduce((t, q) => { if (q.from == null || !q.words || !q.to) return t; const lo = Math.max(q.from, a0), hi = Math.min(q.to, a0 + N - 1); return t + (hi >= lo ? q.words * (hi - lo + 1) / Math.max(1, q.to - q.from + 1) : 0); }, 0);
+      const acc = wordsIn >= 10 ? Math.max(0, 1 - errsIn.length / wordsIn) : null;
+      const kinds = {}; for (const [, , e] of errsIn) kinds[e] = (kinds[e] || 0) + 1;
+      const wc = new Map(); for (const [ai, wi] of errsIn) if (wi >= 0) { const q = ai + ':' + wi; wc.set(q, (wc.get(q) || 0) + 1); }
+      const missed = [...wc].sort((p, q) => q[1] - p[1]).slice(0, 4);
+      const firstAt = Math.min(...ayas.map(ai => (l.first?.[ai] > 1e9 ? l.first[ai] : said[ai]) || Infinity));
+      // its length, and the time it takes (the reader's own pace, in their sessions, else a usual one)
+      const words = ayas.reduce((t, ai) => t + ayaTokens(ai).length, 0);
+      const letters = ayas.reduce((t, ai) => t + ayaTokens(ai).join('').replace(/[^ء-يٱ]/g, '').length, 0);
+      const pace = (q => q.words > 200 ? Math.min(1.4, Math.max(0.45, q.secs / q.words)) : 0.75)(l.sessions.reduce((t, q) => ({ secs: t.secs + (q.secs || 0), words: t.words + (q.secs ? q.words || 0 : 0) }), { secs: 0, words: 0 }));
+      const mins = Math.max(1, Math.round(words * pace / 60));
+      const p0 = R.ayas[a0][2], p1 = R.ayas[a0 + N - 1][2];
+      const fmtD = t => esc(fmt({ day: 'numeric', month: 'long' }).format(new Date(t)));
+      const stat = (v, t) => `<div><b>${v}</b><small>${t}</small></div>`;
+      const fact = (t, v) => `<li><small>${t}</small><b>${v}</b></li>`;
+      setTimeout(fillSim); // (once the page is in)
+      // (each aya as memorized now, or as it will be once the changes pending are kept)
+      const isOn = ai => ed?.pend.has(ai) ? ed.pend.get(ai) : !!said[ai];
+      const add = ed ? [...ed.pend].filter(([ai, v]) => v && !said[ai]).length : 0, del = ed ? [...ed.pend].filter(([ai, v]) => !v && said[ai]).length : 0;
       return `<section class="pp-se">
         <div class="pp-se-top">
           <div class="pp-plan-r" style="--f:${f}"><span><b>${ar(Math.round(f * 100))}٪</b><small>${ar(k)}/${ar(N)}</small></span></div>
           <div class="pp-se-x">
             <b>${k >= N ? 'محفوظة كاملة' : k ? `${ayaCount(k)} محفوظة` : 'لم تحفظ منها شيئًا بعد'}</b>
-            <small>${ayaCount(N)} · الجزء ${ar(R.ayas[a0][3])}${rv ? ` · المراجعة: ${dueText(rv)}` : ''}${weakSet.size ? ` · ${ar([...weakSet].filter(ai => R.ayas[ai][0] === x).length)} مواضع ضعف` : ''}</small>
-            ${rv ? `<span class="pp-str">${[0, 1, 2, 3, 4].map(j => `<i${j < Math.min(5, rv.n) ? ' class="on"' : ''}></i>`).join('')}</span>` : ''}
+            <small>${rv ? `المراجعة ${dueText(rv)}` : k ? 'تدخل جدول المراجعة بعد ثلاث آيات' : 'ابدأ بها خطة حفظ'}${firstAt < Infinity ? ` · بدأت حفظها ${fmtD(firstAt)}` : ''}</small>
+            ${rv ? `<span class="pp-str" aria-label="${ar(rv.n)} مراجعات متقنة">${[0, 1, 2, 3, 4].map(j => `<i${j < Math.min(5, rv.n) ? ' class="on"' : ''}></i>`).join('')}</span>` : ''}
           </div>
         </div>
         <div class="pp-se-acts">
@@ -2184,16 +2223,49 @@ const Recite = (() => {
           ${x === pl0 ? `<button class="on" disabled>${ICONS.seed}<span>خطتك الآن</span></button>` : `<button data-rc-plan="${x}">${ICONS.seed}<span>احفظها</span></button>`}
           <button data-rc-open="${x}">${ICONS.go}<span>في المصحف</span></button>
         </div>
-        <div class="pp-sub-h">آياتها<small>${range ? 'اضغط آخر آية في المدى' : 'اضغط آية لتعلّمها محفوظة، أو لتزيلها'}</small></div>
-        <div class="pp-se-tools">
-          <button data-rc-range${range ? ' class="on"' : ''}>${range ? 'إلغاء التحديد' : 'حدّد من آية إلى آية'}</button>
+
+        ${ss.length ? `<div class="pp-sub-h">أرقامك فيها</div>
+        <div class="pp-se-stats">
+          ${stat(ar(ss.length), ss.length === 1 ? 'جلسة' : 'جلسات')}
+          ${stat(acc == null ? '—' : ar(Math.round(acc * 100)) + '٪', 'دقّتك فيها')}
+          ${stat(ar(errsIn.length), 'خطأ')}
+          ${stat(lastIn[x] ? ago(lastIn[x]) : '—', 'آخر تسميع')}
+        </div>
+        ${errsIn.length ? `<div class="rc-kinds pp-se-kinds">${Object.entries(kinds).sort((p, q) => q[1] - p[1]).slice(0, 4).map(([e, c]) =>
+          `<div class="rc-kind"><span class="rc-mk rc-${e}"></span><span class="k">${KIND_SHORT[e] || TYPES[e] || e}</span><span class="rc-kbar"><i style="width:${Math.max(4, Math.round(c / errsIn.length * 100))}%"></i></span><b>${ar(c)}</b></div>`).join('')}</div>` : ''}
+        ${missed.length ? `<div class="rc-often-h">كلمات تخطئ فيها هنا</div><div class="rc-often">${missed.map(([q, c]) => { const [ai, wi] = q.split(':').map(Number);
+          return `<button data-rc-aya="${ai}"><b style="font-family:${R.font}">${esc(ayaTokens(ai)[wi] || '')}</b><small>آية ${ar(R.ayas[ai][1])}</small><i>${ar(c)}×</i></button>`; }).join('')}</div>` : ''}` : ''}
+
+        <div class="pp-sub-h">تعرّف عليها</div>
+        <ul class="pp-se-facts">
+          ${fact('نزلت', place === 'makkah' ? 'مكية' : 'مدنية')}
+          ${fact('ترتيبها في المصحف', ar(x))}
+          ${fact('صفحاتها', p0 === p1 ? `صفحة ${ar(p0)}` : `${ar(p0)}–${ar(p1)} · ${ar(p1 - p0 + 1)} ${p1 - p0 + 1 <= 10 ? 'صفحات' : 'صفحة'}`)}
+          ${fact('الجزء', ar(R.ayas[a0][3]) + (R.ayas[a0 + N - 1][3] !== R.ayas[a0][3] ? `–${ar(R.ayas[a0 + N - 1][3])}` : ''))}
+          ${fact('كلماتها', `${ar(words)} كلمة · ${ar(letters)} حرف`)}
+          ${fact('تسميعها كاملة', mins >= 60 ? `نحو ${ar(+(mins / 60).toFixed(1))} ${mins < 120 ? 'ساعة' : 'ساعات'}`.replace('.', '٫') : `نحو ${ar(mins)} ${mins <= 10 && mins > 2 ? 'دقائق' : 'دقيقة'}`)}
+          ${fact('لها متشابهات', `<span data-sim-of="${x}">…</span>`)}
+        </ul>
+
+        <div class="pp-sub-h">آياتها<small>${ed ? (ed.range != null ? (ed.range < 0 ? 'اضغط أول آية في المدى' : 'والآن آخر آية فيه') : 'اضغط آية لتغيّرها، ثم احفظ التغييرات') : 'المحفوظة بالأخضر'}</small></div>
+        ${ed ? `<div class="pp-se-tools">
+          <button data-rc-range${ed.range != null ? ' class="on"' : ''}>${ed.range != null ? 'إلغاء التحديد' : 'من آية إلى آية'}</button>
           <button data-rc-all="1">كلها محفوظة</button>
           <button data-rc-all="0">لا شيء</button>
-        </div>
-        <div class="pp-ayas${range ? ' ranging' : ''}">${Array.from({ length: N }, (_, i) => a0 + i).map(ai =>
-          `<button data-rc-tog="${ai}" class="${said[ai] ? 'on' : ''}${weakSet.has(ai) ? ' weak' : ''}${ai === rangeAt ? ' anchor' : ''}">${ar(R.ayas[ai][1])}</button>`).join('')}</div>
-        <div class="rc-legend pp-se-leg"><span><i class="on"></i>محفوظة</span><span><i class="weak"></i>فيها ضعف</span><span><i></i>لم تُحفظ</span></div>
-        ${k ? `<button class="pp-wipe" data-rc-wipe="${x}">احذف تقدّمك في السورة كله</button>` : ''}
+        </div>` : ''}
+        <div class="pp-ayas${ed ? ' editing' : ''}${ed?.range != null ? ' ranging' : ''}">${ayas.map(ai => {
+          const on = isOn(ai), chg = ed?.pend.has(ai) && ed.pend.get(ai) !== !!said[ai];
+          return `<${ed ? `button data-rc-tog="${ai}"` : 'span'} class="${on ? 'on' : ''}${weakSet.has(ai) ? ' weak' : ''}${chg ? ' chg' : ''}${ai === ed?.range ? ' anchor' : ''}">${ar(R.ayas[ai][1])}</${ed ? 'button' : 'span'}>`;
+        }).join('')}</div>
+        <div class="rc-legend pp-se-leg"><span><i class="on"></i>محفوظة</span><span><i class="weak"></i>فيها ضعف</span>${ed ? '<span><i class="chg"></i>تغيّرت</span>' : ''}</div>
+        ${ed ? `<div class="pp-se-save">
+            <span>${add || del ? [add && `+${ar(add)} محفوظة`, del && `−${ar(del)} تُزال`].filter(Boolean).join(' · ') : 'لا تغييرات بعد'}</span>
+            <button data-rc-edit-cancel>إلغاء</button>
+            <button class="pri" data-rc-edit-save${add || del ? '' : ' disabled'}>احفظ</button>
+          </div>
+          ${k ? `<button class="pp-wipe" data-rc-wipe="${x}">احذف تقدّمك في السورة كله</button>` : ''}`
+        : `<button class="pp-se-edit" data-rc-edit-on="${x}">${ICONS.fix}<span>تعديل المحفوظ</span></button>
+          <p class="pp-se-note">لتعلّم آيات حفظتها من قبل، أو تزيل ما لم تعد تحفظه. ما تسمّعه كاملًا يُعلَّم وحده.</p>`}
       </section>`;
     }
 
@@ -2394,38 +2466,52 @@ const Recite = (() => {
       e.stopPropagation();
       const from = store.get('recite.view', '') || '';
       if (from !== 'sura') store.set('recite.editFrom', from);
-      store.set('recite.editS', +ed.dataset.rcEdit); store.set('recite.view', 'sura'); rangeAt = null;
+      store.set('recite.editS', +ed.dataset.rcEdit); store.set('recite.view', 'sura'); suraEdit = null;
       renderSheet(); $('#sheetBody').scrollTop = 0; haptic(5);
       return true;
     }
+    // the surah page's edit mode: on, each aya, a stretch, all or none, kept (twice) or let go
+    const eo = e.target.closest('[data-rc-edit-on]');
+    if (eo) { suraEdit = { s: +eo.dataset.rcEditOn, pend: new Map(), range: null }; rerender(); haptic(8); return true; }
+    if (e.target.closest('[data-rc-edit-cancel]')) { suraEdit = null; rerender(); return true; }
+    const sv = e.target.closest('[data-rc-edit-save]');
+    if (sv && suraEdit) {
+      const said0 = log().said || {}, on = [...suraEdit.pend].filter(([ai, v]) => v && !said0[ai]).map(([ai]) => ai), off = [...suraEdit.pend].filter(([ai, v]) => !v && said0[ai]).map(([ai]) => ai);
+      if (!sv.classList.contains('sure')) {
+        sv.classList.add('sure'); sv.textContent = 'تأكيد';
+        sv.previousElementSibling.previousElementSibling.textContent = 'اضغط «تأكيد» ليُحفظ: ' + [on.length && `${ayaCount(on.length)} تُعلَّم محفوظة`, off.length && `${ayaCount(off.length)} تُزال`].filter(Boolean).join('، ');
+        haptic(10); return true;
+      }
+      suraEdit = null;
+      const l = log(); l.said ||= {}; l.first ||= {};
+      for (const a of on) { l.said[a] = Date.now(); l.first[a] = 1; }
+      for (const a of off) { delete l.said[a]; delete l.first[a]; }
+      store.set(key(), l); weakMap = null; rerender();
+      toast('حُفظت التغييرات'); haptic(15);
+      return true;
+    }
     const tg = e.target.closest('[data-rc-tog]');
-    if (tg) {
-      const ai = +tg.dataset.rcTog;
-      if (rangeAt == null) { markSaid([ai], !log().said?.[ai]); haptic(5); return true; }
-      if (rangeAt === -1) { rangeAt = ai; markSaid([], true); toast('والآن آخر آية في المدى'); return true; }
-      if (rangeAt === ai) { rangeAt = null; markSaid([], true); return true; }
-      const [x, y] = [Math.min(rangeAt, ai), Math.max(rangeAt, ai)];
-      rangeAt = null;
-      markSaid(Array.from({ length: y - x + 1 }, (_, i) => x + i), true);
-      toast(`عُلّمت ${ayaCount(y - x + 1)} محفوظة`); haptic(10);
+    if (tg && suraEdit) {
+      const ai = +tg.dataset.rcTog, ed = suraEdit, now = ai => ed.pend.has(ai) ? ed.pend.get(ai) : !!log().said?.[ai];
+      if (ed.range == null) { ed.pend.set(ai, !now(ai)); rerender(); haptic(5); return true; }
+      if (ed.range === -1 || ed.range === ai) { ed.range = ed.range === ai ? null : ai; rerender(); return true; }
+      const [x, y] = [Math.min(ed.range, ai), Math.max(ed.range, ai)];
+      for (let a = x; a <= y; a++) ed.pend.set(a, true);
+      ed.range = null; rerender(); haptic(10);
       return true;
     }
-    if (e.target.closest('[data-rc-range]')) {
-      // (begun: the first aya tapped; a stretch on the next)
-      if (rangeAt != null) rangeAt = null; else { rangeAt = -1; toast('اضغط أول آية في المدى'); }
-      const y = $('#sheetBody').scrollTop; renderSheet(); $('#sheetBody').scrollTop = y;
-      return true;
-    }
+    if (e.target.closest('[data-rc-range]') && suraEdit) { suraEdit.range = suraEdit.range != null ? null : -1; rerender(); return true; }
     const all = e.target.closest('[data-rc-all]');
-    if (all) { markSaid(suraAyas(store.get('recite.editS', 0)), all.dataset.rcAll === '1'); haptic(8); return true; }
+    if (all && suraEdit) { for (const a of suraAyas(suraEdit.s)) suraEdit.pend.set(a, all.dataset.rcAll === '1'); rerender(); haptic(8); return true; }
     const wipe = e.target.closest('[data-rc-wipe]');
     if (wipe) {
       // (twice: the first tap asks)
-      if (!wipe.classList.contains('sure')) { wipe.classList.add('sure'); wipe.textContent = 'اضغط مرة أخرى لحذفه'; setTimeout(() => { if (wipe.isConnected) { wipe.classList.remove('sure'); wipe.textContent = 'احذف تقدّمك في السورة كله'; } }, 3500); return true; }
+      if (!wipe.classList.contains('sure')) { wipe.classList.add('sure'); wipe.textContent = 'اضغط مرة أخرى: يُحذف حفظها ومراجعاتها وأخطاؤها'; setTimeout(() => { if (wipe.isConnected) { wipe.classList.remove('sure'); wipe.textContent = 'احذف تقدّمك في السورة كله'; } }, 4000); return true; }
       const x = +wipe.dataset.rcWipe, l = log(), list = suraAyas(x);
       for (const a of list) delete l.ayas[a];
       if (l.rev) delete l.rev[x];
       store.set(key(), l);
+      suraEdit = null;
       markSaid(list, false);
       toast(`حُذف تقدّمك في ${suraName(x)}`);
       return true;
@@ -2454,7 +2540,7 @@ const Recite = (() => {
     if (pk) { setPlan(+pk.dataset.rcPlan); return true; }
     // (a page of its own over the panel, or back to it)
     const vw = e.target.closest('[data-rc-view]');
-    if (vw) { store.set('recite.view', vw.dataset.rcView); renderSheet(); $('#sheetBody').scrollTop = 0; haptic(5); return true; }
+    if (vw) { suraEdit = null; store.set('recite.view', vw.dataset.rcView); renderSheet(); $('#sheetBody').scrollTop = 0; haptic(5); return true; }
     if (e.target.closest('[data-rc-review]')) { closeSheet(); start(null, weakAyas()); return true; }
     if (e.target.closest('[data-rc-test]')) { const t = testAyas(); if (t) { closeSheet(); start(null, t, { test: true }); } return true; }
     const pick = e.target.closest('[data-rc-pick]');
