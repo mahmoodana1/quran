@@ -32,7 +32,18 @@ const SEC = RATE;      // while a window can't yet be its full length (the first
 //   save: every SAVE_GAP s
 const DUTY = 0.5, MAX_GAP = 3, SAVE_GAP = 1.5;
 let rate = 'auto';
-const gap = () => rate === 'save' ? SAVE_GAP : rate === 'fast' ? MIN_NEW : Math.max(MIN_NEW, Math.min(MAX_GAP, stepMs / 1000 / DUTY));
+// on a slow device (a read over SLOW_MS), auto: the full reads at most DUTY_FULL of the time, and
+// between them glances: reads of only the newest GLANCE s, which make nothing final, only show the
+// words being said sooner (their frames from GLANCE_CTX s in, the model having heard a little
+// before them; the earlier tentative ones kept), all at most DUTY_SHOW of the time. What is
+// marked comes from the full reads only, as before (a little later)
+const SLOW_MS = 300, DUTY_FULL = 0.4, DUTY_SHOW = 0.8, GLANCE_CTX = 0.4, GLANCE_MIN = 0.3;
+let GLANCE = 2; // s (on a CPU 1.6: a GPU prepares each length, warm() whole seconds only)
+let shortMs = 0, shownUpTo = 0; // how long a glance takes here, lately; up to when (s) the newest read went
+const slow = () => rate === 'auto' && stepMs > SLOW_MS;
+const gap = () => rate === 'save' ? SAVE_GAP : rate === 'fast' ? MIN_NEW
+  : Math.max(MIN_NEW, Math.min(MAX_GAP, stepMs / 1000 / (slow() ? DUTY_FULL : DUTY)));
+const glanceGap = () => Math.max(GLANCE_MIN, (shortMs || stepMs * 0.4) / 1000 / (DUTY_SHOW - DUTY_FULL));
 const ALT = 0.1;     // a sound the model gives this much chance, besides its first choice, is kept as a runner-up
 const now = () => performance.timeOrigin + performance.now(); // same clock as the page
 
@@ -40,7 +51,8 @@ let ort, fe, vocab, session, fromCache = false;
 // the ring: meta[0] = samples written so far, time[0] = when the last ones came in
 let ring = new Float32Array(RATE * 30), meta = new Int32Array(1), time = new Float64Array(1);
 let base = 0;                                      // samples written before this recitation
-let kept = [], keptP = [], keptA = [], keptL = [], readUpTo = 0; // final frames (by absolute frame number), how sure each was, its runner-ups, all its sounds' log-probabilities (ctc.js), and up to when (s)
+let kept = [], keptP = [], keptA = [], keptL = [], readUpTo = 0;
+let tid = [], tp = [], ta = []; // the tentative frames after the final ones (by absolute frame), as last read // final frames (by absolute frame number), how sure each was, its runner-ups, all its sounds' log-probabilities (ctc.js), and up to when (s)
 const KEEP_L = 15000; // frames (10 min) whose log-probabilities are kept
 let live = false, looping = null, stepMs = 0; // stepMs: how long a read takes here, lately
 
@@ -90,6 +102,7 @@ async function load({ variant, ep, threads, shared }) {
   const bytes = await fetchParts(variant);
   const t1 = performance.now();
   session = await ort.InferenceSession.create(bytes, { executionProviders: [ep], graphOptimizationLevel: 'all' });
+  if (ep === 'wasm') GLANCE = 1.6;
   await ids(new Float32Array(RATE * WIN)); // warm up (shader compilation on the GPU)
   postMessage({ type: 'ready', fromCache, loadMs: performance.now() - t1, totalMs: performance.now() - t0, ep, threads: ort.env.wasm.numThreads });
 }
@@ -175,6 +188,20 @@ async function step(final) {
   post(o, f0, final, ms, heardAt, e);
   return true;
 }
+// a glance (slow()): the newest GLANCE s read, its frames from GLANCE_CTX s in taken for the tentative ones
+async function glance() {
+  const n = written() - base, heardAt = time[0], e = Math.floor(n / QUANT) * QUANT, st = e - GLANCE * RATE;
+  if (st < 0 || e / RATE <= shownUpTo) return false;
+  const t0 = performance.now();
+  const o = await ids(slice(st, e, n));
+  const ms = performance.now() - t0;
+  shortMs = shortMs ? 0.7 * shortMs + 0.3 * ms : ms;
+  const f0 = st / FRAME, from = Math.max(Math.round(GLANCE_CTX * RATE / FRAME), kept.length - f0);
+  tid.length = tp.length = ta.length = Math.min(tid.length, f0 + from);
+  for (let k = from; k < o.length; k++) { tid[f0 + k] = o[k]; tp[f0 + k] = o.p[k]; ta[f0 + k] = o.alt[k]; }
+  post(null, 0, false, ms, heardAt, e, true);
+  return true;
+}
 // scores asked for (score), each given once its frames are all final (or the reading is over)
 let asked = [];
 function scoreAsked() {
@@ -188,13 +215,20 @@ function scoreAsked() {
   });
 }
 // the text so far, final and tentative
-function post(o, f0, final, ms, heardAt, e) {
-  const from = Math.max(0, kept.length - f0);
-  const none = final || !o, tent = none ? [] : Array.from(o.subarray(from)), tentP = none ? [] : Array.from(o.p.subarray(from)), tentA = none ? [] : o.alt.slice(from);
-  readUpTo = e / RATE;
+// (o: the read's frames from f0, for the tentative ones after the final; none, final or silence;
+// short: of a glance(), which reads less: up to when the model read doesn't move, nor its pace)
+function post(o, f0, final, ms, heardAt, e, short = false) {
+  if (!short) {
+    tid = []; tp = []; ta = [];
+    if (o && !final) for (let k = Math.max(0, kept.length - f0); k < o.length; k++) { tid[f0 + k] = o[k]; tp[f0 + k] = o.p[k]; ta[f0 + k] = o.alt[k]; }
+    readUpTo = e / RATE;
+  }
+  shownUpTo = e / RATE;
+  const tent = [], tentP = [], tentA = [];
+  for (let k = kept.length; k < tid.length; k++) { tent.push(tid[k] ?? 0); tentP.push(tp[k] ?? 1); tentA.push(ta[k] ?? ''); }
   // lag: from when the newest sample read came in, to its letters being out
   const fin = decode(kept, keptP, keptA).out, all = decode(kept.concat(tent), keptP.concat(tentP), keptA.concat(tentA)); // together, so a letter on the seam isn't doubled
-  postMessage({ type: 'text', final: fin, tent: all.out.slice(fin.length), conf: all.conf, alts: all.alt, at: all.at, ms, lag: now() - heardAt, end: e / RATE });
+  postMessage({ type: 'text', final: fin, tent: all.out.slice(fin.length), conf: all.conf, alts: all.alt, at: all.at, ms, lag: now() - heardAt, end: short ? undefined : e / RATE });
   scoreAsked();
 }
 
@@ -263,6 +297,9 @@ async function loop() {
     else if (!still() && (written() - base) / RATE - readUpTo >= gap()) {
       try { if (await step(false) === false) await new Promise(r => setTimeout(r, 15)); } catch (e) { postMessage({ type: 'error', message: String(e.stack || e) }); await new Promise(r => setTimeout(r, 200)); }
     }
+    else if (slow() && !still() && (written() - base) / RATE - shownUpTo >= glanceGap()) {
+      try { if (await glance() === false) await new Promise(r => setTimeout(r, 15)); } catch (e) { postMessage({ type: 'error', message: String(e.stack || e) }); await new Promise(r => setTimeout(r, 200)); }
+    }
     else await new Promise(r => setTimeout(r, 15));
   }
 }
@@ -311,7 +348,7 @@ onmessage = async ({ data }) => {
       live = false; await looping;
       scoreAsked(); // (any still waiting: on what the last stretch heard)
       recUpTo = Math.max(recUpTo, written()); // what came in while not listening isn't kept
-      base = written(); kept = []; keptP = []; keptA = []; keptL = []; readUpTo = 0;
+      base = written(); kept = []; keptP = []; keptA = []; keptL = []; readUpTo = 0; shownUpTo = 0; tid = []; tp = []; ta = [];
       lvAt = loudEnd = base;
       live = true; looping = loop();
     }
