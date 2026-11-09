@@ -533,10 +533,10 @@ const Recite = (() => {
   // the next, a pause counted as at most 0.4 s). Fast reading turns the fast mode on by itself, past
   // FAST_AT for FAST_ON_MS; reading at a usual pace off, under FAST_OFF for FAST_OFF_MS (readings at a
   // usual pace measured 6.5 to 10.5, fast ones 13 to 14.6: the usual pace never in fast mode). Over a
-  // short stretch and at once (the reader asked: a few words hurried are judged as fast reading, not as
+  // short stretch (1.6 s) and at once both ways (the reader asked: a few words hurried are judged as fast reading, not as
   // mistakes), quietly (the bar's «سريع» lit). For this session only; the reader's own choice
   // («سريع») is left alone FAST_OWN_MS
-  const FAST_WIN = 60, FAST_N = 20, FAST_AT = 12, FAST_OFF = 10.5, FAST_ON_MS = 800, FAST_OFF_MS = 1500, FAST_OWN_MS = 30000;
+  const FAST_WIN = 40, FAST_N = 14, FAST_AT = 12, FAST_OFF = 10.5, FAST_ON_MS = 0, FAST_OFF_MS = 0, FAST_OWN_MS = 30000;
   function speed(g) {
     // (of the final sounds only: the tentative ones, of a glance's short read, run fast and loose)
     const m = g.mu, all = m.final + m.tent, at = m.at, h = m.final;
