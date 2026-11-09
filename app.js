@@ -2,7 +2,22 @@
 
 // bump when data/ or fonts/ change so phones fetch the new files
 const DATA_VERSION = 6;
+// Each riwaya is heard from a reciter who recites it. Hafs: Yasser Al-Dosari,
+// one file per aya (everyayah.com). The others: one file per surah
+// (mp3quran.net) and when each aya starts in it, data/audio/<riwaya>.json
+// (tools/recitations.py; bump AUDIO_DATA_VERSION when those files change).
 const AUDIO_BASE = 'https://everyayah.com/data/Yasser_Ad-Dussary_128kbps/';
+const AUDIO_DATA_VERSION = 1;
+const RECITERS = {
+  hafs: 'ياسر الدوسري',
+  shouba: 'علي بن عبد الرحمن الحذيفي',
+  warsh: 'عمر القزابري',
+  qaloon: 'محمود خليل الحصري',
+  doori: 'محمود خليل الحصري',
+  soosi: 'عبد الرشيد صوفي',
+  bazzi: 'عكاشة كميني',
+  qumbul: 'أحمد ديبان',
+};
 const $ = (s, el = document) => el.querySelector(s);
 
 const store = {
@@ -917,6 +932,7 @@ $('#ayaBar').addEventListener('click', async e => {
   if (b.dataset.act === 'bookmark') { toggleSave(i); closeActions(); }
   if (b.dataset.act === 'tafsir') openTafsir(i);
   if (b.dataset.act === 'close') closeActions();
+  if (b.dataset.act === 'rc-set') openReciteSettings();
 });
 
 // a short buzz: the Vibration API where there is one; iPhones have none, but
@@ -1012,20 +1028,39 @@ const hafsUrl = h => { const [s, a] = META.hafs[h]; return `${AUDIO_BASE}${pad3(
 const BASMALA_URL = `${AUDIO_BASE}001001.mp3`;
 // one joined file holds at most ~26 minutes (128 kbps); as much again is read ahead
 const CHUNK_MB = 24;
-// run: playback session (stale async work checks it); list: files in order from
-// the start aya; got[k]: list[k]'s frames once read; at: index playing; chunk:
-// the joined file now loaded { from, to, starts: start time of each file }
-const P = { run: 0, ai: null, list: [], gen: null, got: [], at: -1, chunk: null, tick: 0 };
+// run: playback session (stale async work checks it); rec: the riwaya's
+// recitation (null: Hafs, aya by aya); list: files or parts of files in order
+// from the start aya; got[k]: list[k]'s frames once read; at: index playing;
+// chunk: the joined file now loaded { from, to, starts: start time of each }
+const P = { run: 0, ai: null, rec: null, list: [], gen: null, got: [], at: -1, chunk: null, tick: 0 };
 
-// every recitation file from aya `ai` on: a riwaya aya may cover part of a
-// hafs aya or several of them; a hafs aya is never played twice
+// the recitation of a riwaya other than Hafs: { url, size, t } (null for Hafs)
+const recs = {};
+const loadRec = id => id === 'hafs' ? Promise.resolve(null)
+  : (recs[id] ||= loadJSON(`data/audio/${id}.json?v=${AUDIO_DATA_VERSION}`).catch(e => { delete recs[id]; throw e; }));
+const surahUrl = (rec, s) => `${rec.url}${pad3(s)}.mp3`;
+
+// what is played from aya `ai` on. Hafs: the aya files (a riwaya aya may
+// cover part of a hafs aya or several of them; a hafs aya is never played
+// twice). Other riwayat: each aya's stretch of its surah's file, and what is
+// recited before a surah's first aya (isti'adha, basmala, takbir) when one is
+// begun. intro: where the reciter pauses anyway
 function* sequence(ai) {
+  const rec = P.rec;
+  if (rec) {
+    for (; ai < R.ayas.length; ai++) {
+      const [s, n] = R.ayas[ai], t = rec.t[s - 1], url = surahUrl(rec, s);
+      if (n === 1 && t[0] > 300) yield { url, ai, from: 0, to: t[0], intro: true };
+      yield { url, ai, from: t[n - 1], to: t[n] };
+    }
+    return;
+  }
   let last = R.ayas[ai][5] - 1;
   for (; ai < R.ayas.length; ai++) {
     const a = R.ayas[ai];
     for (let h = Math.max(a[5], last + 1); h <= a[6]; h++) {
       const [s, n] = META.hafs[h];
-      if (n === 1 && s !== 1 && s !== 9) yield { url: BASMALA_URL, ai };
+      if (n === 1 && s !== 1 && s !== 9) yield { url: BASMALA_URL, ai, intro: true };
       yield { url: hafsUrl(h), ai };
       last = h;
     }
@@ -1036,29 +1071,97 @@ function item(k) {
   return P.list[k];
 }
 
+// MPEG audio frame header at b[i] (Layer III; MPEG-1, 2 or 2.5): its length,
+// samples, and fmt (version, rate, channels: frames of another fmt cannot
+// follow in the same joined file)
+const MP3_KBPS = [[0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320], [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160]];
+const MP3_HZ = { 3: [44100, 48000, 32000], 2: [22050, 24000, 16000], 0: [11025, 12000, 8000] };
+function mp3Header(b, i) {
+  if (i + 4 > b.length || b[i] !== 0xff || (b[i + 1] & 0xe0) !== 0xe0) return null;
+  const v = (b[i + 1] >> 3) & 3;
+  if (v === 1 || ((b[i + 1] >> 1) & 3) !== 1) return null;
+  const kbps = MP3_KBPS[v === 3 ? 0 : 1][b[i + 2] >> 4], hz = MP3_HZ[v][(b[i + 2] >> 2) & 3];
+  if (!kbps || !hz) return null;
+  const k = v === 3 ? 144000 : 72000;
+  return { len: Math.floor(k * kbps / hz) + ((b[i + 2] >> 1) & 1), L: k * kbps / hz, hz, samples: v === 3 ? 1152 : 576, fmt: `${v}.${hz}.${(b[i + 3] >> 6) === 3 ? 1 : 2}` };
+}
+const isTagFrame = (b, i) => /Xing|Info/.test(String.fromCharCode(...b.subarray(i + 4, i + 44)));
+const frameSet = (parts, x) => ({ parts, bytes: parts.reduce((s, p) => s + p.length, 0), dur: x ? parts.length * x.samples / x.hz : 0, fmt: x?.fmt });
+
 // MPEG audio frames of a file without its ID3 tags or Xing/Info header, which
 // would stop a decoder mid-stream; duration counted from the frames
-const MP3_KBPS = [0, 32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320];
-const MP3_HZ = [44100, 48000, 32000];
 function mp3Frames(buf) {
   const b = new Uint8Array(buf);
   let i = 0;
   if (b[0] === 0x49 && b[1] === 0x44 && b[2] === 0x33) i = 10 + ((b[6] & 127) << 21 | (b[7] & 127) << 14 | (b[8] & 127) << 7 | (b[9] & 127));
-  while (i + 1 < b.length && !(b[i] === 0xff && (b[i + 1] & 0xe0) === 0xe0)) i++; // to the first frame
+  while (i + 1 < b.length && !mp3Header(b, i)) i++; // to the first frame
   const parts = [];
-  let hz = 44100, first = true;
-  while (i + 4 <= b.length && b[i] === 0xff && (b[i + 1] & 0xe0) === 0xe0) {
-    const kbps = MP3_KBPS[b[i + 2] >> 4];
-    hz = MP3_HZ[(b[i + 2] >> 2) & 3];
-    if (!kbps || !hz) break;
-    const len = Math.floor(144000 * kbps / hz) + ((b[i + 2] >> 1) & 1);
-    if (i + len > b.length) break;
-    if (!(first && /Xing|Info/.test(String.fromCharCode(...b.subarray(i + 4, i + 44))))) parts.push(b.subarray(i, i + len));
+  let x, h, first = true;
+  while ((h = mp3Header(b, i)) && i + h.len <= b.length) {
+    if (!(first && isTagFrame(b, i))) { parts.push(b.subarray(i, i + h.len)); x = h; }
     first = false;
-    i += len;
+    i += h.len;
   }
-  // MPEG-1 Layer III: 1152 samples a frame
-  return { parts, bytes: parts.reduce((s, p) => s + p.length, 0), dur: parts.length * 1152 / hz };
+  return frameSet(parts, x);
+}
+
+// bytes a-b of a file (an HTTP range; the service worker answers it from a
+// saved copy)
+async function getRange(url, a, b) {
+  const r = await fetch(url, { mode: 'cors', headers: { Range: `bytes=${a}-${b}` } });
+  if (!r.ok) throw new Error(url + ' ' + r.status);
+  if (r.status === 206) return new Uint8Array(await r.arrayBuffer());
+  // the whole file came back: keep just the part asked for, and stop there
+  const rd = r.body.getReader(), out = new Uint8Array(b - a + 1);
+  let pos = 0, got = 0;
+  for (;;) {
+    const { done, value } = await rd.read();
+    if (done) break;
+    const s = Math.max(a - pos, 0), e = Math.min(value.length, b + 1 - pos);
+    if (e > s) { out.set(value.subarray(s, e), pos + s - a); got = pos + e - a; }
+    pos += value.length;
+    if (pos > b) { rd.cancel(); break; }
+  }
+  return out.subarray(0, got);
+}
+
+// A surah file is constant bitrate: frame n starts n * L bytes after the
+// first audio frame and n * fd seconds into the recitation, so an aya is read
+// with a range of the file, frame-exact. Consecutive ayat take frames by the
+// same rule, so none is lost or heard twice between them.
+const heads = {}; // surah file -> { start, L, fd, max }
+function surahHead(url) {
+  return (heads[url] ||= (async () => {
+    let at = 0, b = await getRange(url, 0, 16383);
+    if (b[0] === 0x49 && b[1] === 0x44 && b[2] === 0x33) {
+      at = 10 + ((b[6] & 127) << 21 | (b[7] & 127) << 14 | (b[8] & 127) << 7 | (b[9] & 127)) + (b[5] & 0x10 ? 10 : 0);
+      b = at + 8192 > b.length ? await getRange(url, at, at + 16383) : b.subarray(at);
+    }
+    let i = 0, h;
+    while (i < b.length && !((h = mp3Header(b, i)) && mp3Header(b, i + h.len))) i++;
+    if (!h || i >= b.length) throw new Error(url + ' mp3');
+    return { start: at + i + (isTagFrame(b, i) ? h.len : 0), L: h.L, fd: h.samples / h.hz, max: h.len + 1 };
+  })().catch(e => { delete heads[url]; throw e; }));
+}
+async function surahPart(it) {
+  const h = await surahHead(it.url);
+  const n0 = Math.round(it.from / 1000 / h.fd), n1 = Math.round(it.to / 1000 / h.fd);
+  const off = h.start + Math.max(0, Math.floor(n0 * h.L) - h.max);
+  const b = n1 > n0 ? await getRange(it.url, off, h.start + Math.ceil(n1 * h.L) + h.max) : new Uint8Array(0);
+  const parts = [];
+  let x;
+  for (let i = 0, synced = false; i + 4 <= b.length;) {
+    const f = mp3Header(b, i);
+    // the range starts mid-frame: find a header followed by another
+    if (!f || (!synced && i + f.len + 4 <= b.length && !mp3Header(b, i + f.len))) { if (synced) break; i++; continue; }
+    if (i + f.len > b.length) break;
+    synced = true;
+    const n = Math.round((off + i - h.start) / h.L);
+    if (n >= n1) break;
+    if (n >= n0) { parts.push(b.subarray(i, i + f.len)); x = f; }
+    i += f.len;
+  }
+  return frameSet(parts, x);
 }
 
 function fetchItem(k, tries = 3) {
@@ -1068,6 +1171,7 @@ function fetchItem(k, tries = 3) {
   g.p = (async () => {
     for (let t = 0; t < tries && run === P.run; t++) {
       try {
+        if (it.from != null) return (g.v = await surahPart(it));
         const r = await fetch(it.url, { mode: 'cors' });
         if (r.ok) return (g.v = mp3Frames(await r.arrayBuffer()));
       } catch {}
@@ -1111,18 +1215,21 @@ async function playChunk(from, wait = 0) {
   }
   if (run !== P.run) return;
   const starts = [];
-  let t = 0, bytes = 0, to = from;
-  while (item(to) && P.got[to]?.v && (to === from || bytes + P.got[to].v.bytes < CHUNK_MB * 1e6)) {
+  let t = 0, bytes = 0, to = from, fmt = first.fmt;
+  // frames of another sample rate or channel count (a surah recorded apart)
+  // begin a joined file of their own
+  const same = v => !v.fmt || !fmt || v.fmt === fmt;
+  while (item(to) && P.got[to]?.v && (to === from || (bytes + P.got[to].v.bytes < CHUNK_MB * 1e6 && same(P.got[to].v)))) {
     starts.push(t);
-    t += P.got[to].v.dur; bytes += P.got[to].v.bytes;
+    t += P.got[to].v.dur; bytes += P.got[to].v.bytes; fmt ||= P.got[to].v.fmt;
     to++;
   }
   // the hand-over to the next joined file may not be quite seamless on every
-  // phone: when one is coming, make it just before a surah's basmala, where
+  // phone: when one is coming, make it just before a surah's opening, where
   // the reciter pauses anyway (if that leaves over two minutes)
-  if (item(to)) {
+  if (item(to) && !(P.got[to]?.v && !same(P.got[to].v))) {
     for (let j = to - 1; j > from; j--) {
-      if (P.list[j].url === BASMALA_URL && starts[j - from] > 120) { to = j; t = starts[j - from]; starts.length = j - from; break; }
+      if (P.list[j].intro && starts[j - from] > 120) { to = j; t = starts[j - from]; starts.length = j - from; break; }
     }
   }
   starts.push(t);
@@ -1168,16 +1275,18 @@ function sync() {
   if (!audio.paused && k + 1 < c.to) P.tick = setTimeout(sync, (c.starts[k + 1 - c.from] - t) * 1000 / (audio.playbackRate || 1) + 15);
 }
 
-function playFrom(ai) {
+async function playFrom(ai) {
   if (typeof Recite !== 'undefined') Recite.cancel();
   stopAudio(false);
-  P.run++;
-  P.gen = sequence(ai);
+  const run = ++P.run;
   P.ai = S.play = ai;
   const page = R.ayas[ai][2];
   if (page !== S.page) goTo(page, { animate: Math.abs(page - S.page) === 1 });
   paintMarks();
   showPlayer();
+  try { P.rec = await loadRec(R.id); } catch { if (run === P.run) { toast('تعذر تحميل الصوت'); stopAudio(); } return; }
+  if (run !== P.run) return;
+  P.gen = sequence(ai);
   playChunk(0, 1500);
 }
 
@@ -1204,11 +1313,12 @@ audio.addEventListener('error', () => { if (P.ai != null) toast('تعذر تحم
 
 function showPlayer() {
   $('#plTitle').textContent = ayaLabel(P.ai);
+  $('#plReciter').textContent = `الشيخ ${RECITERS[R.id]}`;
   show($('#player'));
   if (S.act == null) hide($('#ayaBar'));
   if ('mediaSession' in navigator) {
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: `سورة ${ayaLabel(P.ai)}`, artist: 'ياسر الدوسري', album: 'القرآن الكريم',
+      title: `سورة ${ayaLabel(P.ai)}`, artist: RECITERS[R.id], album: `القرآن الكريم · ${META.riwayat.find(r => r.id === R.id)?.name || ''}`,
       artwork: [{ src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' }],
     });
   }
@@ -1362,6 +1472,8 @@ const MQ = { running: false, done: 0, total: 0, failed: 0, stop: false };
 const mushafTasks = () => [
   { cache: MUSHAF_CACHE, url: new URL(`data/meta.json?v=${DATA_VERSION}`, location.href).href },
   ...META.riwayat.map(r => ({ cache: MUSHAF_CACHE, url: new URL(`data/${r.id}.json?v=${DATA_VERSION}`, location.href).href })),
+  // when each aya starts in the recitations (the audio itself is saved apart)
+  ...META.riwayat.filter(r => r.id !== 'hafs').map(r => ({ cache: MUSHAF_CACHE, url: new URL(`data/audio/${r.id}.json?v=${AUDIO_DATA_VERSION}`, location.href).href })),
   { cache: MUSHAF_CACHE, url: Adhkar.url() },
   ...LOCAL_FONTS.map(f => ({ cache: MUSHAF_CACHE, url: new URL(`fonts/${f}.woff2`, location.href).href })),
   ...Array.from({ length: 604 }, (_, i) => ({ cache: FONT_CACHE, url: `${QCF_BASE}p${i + 1}.woff2` })),
@@ -1430,19 +1542,53 @@ async function downloadMushaf() {
 }
 
 // ---------------------------------------------------------------- offline audio
-// Every recitation file can be saved on the device (≈1.5 GB for all 6236
-// ayat). The service worker answers playback from this cache, ranges included.
+// Each riwaya's recitation can be saved on the device, only when asked: from
+// the recitation card (the riwaya being read) or the button beside each riwaya
+// in the settings. Hafs aya by aya (≈1.5 GB for all 6236 ayat; also part of
+// «تحميل الكل»), the others surah by surah (their sizes are in data/audio/).
+// The service worker answers playback from these caches, ranges included.
 
-const AUDIO_CACHE = 'audio-yasser-128';
+const AUDIO_CACHE = 'audio-yasser-128', RIWAYA_AUDIO_CACHE = 'audio-riwayat';
 const AUDIO_TOTAL_MB = 1500;
-const DL = { running: false, done: 0, total: 0, failed: 0, cached: null, wake: null };
+// what of each recitation is on the device: rid -> { total, done (files), mb,
+// doneMB }; the one downloading is updated as it goes
+const AS = {};
+// the download running (one at a time): its riwaya and failures
+const DL = { running: false, rid: null, failed: 0, wake: null };
 const allAudioUrls = () => META.hafs.map((_, h) => hafsUrl(h));
 
-async function audioCachedSet() {
+// the files of a riwaya's recitation, with their sizes in MB (Hafs: by count)
+async function audioFiles(rid) {
+  if (rid === 'hafs') {
+    const urls = allAudioUrls();
+    return { cache: AUDIO_CACHE, urls, mb: urls.map(() => AUDIO_TOTAL_MB / urls.length) };
+  }
+  const rec = await loadRec(rid);
+  return { cache: RIWAYA_AUDIO_CACHE, urls: rec.size.map((_, i) => surahUrl(rec, i + 1)), mb: rec.size.map(b => b / 1e6) };
+}
+const sumMB = a => a.reduce((s, x) => s + x, 0);
+const gbText = mb => mb >= 1000 ? `${ar((mb / 1000).toFixed(1)).replace('.', '٫')} غيغابايت` : `${ar(Math.round(mb))} م.ب`;
+
+async function audioCachedSet(name = AUDIO_CACHE) {
   if (!('caches' in window)) return new Set();
-  const c = await caches.open(AUDIO_CACHE);
+  const c = await caches.open(name);
   return new Set((await c.keys()).map(r => r.url));
 }
+
+async function audioStatus(rid, sets = {}) {
+  const f = await audioFiles(rid), set = await (sets[f.cache] ||= audioCachedSet(f.cache));
+  const have = f.urls.map(u => set.has(u));
+  return { total: f.urls.length, done: have.filter(Boolean).length, mb: sumMB(f.mb), doneMB: sumMB(f.mb.filter((_, i) => have[i])) };
+}
+// every riwaya's (the one downloading keeps its live count)
+async function refreshAudioStatus() {
+  const sets = {};
+  await Promise.all(META.riwayat.map(async r => {
+    if (DL.running && DL.rid === r.id) return;
+    try { AS[r.id] = await audioStatus(r.id, sets); } catch {}
+  }));
+}
+const audioDone = st => st?.total > 0 && st.done >= st.total;
 
 const ICO = {
   theme: '<path d="M12 3.5a8.5 8.5 0 100 17 8.5 8.5 0 000-17zM12 3.5v17"/><path d="M12 3.5a8.5 8.5 0 010 17z" fill="currentColor" stroke="none"/>',
@@ -1461,7 +1607,8 @@ function settingsHTML() {
   const riwayat = META.riwayat.map((r, k) => {
     const letter = r.name.replace(/^ال/, '')[0];
     return `<button class="row" data-riwaya="${r.id}"><span class="num">${letter}</span>
-      <span class="main"><span class="t">${r.name}</span><span class="s">${ar(r.ayas)} آية</span></span>${r.id === R.id ? '<span class="check">✓</span>' : ''}</button>`;
+      <span class="main"><span class="t">${r.name}</span><span class="s">${ar(r.ayas)} آية · بصوت ${RECITERS[r.id]}</span></span>${r.id === R.id ? '<span class="check">✓</span>' : ''}
+      <span class="rw-dl" data-dl="rw" data-rid="${r.id}" role="button" hidden></span></button>`;
   }).join('');
   return `
     ${typeof Install !== 'undefined' ? Install.settingsHTML() : ''}
@@ -1496,7 +1643,7 @@ function settingsHTML() {
 
     <div class="group-label">الرواية</div>
     <div class="group">${riwayat}</div>
-    <p class="note">لكل رواية رسمها وعلامات ضبطها ووقفها. التلاوة بصوت الشيخ ياسر الدوسري برواية حفص، وتُطابَق آيات الروايات الأخرى مع ما يقابلها فيها.</p>`;
+    <p class="note">لكل رواية رسمها وعلامات ضبطها ووقفها، وتلاوتها بصوت قارئ يقرأ بها: حفص آيةً آية من everyayah.com، والروايات الأخرى سورةً سورة من mp3quran.net مع مواضع آياتها.</p>`;
 }
 
 // a setting that is on or off
@@ -1574,93 +1721,157 @@ function audioPanelHTML() {
   return `<div class="group dl-card" id="dlCard">
     <div class="dl-top">
       ${ico('audio', 'settings')}
-      <div class="dl-txt"><div class="t">التلاوة · الشيخ ياسر الدوسري</div><div class="s" id="dlText">جارٍ الفحص…</div></div>
+      <div class="dl-txt"><div class="t" id="dlTitle">التلاوة · ${RECITERS[R.id]}</div><div class="s" id="dlText">جارٍ الفحص…</div></div>
       <div class="dl-pct" id="dlPct"></div>
     </div>
     <div class="prog dl-prog"><i id="dlBar" style="width:0"></i></div>
     <div class="dl-actions" id="dlActions"></div>
   </div>
   ${tafsirCardHTML()}
-  <p class="note">يُحفظ صوت كل آية (قرابة ١٫٥ غيغابايت) والتفسير على جهازك لتستعملهما دون إنترنت. أبقِ التطبيق مفتوحًا أثناء التحميل، ويمكنك الإيقاف والمتابعة لاحقًا. الآيات التي تستمع إليها تُحفظ تلقائيًا.</p>`;
+  <p class="note" id="dlNote"></p>`;
 }
 
 async function refreshAudioPanel() {
   if (!$('#dlCard')) return;
   if (!TF.running) TF.done = await tafsirStatus();
   paintTafsirCard();
-  if (!DL.running) {
-    const set = await audioCachedSet();
-    DL.total = META.hafs.length;
-    DL.done = allAudioUrls().filter(u => set.has(u)).length;
-  }
+  await refreshAudioStatus();
   paintAudioPanel();
 }
 
+// the card shows the riwaya being read (or the one downloading)
 function paintAudioPanel() {
+  paintRiwayaDl();
   if (!$('#dlCard')) return;
-  const pct = DL.total ? DL.done / DL.total : 0;
+  const rid = DL.running ? DL.rid : R.id, st = AS[rid] || { total: 0, done: 0, mb: 0, doneMB: 0 }, hafs = rid === 'hafs';
+  const running = DL.running && DL.rid === rid;
+  const pct = st.mb ? Math.min(1, st.doneMB / st.mb) : 0;
   $('#dlBar').style.width = (pct * 100).toFixed(1) + '%';
   $('#dlPct').textContent = ar(Math.floor(pct * 100)) + '٪';
-  const mb = Math.round(pct * AUDIO_TOTAL_MB);
-  const complete = DL.done >= DL.total && DL.total > 0;
+  $('#dlTitle').textContent = `التلاوة · ${RECITERS[rid]}`;
+  const complete = audioDone(st);
   $('#dlText').textContent = complete
     ? `التلاوة كاملة محفوظة على جهازك ✓`
-    : `${ar(DL.done)} من ${ar(DL.total)} آية · ${ar(mb)} من ${ar(AUDIO_TOTAL_MB)} م.ب${DL.running ? ' · جارٍ التحميل…' : ''}${DL.failed ? ` · تعذّر ${ar(DL.failed)}` : ''}`;
-  $('#dlActions').innerHTML = (complete || ALL.running ? '' : DL.running
+    : !st.total ? 'تعذّر الفحص — تحقق من الاتصال'
+    : `${ar(st.done)} من ${ar(st.total)} ${hafs ? 'آية' : 'سورة'} · ${ar(Math.round(st.doneMB))} من ${ar(Math.round(st.mb))} م.ب${running ? ' · جارٍ التحميل…' : ''}${running && DL.failed ? ` · تعذّر ${ar(DL.failed)}` : ''}`;
+  $('#dlActions').innerHTML = (complete || ALL.running || !st.total ? '' : running
     ? '<button data-dl="pause">إيقاف مؤقت</button>'
-    : `<button data-dl="start" class="primary">${DL.done ? 'متابعة التحميل' : 'تحميل التلاوة كاملة'}</button>`)
-    + (DL.done && !DL.running && !ALL.running ? '<button data-dl="clear" class="danger">حذف التحميلات</button>' : '');
+    : `<button data-dl="start" class="primary">${st.done ? 'متابعة التحميل' : 'تحميل التلاوة كاملة'}</button>`)
+    + (st.done && !running && !ALL.running ? `<button data-dl="clear" data-rid="${rid}" class="danger">حذف التحميلات</button>` : '');
+  $('#dlNote').textContent = (hafs
+    ? `يُحفظ صوت كل آية (قرابة ${gbText(st.mb || AUDIO_TOTAL_MB)}) والتفسير على جهازك لتستعملهما دون إنترنت.`
+    : `تُحفظ تلاوة ${RECITERS[rid]} سورةً سورة (قرابة ${gbText(st.mb)}) والتفسير على جهازك لتستعملهما دون إنترنت.`)
+    + ' أبقِ التطبيق مفتوحًا أثناء التحميل، ويمكنك الإيقاف والمتابعة لاحقًا.'
+    + (hafs ? ' الآيات التي تستمع إليها تُحفظ تلقائيًا.' : '')
+    + ' تلاوة كل رواية اختيارية: تُحمَّل من زرّها بجانب الرواية في قائمة الرواية أدناه.';
   paintAllCard();
 }
 
-async function startAudioDownload() {
+// the button beside each riwaya in the settings: its size and a download
+// arrow; its progress (tap to pause) while downloading; a check once saved
+// (tapped twice, deleted)
+const DL_ICO = {
+  get: '<svg viewBox="0 0 24 24"><path d="M12 4.5v10M7.8 10.6l4.2 4.2 4.2-4.2M5 19.5h14"/></svg>',
+  pause: '<svg viewBox="0 0 24 24"><path d="M9 7v10M15 7v10"/></svg>',
+  done: '<svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9"/></svg>',
+};
+function paintRiwayaDl() {
+  for (const el of document.querySelectorAll('[data-dl="rw"]')) {
+    const rid = el.dataset.rid, st = AS[rid];
+    const running = DL.running && DL.rid === rid;
+    const pct = st?.mb ? Math.floor(Math.min(1, st.doneMB / st.mb) * 100) : 0;
+    el.hidden = !st;
+    if (!st || el.dataset.armed) continue;
+    const state = running ? 'run' : audioDone(st) ? 'done' : st.done ? 'part' : 'none';
+    el.className = `rw-dl ${state}`;
+    el.style.setProperty('--p', pct + '%');
+    el.setAttribute('aria-label', running ? 'إيقاف التحميل مؤقتًا' : state === 'done' ? 'التلاوة محفوظة — اضغط مرتين للحذف' : `تحميل التلاوة (${gbText(st.mb)})`);
+    el.innerHTML = running ? `${DL_ICO.pause}<span>${ar(pct)}٪</span>`
+      : state === 'done' ? `${DL_ICO.done}<span>محفوظة</span>`
+      : `${DL_ICO.get}<span>${state === 'part' ? ar(pct) + '٪' : gbText(st.mb).replace(' غيغابايت', ' غ.ب')}</span>`;
+  }
+}
+async function riwayaDlTap(el) {
+  const rid = el.dataset.rid, st = AS[rid];
+  if (!st) return;
+  if (DL.running && DL.rid === rid) { DL.running = false; return; }
+  if (audioDone(st)) {
+    if (!el.dataset.armed) {
+      el.dataset.armed = '1';
+      el.className = 'rw-dl del';
+      el.innerHTML = '<span>حذف؟</span>';
+      setTimeout(() => { if (el.isConnected && el.dataset.armed) { delete el.dataset.armed; paintRiwayaDl(); } }, 2500);
+      return;
+    }
+    delete el.dataset.armed;
+    return clearRecitation(rid);
+  }
+  if (DL.running || ALL.running) { toast(`يجري تحميل ${DL.rid ? 'تلاوة ' + RECITERS[DL.rid] : 'آخر'} — أوقفه أولًا`); return; }
+  startAudioDownload(rid);
+}
+
+// a riwaya's recitation, file by file; the progress of a surah file counts as
+// it arrives
+async function startAudioDownload(rid = R.id) {
   if (DL.running) return;
-  DL.running = true; DL.failed = 0;
+  Object.assign(DL, { running: true, rid, failed: 0 });
   paintAudioPanel();
   try { await navigator.storage?.persist?.(); } catch {}
   try { DL.wake = await navigator.wakeLock?.request('screen'); } catch {}
-  const cache = await caches.open(AUDIO_CACHE);
-  const have = await audioCachedSet();
-  const urls = allAudioUrls().filter(u => !have.has(u)); // 001001 doubles as the basmala
-  DL.total = META.hafs.length;
-  DL.done = allAudioUrls().filter(u => have.has(u)).length;
+  let f;
+  try { f = await audioFiles(rid); } catch { DL.running = false; paintAudioPanel(); if (!ALL.running) toast('تعذّر التحميل — تحقق من الاتصال'); return; }
+  const cache = await caches.open(f.cache);
+  const have = await audioCachedSet(f.cache);
+  const todo = f.urls.map((u, i) => i).filter(i => !have.has(f.urls[i])); // 001001 doubles as the basmala
+  const st = AS[rid] = { total: f.urls.length, done: f.urls.length - todo.length, mb: sumMB(f.mb), doneMB: sumMB(f.mb.filter((_, i) => have.has(f.urls[i]))) };
   let next = 0, lastPaint = 0;
+  const paint = () => { if (performance.now() - lastPaint > 400) { lastPaint = performance.now(); paintAudioPanel(); } };
   const worker = async () => {
-    while (DL.running && next < urls.length) {
-      const u = urls[next++];
+    while (DL.running && next < todo.length) {
+      const i = todo[next++], u = f.urls[i];
       let ok = false;
       for (let attempt = 0; attempt < 3 && !ok && DL.running; attempt++) {
+        let got = 0;
         try {
           const res = await fetch(u, { mode: 'cors' });
-          if (res.ok) { await cache.put(u, res); ok = true; }
+          if (!res.ok) throw 0;
+          const body = res.body.pipeThrough(new TransformStream({
+            transform(c, ctl) { got += c.length; st.doneMB += c.length / 1e6; paint(); ctl.enqueue(c); },
+          }));
+          await cache.put(u, new Response(body, { headers: res.headers }));
+          ok = true;
         } catch { await new Promise(r => setTimeout(r, 800 * (attempt + 1))); }
+        st.doneMB += ok ? f.mb[i] - got / 1e6 : -got / 1e6;
       }
-      if (ok) DL.done++;
+      if (ok) st.done++;
       else if (DL.running) DL.failed++;
-      if (performance.now() - lastPaint > 400) { lastPaint = performance.now(); paintAudioPanel(); }
+      paint();
     }
   };
-  await Promise.all(Array.from({ length: 6 }, worker));
+  await Promise.all(Array.from({ length: rid === 'hafs' ? 6 : 3 }, worker));
   const finished = DL.running;
   DL.running = false;
   try { await DL.wake?.release(); } catch {}
   DL.wake = null;
   await refreshAudioPanel();
+  paintAudioPanel();
   if (ALL.running) return;
-  if (finished && !DL.failed) toast('اكتمل تحميل التلاوة');
-  else if (finished) toast('تعذّر تحميل بعض الآيات — اضغط متابعة');
+  if (finished && !DL.failed) toast(`اكتمل تحميل تلاوة ${RECITERS[rid]}`);
+  else if (finished) toast(`تعذّر تحميل بعض ${rid === 'hafs' ? 'الآيات' : 'السور'} — اضغط متابعة`);
 }
 
 // ---------------------------------------------------------------- everything offline
-// One button for the mushaf, tafsir, adhkar and (optionally) the recitation,
-// one after the other, with a single progress bar weighted by size.
+// One button for the mushaf, tafsir, adhkar and (optionally) the recitation of
+// Hafs, one after the other, with a single progress bar weighted by size. The
+// other riwayat's recitations are never part of it: each has its own button.
 
 const ALL = { running: false, audio: true, stop: false, stage: '' };
-const SIZE_MB = { mushaf: 112, tafsir: 6, audio: AUDIO_TOTAL_MB };
+const SIZE_MB = { mushaf: 112, tafsir: 6 };
 
 function allProgress(audio) {
   const parts = [[SIZE_MB.mushaf, MQ.total ? MQ.done / MQ.total : 0], [SIZE_MB.tafsir, TF.done / 114]];
-  if (audio) parts.push([SIZE_MB.audio, DL.total ? DL.done / DL.total : 0]);
+  const h = AS.hafs || { mb: AUDIO_TOTAL_MB, doneMB: 0 };
+  if (audio) parts.push([h.mb, h.mb ? h.doneMB / h.mb : 0]);
   return parts.reduce((s, [w, f]) => s + w * Math.min(1, f), 0) / parts.reduce((s, [w]) => s + w, 0);
 }
 
@@ -1677,9 +1888,9 @@ function allCardHTML() {
 function paintAllCard() {
   if (!$('#allCard')) return;
   const textDone = MQ.total > 0 && MQ.done >= MQ.total && TF.done >= 114;
-  const audioDone = DL.total > 0 && DL.done >= DL.total;
+  const h = AS.hafs || { mb: AUDIO_TOTAL_MB, doneMB: 0 }, hafsDone = audioDone(AS.hafs);
   const card = $('#allCard');
-  card.classList.toggle('done', textDone && audioDone);
+  card.classList.toggle('done', textDone && hafsDone);
   $('#allProg').hidden = !ALL.running;
   if (ALL.running) {
     const pct = allProgress(ALL.audio);
@@ -1687,19 +1898,19 @@ function paintAllCard() {
     $('#allT').textContent = `جارٍ التحميل… ${ar(Math.floor(pct * 100))}٪`;
     $('#allS').textContent = `${ALL.stage} · أبقِ التطبيق مفتوحًا حتى يكتمل`;
     $('#allActions').innerHTML = '<button data-dl="all-pause" class="all-btn ghost">إيقاف مؤقت</button>';
-  } else if (textDone && audioDone) {
+  } else if (textDone && hafsDone) {
     $('#allT').textContent = 'التطبيق كاملًا محفوظ على جهازك ✓';
-    $('#allS').textContent = 'المصحف بكل رواياته، والتفسير، والأذكار، والتلاوة تعمل دون إنترنت';
+    $('#allS').textContent = 'المصحف بكل رواياته، والتفسير، والأذكار، وتلاوة حفص تعمل دون إنترنت';
     $('#allActions').innerHTML = '';
   } else if (textDone) {
     $('#allT').textContent = 'المصحف والتفسير والأذكار محفوظة ✓';
-    $('#allS').textContent = `بقيت التلاوة · قرابة ${DL.done ? ar(Math.round((1 - DL.done / DL.total) * AUDIO_TOTAL_MB)) + ' م.ب' : '١٫٥ غيغابايت'}`;
-    $('#allActions').innerHTML = '<button data-dl="all" class="all-btn">تحميل التلاوة أيضًا</button>';
+    $('#allS').textContent = `بقيت تلاوة حفص (${RECITERS.hafs}) · قرابة ${gbText(h.mb - h.doneMB)}`;
+    $('#allActions').innerHTML = '<button data-dl="all" class="all-btn">تحميل تلاوة حفص أيضًا</button>';
   } else {
     const started = store.get('dlAll', false);
     $('#allT').textContent = 'استعمل التطبيق كاملًا دون إنترنت';
-    $('#allS').textContent = 'المصحف بكل رواياته وخطوطه، والتفسير، والأذكار، والتلاوة كاملة';
-    $('#allActions').innerHTML = `<button data-dl="all" class="all-btn">${started ? 'متابعة تحميل الكل' : 'تحميل الكل'} <small>قرابة ١٫٦ غيغابايت</small></button>
+    $('#allS').textContent = 'المصحف بكل رواياته وخطوطه، والتفسير، والأذكار، وتلاوة حفص كاملة';
+    $('#allActions').innerHTML = `<button data-dl="all" class="all-btn">${started ? 'متابعة تحميل الكل' : 'تحميل الكل'} <small>قرابة ${gbText(h.mb + SIZE_MB.mushaf + SIZE_MB.tafsir)}</small></button>
       <button data-dl="all-text" class="all-link">أو دون التلاوة · قرابة ١٢٠ م.ب</button>`;
   }
 }
@@ -1712,7 +1923,7 @@ async function downloadAll(audio) {
   try { await navigator.storage?.persist?.(); } catch {}
   await downloadMushaf();
   if (!ALL.stop) { ALL.stage = 'تفسير السعدي'; paintAllCard(); await downloadTafsir(); }
-  if (!ALL.stop && audio) { ALL.stage = 'التلاوة'; paintAllCard(); await startAudioDownload(); }
+  if (!ALL.stop && audio && !DL.running) { ALL.stage = 'تلاوة حفص'; paintAllCard(); await startAudioDownload('hafs'); }
   ALL.running = false;
   await refreshAudioPanel();
   await refreshMushafCard();
@@ -1743,10 +1954,20 @@ async function clearAudioDownload(btn) {
     setTimeout(() => { if (btn.isConnected) { delete btn.dataset.armed; btn.textContent = 'حذف التحميلات'; } }, 2500);
     return;
   }
-  await caches.delete(AUDIO_CACHE);
-  DL.done = 0;
+  await clearRecitation(btn.dataset.rid || R.id);
+}
+
+// one riwaya's saved recitation (the riwayat other than Hafs share a cache)
+async function clearRecitation(rid) {
+  if (rid === 'hafs') await caches.delete(AUDIO_CACHE);
+  else {
+    const f = await audioFiles(rid), c = await caches.open(f.cache);
+    await Promise.all(f.urls.map(u => c.delete(u)));
+  }
+  delete AS[rid];
   await refreshAudioPanel();
-  toast('حُذفت التحميلات');
+  paintAudioPanel();
+  toast(`حُذفت تلاوة ${RECITERS[rid]}`);
 }
 
 // ---------------------------------------------------------------- search
@@ -1924,6 +2145,15 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyThe
 
 let tab = 'suras';
 function openRecite() { openSheet('recite'); }
+// the same panel, on its settings («الإعدادات»)
+function openReciteSettings() {
+  store.set('recite.seg', 'set');
+  openSheet('recite');
+  requestAnimationFrame(() => {
+    const nav = $('#sheetBody .rc-seg');
+    if (nav) $('#sheetBody').scrollTop += nav.getBoundingClientRect().top - $('#sheetBody').getBoundingClientRect().top - 8;
+  });
+}
 function openSheet(t = tab) {
   tab = t;
   $('#sheetTitle').textContent = 'اللوحات';
@@ -2145,7 +2375,8 @@ $('#sheetBody').addEventListener('click', async e => {
   const dl = e.target.closest('[data-dl]');
   if (dl) {
     const a = dl.dataset.dl;
-    if (a === 'start') startAudioDownload();
+    if (a === 'rw') { e.stopPropagation(); riwayaDlTap(dl); }
+    else if (a === 'start') startAudioDownload(R.id);
     else if (a === 'pause') DL.running = false;
     else if (a === 'clear') clearAudioDownload(dl);
     else if (a === 'tafsir') downloadTafsir();

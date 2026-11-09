@@ -270,6 +270,11 @@ svg { fill: currentColor; }
 }
 .x-btn svg { width: 16px; height: 16px; }
 .x-btn:active { background: var(--tint-2); }
+/* a small gear beside a bar's close button: the settings of التسميع */
+.gear-btn svg { width: 17px; height: 17px; }
+.acts-head .gear-btn { margin-inline-start: auto; margin-inline-end: 8px; }
+#recBar .gear-btn { width: 34px; height: 34px; }
+@media (max-width: 380px) { #recBar .gear-btn { width: 30px; height: 30px; } #recBar .rec-stop span { display: none; } #recBar .rec-stop { padding: 0 10px; } }
 
 /* aya actions */
 .acts { padding: 12px 14px 12px; display: flex; flex-direction: column; gap: 12px; }
@@ -388,7 +393,7 @@ svg { fill: currentColor; }
 .mini { display: flex; align-items: center; gap: 12px; padding: 10px 12px 12px 10px; }
 .pl-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding-right: 4px; }
 .pl-info b { font-size: 16px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pl-info small { font-size: 12px; color: var(--muted); }
+.pl-info small { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pl-ctrl { display: flex; align-items: center; gap: 6px; }
 .pl-btn { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 50%; color: var(--ink); }
 .pl-btn:active { background: var(--tint); }
@@ -496,6 +501,16 @@ svg { fill: currentColor; }
 }
 .row .del { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: var(--danger); background: rgba(179, 38, 30, .07); }
 .row .del svg { width: 18px; height: 18px; }
+/* beside each riwaya: its recitation, downloaded only when asked */
+.row .rw-dl {
+  flex: none; height: 30px; min-width: 30px; padding: 0 10px 0 9px; border-radius: 15px; display: flex; align-items: center; gap: 4px;
+  font-size: 12px; font-weight: 600; color: var(--accent); background: var(--tint); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.row .rw-dl[hidden] { display: none; }
+.row .rw-dl svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.row .rw-dl.run { color: var(--on-accent); background: linear-gradient(270deg, var(--accent) var(--p), color-mix(in srgb, var(--accent) 55%, transparent) var(--p)); }
+.row .rw-dl.done { color: var(--muted); background: transparent; }
+.row .rw-dl.del { color: var(--danger); background: rgba(179, 38, 30, .08); }
 .row .verse {
   font-size: 21px; line-height: 1.9; color: var(--ink);
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
