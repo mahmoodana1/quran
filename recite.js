@@ -1907,9 +1907,14 @@ const Recite = (() => {
     fix: '<svg viewBox="0 0 24 24"><path d="M14.5 5.5l4 4L9 19H5v-4z"/><path d="M12.5 7.5l4 4"/></svg>',
     check: '<svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9"/></svg>',
     gear: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.8"/><path d="M12 3.2l1.6 1.9 2.4-.6.8 2.3 2.3.8-.6 2.4 1.9 1.6-1.9 1.6.6 2.4-2.3.8-.8 2.3-2.4-.6L12 20.8l-1.6-1.9-2.4.6-.8-2.3-2.3-.8.6-2.4L3.2 12l1.9-1.6-.6-2.4 2.3-.8.8-2.3 2.4.6z"/></svg>',
+    clock: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
+    back: '<svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>',
+    go: '<svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>',
+    play: '<svg viewBox="0 0 24 24"><path d="M9 6.5v11l9-5.5z"/></svg>',
+    plus: '<svg viewBox="0 0 24 24"><path d="M12 6v12M6 12h12"/></svg>',
     flame: '<svg viewBox="0 0 24 24"><path d="M12 21c-3.6 0-6-2.4-6-5.6 0-3.4 2.6-5 3.4-8.4 1.9 1.3 2.6 3 2.6 4.6 1-.6 1.6-1.7 1.8-2.9 1.6 1.4 4.2 3.6 4.2 6.7 0 3.2-2.4 5.6-6 5.6z"/></svg>',
   };
-  const SEGS = [['today', 'اليوم'], ['plan', 'الخطة'], ['stats', 'الإحصاءات'], ['log', 'السجل'], ['set', 'الإعدادات']];
+  const VIEWS = { log: 'السجل', set: 'إعدادات التسميع', pick: 'اختر سورة تحفظها', revs: 'جدول المراجعة', weak: 'مواضع الضعف', suras: 'سوري' };
   const PER = [3, 5, 10, 15, 20]; // ayas a day the plan may take
 
   // ---- the plan: one surah memorized at a time, so many new ayas a day (store recite.plan.<riwaya>
@@ -1957,193 +1962,171 @@ const Recite = (() => {
     const weak = all.filter(([, a]) => !a.done).sort((x, y) => x[0] - y[0]);
     const mastered = all.filter(([, a]) => a.done).sort((x, y) => y[1].at - x[1].at);
     const goal = store.get('recite.goal', 0), fresh = !all.length && !l.sessions.length;
-    const seg = SEGS.some(([k]) => k === store.get('recite.seg')) ? store.get('recite.seg') : 'today';
+    const view = store.get('recite.view', '') || '';
 
-    // ---- the memorizer's day, the plan and the numbers (each a tab below the header):
-    //   اليوم: today's wird (new ayas of the plan, the revision due, the weak spots), the streak
-    //   الخطة: the surah being memorized and how much a day (its finish), the revision schedule, the maps
-    //   الإحصاءات: the totals, this week against the last, the activity of 16 weeks, the mistakes
-    //   السجل: each session · ⚙: the settings
+    // ---- one page, top to bottom: the greeting and the streak, the week, today's wird as cards to
+    // swipe (each its colour and a play button), the plan as a journey, the revisions due, the numbers
+    // and the mistakes. The log, the settings, the surah picker, the whole revision schedule and the
+    // weak spots open as pages of their own over it (recite.view), a back arrow to return
     const at = resumeAya(), got = new Array(115).fill(0), lastIn = new Array(115).fill(0);
     for (const k of Object.keys(said)) { const a = R.ayas[+k]; if (a) { got[a[0]]++; lastIn[a[0]] = Math.max(lastIn[a[0]], said[k]); } }
     const today = l.days?.[day()] || 0, run = streak(l), pl = planInfo(l), revs = revisions(l, pl && !pl.finished ? pl.s : 0);
     const n = Object.keys(said).filter(k => R.ayas[+k]).length;
-    const weekday = new Intl.DateTimeFormat('ar-u-nu-arab', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date());
+    const fmt = o => new Intl.DateTimeFormat('ar-u-nu-arab', o);
+    if (view) return `<div class="pp pp-sub"><div class="pp-bar"><button class="pp-back" data-rc-view="" aria-label="رجوع">${ICONS.back}</button><b>${VIEWS[view] || ''}</b></div>
+      <div class="pp-subb">${view === 'log' ? logHTML() : view === 'set' ? setHTML() : view === 'pick' ? pickHTML() : view === 'revs' ? revsHTML() : view === 'weak' ? weakHTML(weak) : view === 'suras' ? memoHTML() : ''}</div></div>`;
 
-    let html = '';
-    html += `<nav class="rc-seg rc-seg5" role="tablist">${SEGS.map(([k, t]) => `<button role="tab" data-rc-seg="${k}" aria-selected="${k === seg}"${k === seg ? ' class="on"' : ''}${k === 'set' ? ' aria-label="إعدادات التسميع"' : ''}>${k === 'set' ? ICONS.gear : t}${k === 'today' && weak.length ? `<i>${ar(weak.length)}</i>` : ''}</button>`).join('')}</nav>`;
-    html += `<div class="rc-pane">${seg === 'today' ? todayHTML() : seg === 'plan' ? planHTML() : seg === 'stats' ? statsHTML() : seg === 'log' ? logHTML() : setHTML()}</div>`;
-    return html;
+    const hr = new Date().getHours(), hi = hr < 5 ? 'ليلة مباركة' : hr < 12 ? 'صباح الخير' : hr < 18 ? 'طاب يومك' : 'مساء النور';
+    let h = `<div class="pp">
+      <header class="pp-top">
+        <div class="pp-hi"><small>${hi}</small><b>${esc(fmt({ weekday: 'long', day: 'numeric', month: 'long' }).format(new Date()))}</b></div>
+        <span class="pp-flame${run ? '' : ' cold'}" aria-label="${run ? streakText(run) : 'لا سلسلة بعد'}">${ICONS.flame}<b>${ar(run)}</b></span>
+        <span class="pp-icons"><button data-rc-view="log" aria-label="السجل">${ICONS.clock}</button><button data-rc-view="set" aria-label="إعدادات التسميع">${ICONS.gear}</button></span>
+      </header>`;
+    h += weekHTML();
 
-    // ---- اليوم: the wird, the streak, the weak spots
-    function todayHTML() {
-      const due = revs.filter(r => r.due >= 0), revDone = revs.filter(r => r.today);
-      const tasks = [];
-      // new ayas, by the plan
-      if (pl && !pl.finished) {
-        const met = pl.todayN >= pl.per, a0 = pl.portion[0], a1 = pl.portion[pl.portion.length - 1];
-        tasks.push({ done: met, icon: ICONS.seed, t: 'حفظ جديد', s: met ? `أتممت ورد اليوم: ${ayaCount(pl.todayN)} من ${suraName(pl.s)}` : `${suraName(pl.s)} ${ar(R.ayas[a0][1])}${a1 !== a0 ? '–' + ar(R.ayas[a1][1]) : ''} · ${ayaCount(pl.portion.length)}`,
-          b: met ? `<button class="rc-tk-b ghost" data-rc-new>زد</button>` : `<button class="rc-tk-b" data-rc-new>${MIC}ابدأ</button>` });
-      } else tasks.push({ done: false, icon: ICONS.seed, t: 'حفظ جديد', s: pl?.finished ? `أتممت ${suraName(pl.s)}، ما شاء الله — اختر سورتك التالية` : 'اختر سورة تحفظها، وكم آية في اليوم', b: `<button class="rc-tk-b ghost" data-rc-seg="plan">خطّط</button>` });
-      // the revision due (the most overdue first)
-      if (due.length) tasks.push({ done: false, icon: ICONS.review, t: 'مراجعة', s: `${suraName(due[0].s)}${due.length > 1 ? ` و${due.length === 2 ? suraName(due[1].s) : `${ar(due.length - 1)} سور أخرى`}` : ''} · ${dueText(due[0])}`, b: `<button class="rc-tk-b" data-rc-rev="${due[0].s}">${MIC}راجع</button>` });
-      else if (revs.length) tasks.push({ done: true, icon: ICONS.review, t: 'مراجعة', s: revDone.length ? `راجعت ${suraName(revDone[0].s)} اليوم` : `لا مراجعة مستحقة اليوم · التالية ${dueText(revs[0])}`, b: '' });
-      // the weak spots
-      if (weak.length) tasks.push({ done: false, icon: ICONS.fix, t: 'تثبيت', s: `${ayaCount(weak.length)} فيها أخطاء تنتظر`, b: `<button class="rc-tk-b" data-rc-review>${MIC}ثبّت</button>` });
-      const done = tasks.filter(x => x.done).length, f = tasks.length ? done / tasks.length : 0;
-      let h = `<section class="rc-day">
-        <div class="rc-day-h"><span class="rc-ring" style="--f:${f}"><b>${ar(done)}<small>/${ar(tasks.length)}</small></b></span>
-          <span class="rc-day-t"><small>${esc(weekday)}</small><b>${done === tasks.length && tasks.length ? 'أتممت وردك اليوم' : 'وردك اليوم'}</b></span>
-          ${run ? `<span class="rc-day-run" aria-label="${streakText(run)}">${ICONS.flame}${ar(run)}</span>` : ''}</div>
-        <div class="rc-tasks">${tasks.map(x => `<div class="rc-tk${x.done ? ' done' : ''}"><span class="rc-tk-i">${x.done ? ICONS.check : x.icon}</span>
-          <span class="rc-tk-x"><b>${x.t}</b><small>${x.s}</small></span>${x.b}</div>`).join('')}</div>
-      </section>`;
-      h += `<div class="rc-quick">
-        <button data-rc-resume><span class="ic">${MIC}</span><span class="tx"><b>تابع</b><small>${ayaLabel(at)}</small></span></button>
-        <button data-rc-test${testAyas() ? '' : ' disabled'}><span class="ic">${ICONS.test}</span><span class="tx"><b>اختبرني</b><small>آيات مخفية</small></span></button>
-        <button data-rc-find><span class="ic">${ICONS.find}</span><span class="tx"><b>ابحث بصوتك</b><small>اقرأ ونجدها</small></span></button>
-      </div>`;
-      h += streakHTML();
-      if (weak.length) {
-        h += `<div class="group-label">مواضع الضعف · ${ayaCount(weak.length)}</div>` + weakHTML(weak.slice(0, 5));
-        if (weak.length > 5) h += `<details class="rc-more"><summary>عرض الكل</summary>${weakHTML(weak.slice(5))}</details>`;
-        h += `<p class="rc-hint">تُتقَن الآية بقراءتها صحيحة في ${ar(MASTER_DAYS)} أيام مختلفة، فتخرج من هنا.</p>`;
-      }
-      if (fresh) h += helpHTML();
-      return h;
-    }
+    // ---- today's wird: a card each, to swipe through
+    const cards = [];
+    if (pl && !pl.finished) {
+      const met = pl.todayN >= pl.per, a0 = pl.portion[0], a1 = pl.portion[pl.portion.length - 1];
+      cards.push({ c: 'green', icon: ICONS.seed, k: 'حفظ جديد', t: suraName(pl.s), s: met ? `أتممت ورد اليوم · ${ayaCount(pl.todayN)}` : `الآيات ${ar(R.ayas[a0][1])}${a1 !== a0 ? '–' + ar(R.ayas[a1][1]) : ''}`, f: Math.min(1, pl.todayN / pl.per), done: met, act: 'data-rc-new' });
+    } else cards.push({ c: 'green', icon: ICONS.seed, k: 'حفظ جديد', t: pl?.finished ? 'سورة جديدة؟' : 'ابدأ رحلة حفظ', s: pl?.finished ? `أتممت ${suraName(pl.s)}، ما شاء الله` : 'اختر سورة وكم آية في اليوم', act: 'data-rc-view="pick"', go: ICONS.plus });
+    const due = revs.filter(r => r.due >= 0);
+    if (due.length) cards.push({ c: 'amber', icon: ICONS.review, k: 'مراجعة', t: suraName(due[0].s), s: dueText(due[0]) + (due.length > 1 ? ` · و${ar(due.length - 1)} غيرها` : ''), act: `data-rc-rev="${due[0].s}"` });
+    else if (revs.length) cards.push({ c: 'amber', icon: ICONS.review, k: 'مراجعة', t: 'لا شيء مستحق', s: `التالية: ${suraName(revs[0].s)} ${dueText(revs[0])}`, done: true, act: `data-rc-rev="${revs[0].s}"` });
+    if (weak.length) cards.push({ c: 'coral', icon: ICONS.fix, k: 'تثبيت', t: `${ar(weak.length)} ${weak.length <= 10 && weak.length > 2 ? 'مواضع' : 'موضعًا'}`, s: 'آيات أخطأت فيها تنتظرك', act: 'data-rc-review' });
+    cards.push({ c: 'sky', icon: MIC, k: fresh ? 'ابدأ التسميع' : 'تابع', t: ayaLabel(at), s: esc(ayaTokens(at).slice(0, 4).join(' ')) + ' …', act: 'data-rc-resume', verse: true });
+    if (testAyas()) cards.push({ c: 'violet', icon: ICONS.test, k: 'اختبرني', t: 'آيات مخفية', s: 'من موضع سمّعته من قبل', act: 'data-rc-test' });
+    cards.push({ c: 'ink', icon: ICONS.find, k: 'ابحث بصوتك', t: 'اقرأ ونجدها', s: 'من أي موضع في المصحف', act: 'data-rc-find' });
+    const doneN = cards.filter(x => x.done).length, wird = cards.filter(x => ['green', 'amber', 'coral'].includes(x.c)).length;
+    h += `<div class="pp-h"><b>ورد اليوم</b><small>${ar(doneN)} من ${ar(wird)}</small></div>
+      <div class="pp-cards">${cards.map((x, i) => `<button class="pp-c ${x.c}${x.done ? ' done' : ''}" ${x.act} style="--i:${i}">
+        <span class="pp-c-i">${x.icon}</span>
+        <span class="pp-c-k">${x.k}</span>
+        <b class="pp-c-t">${x.t}</b>
+        <span class="pp-c-s"${x.verse ? ` style="font-family:${R.font}"` : ''}>${x.s}</span>
+        ${x.f != null ? `<span class="pp-c-bar"><i style="width:${Math.round(x.f * 100)}%"></i></span>` : ''}
+        <span class="pp-c-go">${x.done ? ICONS.check : x.go || ICONS.play}</span></button>`).join('')}</div>`;
 
-    // ---- the streak: the days in a row, the longest, and this week day by day (today's ring filling
-    // toward the goal)
-    function streakHTML() {
-      const best = Math.max(run, longest(l)), wk = [], now = new Date();
-      for (let i = 6; i >= 0; i--) { const d = new Date(now); d.setDate(now.getDate() - i); wk.push(d); }
-      const LET = ['ح', 'ن', 'ث', 'ر', 'خ', 'ج', 'س'];
-      return `<section class="rc-streak${run ? '' : ' cold'}">
-        <div class="rc-sk-h"><span class="rc-sk-f">${ICONS.flame}</span>
-          <span class="rc-sk-n"><b>${ar(run)}</b><small>${run ? (run === 1 ? 'يوم متتالٍ' : 'أيام متتالية') : 'ابدأ سلسلتك اليوم'}</small></span>
-          ${best > 1 ? `<span class="rc-sk-best">أطولها<b>${ar(best)}</b></span>` : ''}</div>
-        <ol class="rc-week">${wk.map((d, i) => {
-          const c = l.days?.[day(d)] || 0, isToday = i === 6, fl = isToday && goal ? Math.min(1, today / goal) : c ? 1 : 0;
-          return `<li class="${c ? 'on' : ''}${isToday ? ' now' : ''}" title="${c ? ayaCount(c) : 'لا تسميع'}"><span class="d" style="--f:${fl}">${c ? ICONS.check : ''}</span><small>${LET[d.getDay()]}</small></li>`;
-        }).join('')}</ol>
-        ${goal ? `<p class="rc-sk-goal">${today >= goal ? 'بلغت هدف اليوم، ما شاء الله' : `${ayaCount(goal - today)} لبلوغ هدف اليوم (${ar(goal)})`}</p>` : ''}
-      </section>`;
-    }
-
-    function weakHTML(list) {
-      return '<div class="group">' + list.map(([ai, a]) => {
-        const dots = [0, 1, 2].map(j => `<i${j < a.ok.length ? ' class="on"' : ''}></i>`).join('');
-        return `<button class="row rc-row" data-rc-aya="${ai}"><span class="num">${ar(R.ayas[ai][1])}</span>
-          <span class="main"><span class="verse rc-snip" style="font-family:${R.font}">${snippet(ai, a.words)}</span>
-          <span class="s">${suraName(R.ayas[ai][0])} · ${times(a.n)} · آخرها ${ago(a.last)}<span class="rc-dots" aria-label="${ar(a.ok.length)} من ${ar(MASTER_DAYS)} قراءات صحيحة">${dots}</span></span></span>
-          <span class="rc-mic" data-rc-start="${ai}" aria-label="سمّع الآية">${MIC}</span></button>`;
-      }).join('') + '</div>';
-    }
-
-    // ---- الخطة: the surah being memorized, the revision schedule, the maps
-    function planHTML() {
-      let h = '';
-      if (pl) {
-        const f = pl.done / pl.n, end = new Date(Date.now() + pl.days * 864e5);
-        const endTxt = new Intl.DateTimeFormat('ar-u-nu-arab', { weekday: 'long', day: 'numeric', month: 'long' }).format(end);
-        h += `<section class="rc-plan">
-          <div class="rc-plan-h"><span class="rc-ring big" style="--f:${f}"><b>${ar(Math.round(f * 100))}<small>٪</small></b></span>
-            <span class="rc-plan-t"><small>تحفظ الآن</small><b>${suraName(pl.s)}</b><span>${ar(pl.done)} من ${ar(pl.n)} آية</span></span></div>
-          ${pl.finished ? `<p class="rc-plan-eta done">أتممت حفظها، ما شاء الله. تدخل جدول المراجعة، واختر سورتك التالية.</p>`
-            : `<p class="rc-plan-eta">${ayaCount(pl.left)} باقية · تتمّها بإذن الله في ${pl.days === 1 ? 'يوم واحد' : pl.days === 2 ? 'يومين' : `${ar(pl.days)} ${pl.days <= 10 ? 'أيام' : 'يومًا'}`}، ${esc(endTxt)}</p>`}
-          <div class="rc-plan-per"><span>كل يوم</span><span class="rc-chips">${PER.map(k => `<button data-rc-per="${k}"${pl.per === k ? ' class="on"' : ''}>${ar(k)}</button>`).join('')}</span><span>آيات</span></div>
-          <div class="rc-plan-acts">${pl.finished ? '' : `<button class="rc-go-b sm" data-rc-new>${MIC}ورد اليوم</button>`}<button class="rc-not" data-rc-plan-change>${pl.finished ? 'اختر سورة' : 'غيّر السورة'}</button></div>
+    // ---- the plan, as a journey: the surah in its ring, a dot a day to its end
+    if (pl) {
+      const f = pl.done / pl.n, days = Math.ceil(pl.n / pl.per), past = Math.floor(pl.done / pl.per), dots = Math.min(days, 21);
+      const end = new Date(Date.now() + pl.days * 864e5);
+      h += `<div class="pp-h"><b>رحلة الحفظ</b><button data-rc-view="pick">${pl.finished ? 'سورة جديدة' : 'غيّر'}</button></div>
+        <section class="pp-plan">
+          <div class="pp-plan-r" style="--f:${f}"><span><b>${suraName(pl.s)}</b><small>${ar(Math.round(f * 100))}٪</small></span></div>
+          <div class="pp-plan-x">
+            <b>${pl.finished ? 'أتممتها، ما شاء الله' : `${ayaCount(pl.left)} باقية`}</b>
+            <small>${pl.finished ? 'دخلت جدول المراجعة' : `تتمّها ${pl.days <= 1 ? 'غدًا' : `في ${ar(pl.days)} ${pl.days <= 10 ? 'أيام' : 'يومًا'}`} · ${esc(fmt({ weekday: 'long', day: 'numeric', month: 'long' }).format(end))}`}</small>
+            <span class="pp-path">${Array.from({ length: dots }, (_, i) => `<i class="${i < Math.round(past * dots / days) ? 'on' : ''}${i === Math.round(past * dots / days) && !pl.finished ? ' now' : ''}"></i>`).join('')}<em>🏁</em></span>
+            <span class="pp-per">${PER.map(k => `<button data-rc-per="${k}"${pl.per === k ? ' class="on"' : ''}>${ar(k)}</button>`).join('')}<small>آية/يوم</small></span>
+          </div>
         </section>`;
-      }
-      if (!pl || pl.finished || store.get('recite.planPick', false)) h += pickHTML();
-      // the revision schedule
-      if (revs.length) {
-        h += `<div class="group-label">جدول المراجعة</div><p class="rc-hint">كل سورة حفظتها تعود إليك لتراجعها، وتطول المدة كلما راجعتها بلا أخطاء.</p><div class="group">` + revs.map(r =>
-          `<div class="row rc-rev"><span class="rc-rev-d ${r.due > 0 ? 'late' : r.due === 0 ? 'now' : ''}">${r.due >= 0 ? (r.due ? `متأخرة ${ar(r.due)}` : 'اليوم') : `بعد ${ar(-r.due)}`}</span>
-            <span class="main"><span class="t">${suraName(r.s)}</span><span class="s">${r.whole ? 'كاملة' : `${ar(r.got)} من ${ar(r.size)}`} · آخر قراءة ${ago(r.last)}${r.weak ? ` · ${ar(r.weak)} ${r.weak <= 10 && r.weak > 2 ? 'مواضع ضعف' : 'موضع ضعف'}` : ''}</span>
-            <span class="rc-str" aria-label="ثباتها">${[0, 1, 2, 3, 4].map(j => `<i${j < Math.min(5, r.n) ? ' class="on"' : ''}></i>`).join('')}</span></span>
-            <button class="rc-cont" data-rc-rev="${r.s}">${MIC}<span>راجع</span></button></div>`).join('') + '</div>';
-      }
-      h += juzHTML() + memoHTML();
-      return h;
-    }
-    // a surah to memorize: the ones begun first, then the short ones from the end, as most begin
-    function pickHTML() {
-      const begun = Array.from({ length: 114 }, (_, i) => i + 1).filter(x => got[x] && got[x] < sizes[x] && x !== pl?.s).sort((a, b) => lastIn[b] - lastIn[a]).slice(0, 4);
-      const next = []; for (let x = 114; x >= 1 && next.length < 6; x--) if (!got[x] && x !== pl?.s) next.push(x);
-      const opt = x => `<option value="${x}">${ar(x)} · ${suraName(x)} (${ar(sizes[x])} آية)</option>`;
-      return `<section class="rc-pick"><div class="rc-pick-h">${pl ? 'سورة جديدة للحفظ' : 'ابدأ خطة حفظ'}</div>
-        <p class="rc-hint">اختر سورة، وكم آية تحفظها كل يوم؛ فيصير لك ورد يومي وموعد لإتمامها، وتنتقل إلى جدول المراجعة حين تتمّها.</p>
-        ${begun.length ? `<div class="rc-pick-l">بدأتها</div><div class="rc-pick-c">${begun.map(x => `<button data-rc-plan="${x}">${suraName(x)}<small>${ar(got[x])}/${ar(sizes[x])}</small></button>`).join('')}</div>` : ''}
-        <div class="rc-pick-l">من آخر المصحف</div><div class="rc-pick-c">${next.map(x => `<button data-rc-plan="${x}">${suraName(x)}<small>${ar(sizes[x])}</small></button>`).join('')}</div>
-        <label class="rc-pick-any"><span>أو أي سورة</span><select data-rc-plan-sel><option value="">اختر…</option>${Array.from({ length: 114 }, (_, i) => opt(i + 1)).join('')}</select></label>
-      </section>`;
-    }
-    // the 30 ajza, each filled by how much of it was recited
-    function juzHTML() {
-      const all = new Array(31).fill(0), have = new Array(31).fill(0);
-      R.ayas.forEach((a, i) => { all[a[3]]++; if (said[i]) have[a[3]]++; });
-      if (!n) return '';
-      return `<div class="group-label">الأجزاء</div><div class="rc-juz">${Array.from({ length: 30 }, (_, i) => i + 1).map(j => {
-        const f = all[j] ? have[j] / all[j] : 0;
-        return `<span class="${f >= 1 ? 'full' : ''}" title="الجزء ${ar(j)}: ${ar(Math.round(f * 100))}٪"><i style="height:${Math.round(f * 100)}%"></i><b>${ar(j)}</b></span>`;
-      }).join('')}</div>`;
     }
 
-    // ---- الإحصاءات: the totals, the week against the last, 16 weeks of days, the mistakes
-    function statsHTML() {
-      if (fresh) return '<p class="rc-empty">إحصاءاتك تظهر هنا بعد أول تسميع: ما حفظته، ووقتك، وأيامك، وأخطاؤك.</p>';
-      const tot = l.total || {}, secs = Math.max(tot.secs || 0, l.sessions.reduce((t, x) => t + (x.secs || 0), 0));
-      const sessions = Math.max(tot.sessions || 0, l.sessions.length), mastered = Object.values(l.ayas).filter(a => a.done).length;
-      const full = Array.from({ length: 114 }, (_, i) => i + 1).filter(x => sizes[x] && got[x] >= sizes[x]).length;
-      const pages = new Set(), pageAll = new Map();
-      R.ayas.forEach((a, i) => { pageAll.set(a[2], (pageAll.get(a[2]) || 0) + 1); });
-      const pageGot = new Map(); for (const k of Object.keys(said)) { const a = R.ayas[+k]; if (a) pageGot.set(a[2], (pageGot.get(a[2]) || 0) + 1); }
-      for (const [pg, c] of pageGot) if (c >= pageAll.get(pg)) pages.add(pg);
-      const pct = n / R.ayas.length * 100, hrs = secs / 3600;
-      let h = `<div class="rc-kpi">
-        <div><b>${ar(n)}</b><small>آية سمّعتها</small></div>
-        <div><b>${ar(pages.size)}</b><small>صفحة كاملة</small></div>
-        <div><b>${ar(full)}</b><small>${full === 1 ? 'سورة كاملة' : 'سورة كاملة'}</small></div>
-        <div><b>${ar(pct < 1 ? pct.toFixed(1) : Math.round(pct))}٪</b><small>من القرآن</small></div>
-        <div><b>${hrs >= 1 ? ar(hrs.toFixed(1).replace('.', '٫')) : ar(Math.round(secs / 60))}</b><small>${hrs >= 1 ? 'ساعة تسميع' : 'دقيقة تسميع'}</small></div>
-        <div><b>${ar(sessions)}</b><small>جلسة</small></div>
-        <div><b>${ar(mastered)}</b><small>آية أتقنتها</small></div>
-        <div><b>${ar(Math.max(run, longest(l)))}</b><small>أطول سلسلة</small></div>
-      </div>`;
-      // this week against the last
-      const now = Date.now(), wk = now - 7 * 864e5, wk2 = now - 14 * 864e5;
-      const sum = (list, f) => list.reduce((t, x) => t + (x[f] || 0), 0);
-      const w1 = l.sessions.filter(x => x.t >= wk), w0 = l.sessions.filter(x => x.t >= wk2 && x.t < wk);
-      const cmp = (a, b) => b ? (a >= b ? `<em class="up">▲ ${ar(Math.round((a / b - 1) * 100))}٪</em>` : `<em class="down">▼ ${ar(Math.round((1 - a / b) * 100))}٪</em>`) : '';
-      const dd = d => { let t = 0; for (let i = 0; i < 7; i++) { const x = new Date(now - (i + d) * 864e5); t += l.days?.[day(x)] || 0; } return t; };
-      const a1 = dd(0), a0 = dd(7), m1 = Math.round(sum(w1, 'secs') / 60), m0 = Math.round(sum(w0, 'secs') / 60);
-      h += `<div class="group-label">هذا الأسبوع · مقارنة بالذي قبله</div><div class="rc-wk2">
-        <div><small>آيات</small><b>${ar(a1)}</b>${cmp(a1, a0)}</div>
-        <div><small>دقائق</small><b>${ar(m1)}</b>${cmp(m1, m0)}</div>
-        <div><small>جلسات</small><b>${ar(w1.length)}</b>${cmp(w1.length, w0.length)}</div>
-        <div><small>أخطاء</small><b>${ar(sum(w1, 'errs'))}</b>${sum(w0, 'errs') ? (sum(w1, 'errs') <= sum(w0, 'errs') ? `<em class="up">▼ أقل</em>` : `<em class="down">▲ أكثر</em>`) : ''}</div></div>`;
-      h += heatHTML();
-      return h + insightsHTML();
+    // ---- the revisions, the most urgent first
+    if (revs.length) {
+      h += `<div class="pp-h"><b>المراجعة</b><button data-rc-view="revs">الجدول كله</button></div>
+        <div class="pp-revs">${revs.slice(0, 8).map(r => `<button class="pp-rev ${r.due > 0 ? 'late' : r.due === 0 ? 'now' : 'later'}" data-rc-rev="${r.s}">
+          <small>${r.due > 0 ? `متأخرة ${ar(r.due)}` : r.due === 0 ? 'اليوم' : r.due === -1 ? 'غدًا' : `بعد ${ar(-r.due)} أيام`}</small>
+          <b>${suraName(r.s)}</b>
+          <span class="pp-str">${[0, 1, 2, 3, 4].map(j => `<i${j < Math.min(5, r.n) ? ' class="on"' : ''}></i>`).join('')}</span></button>`).join('')}</div>`;
     }
-    // 16 weeks, a cell a day (ayas recited), oldest on the right as a page is read
+
+    // ---- the numbers, as a bento of tiles
+    if (!fresh) {
+      const tot = l.total || {}, secs = Math.max(tot.secs || 0, l.sessions.reduce((t, x) => t + (x.secs || 0), 0));
+      const full = Array.from({ length: 114 }, (_, i) => i + 1).filter(x => sizes[x] && got[x] >= sizes[x]).length;
+      const mastered = all.filter(([, a]) => a.done).length, pct = n / R.ayas.length * 100, hrs = secs / 3600;
+      const w1 = l.sessions.filter(x => x.t >= Date.now() - 7 * 864e5);
+      const acc = w1.length ? 1 - w1.reduce((t, x) => t + x.errs, 0) / Math.max(1, w1.reduce((t, x) => t + x.words, 0)) : null;
+      h += `<div class="pp-h"><b>أرقامك</b><button data-rc-view="suras">سوري</button></div>
+        <div class="pp-bento">
+          <div class="pp-t big green"><span class="pp-ring" style="--f:${Math.min(1, pct / 100)}"></span><b>${ar(n)}</b><small>آية سمّعتها · ${ar(pct < 1 ? pct.toFixed(1) : Math.round(pct))}٪ من القرآن</small></div>
+          <div class="pp-t amber"><b>${ar(Math.max(run, longest(l)))}</b><small>أطول سلسلة</small></div>
+          <div class="pp-t sky"><b>${hrs >= 1 ? ar(hrs.toFixed(1).replace('.', '٫')) : ar(Math.round(secs / 60))}</b><small>${hrs >= 1 ? 'ساعة' : 'دقيقة'} تسميع</small></div>
+          <div class="pp-t violet"><b>${ar(full)}</b><small>سورة كاملة</small></div>
+          <div class="pp-t coral"><b>${acc == null ? '—' : ar(Math.round(acc * 100)) + '٪'}</b><small>دقّتك هذا الأسبوع</small></div>
+          <div class="pp-t wide">${heatHTML()}</div>
+          <div class="pp-t ink"><b>${ar(mastered)}</b><small>آية أتقنتها</small></div>
+          <div class="pp-t ink"><b>${ar(Math.max(tot.sessions || 0, l.sessions.length))}</b><small>جلسة</small></div>
+        </div>`;
+      h += mistakesHTML();
+    } else h += helpHTML();
+    return h + '</div>';
+
+    // the week: a bubble a day, filled when recited, today's ring filling toward the goal
+    function weekHTML() {
+      const LET = ['ح', 'ن', 'ث', 'ر', 'خ', 'ج', 'س'], now = new Date();
+      let w = '';
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(now); d.setDate(now.getDate() - i);
+        const c = l.days?.[day(d)] || 0, isT = !i, f = isT && goal ? Math.min(1, today / goal) : c ? 1 : 0;
+        w += `<li class="${c ? 'on' : ''}${isT ? ' now' : ''}" style="--f:${f};--i:${6 - i}" title="${c ? ayaCount(c) : 'لا تسميع'}"><span>${c ? ICONS.check : ar(d.getDate())}</span><small>${LET[d.getDay()]}</small></li>`;
+      }
+      return `<ol class="pp-week">${w}</ol>${goal ? `<p class="pp-goal">${today >= goal ? '🎉 بلغت هدف اليوم' : `${ayaCount(goal - today)} لهدف اليوم`}</p>` : ''}`;
+    }
+    // the mistakes: their kinds as chips, the words most often wrong, the weak spots a tap away
+    function mistakesHTML() {
+      const ss = l.sessions.filter(x => x.t >= Date.now() - 30 * 864e5), kinds = {}, words = new Map();
+      for (const x of ss) for (const [ai, wi, e] of x.list || []) {
+        kinds[e] = (kinds[e] || 0) + 1;
+        if (wi >= 0 && R.ayas[ai]) { const k = ai + ':' + wi; words.set(k, (words.get(k) || 0) + 1); }
+      }
+      if (!Object.keys(kinds).length && !weak.length) return '';
+      const often = [...words].filter(([, c]) => c >= 2).sort((a, b) => b[1] - a[1]).slice(0, 8);
+      return `<div class="pp-h"><b>أخطاؤك</b><small>آخر ٣٠ يومًا</small></div>
+        <div class="pp-kinds">${Object.entries(kinds).sort((a, b) => b[1] - a[1]).map(([e, c], i) => `<span class="pp-k k${i % 5}"><b>${ar(c)}</b>${KIND_SHORT[e] || TYPES[e] || e}</span>`).join('')}</div>
+        ${often.length ? `<div class="pp-sub-h">كلمات تتكرر أخطاؤك فيها</div><div class="pp-words">${often.map(([k, c]) => {
+          const [ai, wi] = k.split(':').map(Number);
+          return `<button data-rc-aya="${ai}"><b style="font-family:${R.font}">${esc(ayaTokens(ai)[wi] || '')}</b><small>${ayaLabel(ai)}</small><i>${ar(c)}</i></button>`;
+        }).join('')}</div>` : ''}
+        ${weak.length ? `<button class="pp-wide-b" data-rc-view="weak">${ICONS.fix}<span>كل مواضع الضعف <b>${ar(weak.length)}</b></span>${ICONS.go}</button>` : ''}`;
+    }
+    // 16 weeks, a cell a day, oldest on the right
     function heatHTML() {
       const cols = [], now = new Date(), start = new Date(now); start.setDate(now.getDate() - now.getDay() - 7 * 15);
-      let active = 0, total = 0;
+      let active = 0;
       for (let w = 0; w < 16; w++) {
         const col = [];
         for (let d = 0; d < 7; d++) {
           const x = new Date(start); x.setDate(start.getDate() + w * 7 + d);
           const c = x > now ? -1 : l.days?.[day(x)] || 0;
-          if (c > 0) { active++; total += c; }
-          const lv = c < 0 ? 'x' : !c ? 0 : c < 5 ? 1 : c < 10 ? 2 : c < 20 ? 3 : 4;
-          col.push(`<i class="h${lv}" title="${new Intl.DateTimeFormat('ar-u-nu-arab', { day: 'numeric', month: 'short' }).format(x)}: ${c > 0 ? ayaCount(c) : 'لا تسميع'}"></i>`);
+          if (c > 0) active++;
+          col.push(`<i class="h${c < 0 ? 'x' : !c ? 0 : c < 5 ? 1 : c < 10 ? 2 : c < 20 ? 3 : 4}" title="${fmt({ day: 'numeric', month: 'short' }).format(x)}: ${c > 0 ? ayaCount(c) : 'لا تسميع'}"></i>`);
         }
         cols.push(`<span>${col.join('')}</span>`);
       }
-      return `<div class="group-label">أيامك · آخر ١٦ أسبوعًا</div><section class="rc-heat"><div class="rc-heat-g" role="img" aria-label="${ar(active)} يومًا فيها تسميع، ${ayaCount(total)}">${cols.join('')}</div>
-        <div class="rc-heat-k"><small>${ar(active)} يومًا فيها تسميع</small><span>أقل<i class="h0"></i><i class="h1"></i><i class="h2"></i><i class="h3"></i><i class="h4"></i>أكثر</span></div></section>`;
+      return `<div class="pp-heat-h"><b>${ar(active)}</b><small>يومًا فيها تسميع · آخر ١٦ أسبوعًا</small></div><div class="pp-heat">${cols.join('')}</div>`;
+    }
+    // the whole revision schedule
+    function revsHTML() {
+      if (!revs.length) return '<p class="rc-empty">ما تحفظه من السور يعود إليك هنا لتراجعه، وتطول المدة كلما راجعته بلا أخطاء.</p>';
+      return `<p class="rc-hint">كل سورة حفظتها تعود إليك بعد يوم، ثم يومين، ثم ٤، ثم أسبوع، ثم أسبوعين، ثم شهر، كلما راجعتها بلا أخطاء؛ وأسرع إن كانت فيها مواضع ضعف.</p><div class="group">` + revs.map(r =>
+        `<div class="row rc-rev"><span class="rc-rev-d ${r.due > 0 ? 'late' : r.due === 0 ? 'now' : ''}">${r.due >= 0 ? (r.due ? `متأخرة ${ar(r.due)}` : 'اليوم') : `بعد ${ar(-r.due)}`}</span>
+          <span class="main"><span class="t">${suraName(r.s)}</span><span class="s">${r.whole ? 'كاملة' : `${ar(r.got)} من ${ar(r.size)}`} · آخر قراءة ${ago(r.last)}${r.weak ? ` · ${ar(r.weak)} موضع ضعف` : ''}</span>
+          <span class="rc-str">${[0, 1, 2, 3, 4].map(j => `<i${j < Math.min(5, r.n) ? ' class="on"' : ''}></i>`).join('')}</span></span>
+          <button class="rc-cont" data-rc-rev="${r.s}">${MIC}<span>راجع</span></button></div>`).join('') + '</div>';
+    }
+    function weakHTML(list) {
+      if (!list.length) return '<p class="rc-empty">لا مواضع ضعف الآن، ما شاء الله.</p>';
+      return `<button class="pp-wide-b solid" data-rc-review>${MIC}<span>سمّعها كلها الآن</span></button><div class="group">` + list.map(([ai, a]) => {
+        const dots = [0, 1, 2].map(j => `<i${j < a.ok.length ? ' class="on"' : ''}></i>`).join('');
+        return `<button class="row rc-row" data-rc-aya="${ai}"><span class="num">${ar(R.ayas[ai][1])}</span>
+          <span class="main"><span class="verse rc-snip" style="font-family:${R.font}">${snippet(ai, a.words)}</span>
+          <span class="s">${suraName(R.ayas[ai][0])} · ${times(a.n)} · آخرها ${ago(a.last)}<span class="rc-dots">${dots}</span></span></span>
+          <span class="rc-mic" data-rc-start="${ai}" aria-label="سمّع الآية">${MIC}</span></button>`;
+      }).join('') + `</div><p class="rc-hint">تُتقَن الآية بقراءتها صحيحة في ${ar(MASTER_DAYS)} أيام مختلفة، فتخرج من هنا.</p>`;
+    }
+    // a surah to memorize: the ones begun, then the short ones from the end of the mushaf, or any
+    function pickHTML() {
+      const begun = Array.from({ length: 114 }, (_, i) => i + 1).filter(x => got[x] && got[x] < sizes[x]).sort((a, b) => lastIn[b] - lastIn[a]).slice(0, 6);
+      const next = []; for (let x = 114; x >= 1 && next.length < 9; x--) if (!got[x]) next.push(x);
+      const tile = (x, sub) => `<button class="pp-pick-t" data-rc-plan="${x}"><b>${suraName(x)}</b><small>${sub}</small></button>`;
+      return `<p class="rc-hint">اختر سورة، ثم كم آية تحفظ كل يوم: يصير لك ورد يومي وموعد لإتمامها، وتدخل جدول المراجعة حين تتمّها.</p>
+        ${begun.length ? `<div class="pp-sub-h">بدأتها</div><div class="pp-pick">${begun.map(x => tile(x, `${ar(got[x])} من ${ar(sizes[x])}`)).join('')}</div>` : ''}
+        <div class="pp-sub-h">من آخر المصحف</div><div class="pp-pick">${next.map(x => tile(x, ayaCount(sizes[x]))).join('')}</div>
+        <label class="rc-pick-any"><span>أو أي سورة</span><select data-rc-plan-sel><option value="">اختر…</option>${Array.from({ length: 114 }, (_, i) => `<option value="${i + 1}">${ar(i + 1)} · ${suraName(i + 1)} (${ar(sizes[i + 1])} آية)</option>`).join('')}</select></label>`;
     }
 
     // ---- حفظي: the whole so far, and each surah begun, to go on with
@@ -2318,8 +2301,7 @@ const Recite = (() => {
   function setPlan(s) {
     if (!R.suraStart[s] && R.suraStart[s] !== 0) return;
     store.set(planKey(), { s, per: store.get(planKey(), null)?.per || 5, at: Date.now() });
-    store.set('recite.planPick', false);
-    store.set('recite.seg', 'plan');
+    store.set('recite.view', '');
     renderSheet();
     toast(`خطتك: ${suraName(s)}`);
   }
@@ -2343,15 +2325,9 @@ const Recite = (() => {
     if (per) { const p = store.get(planKey(), null); if (p) { store.set(planKey(), { ...p, per: +per.dataset.rcPer }); renderSheet(); } return true; }
     const pk = e.target.closest('[data-rc-plan]');
     if (pk) { setPlan(+pk.dataset.rcPlan); return true; }
-    if (e.target.closest('[data-rc-plan-change]')) { store.set('recite.planPick', true); renderSheet(); return true; }
-    const sg = e.target.closest('[data-rc-seg]');
-    if (sg) {
-      store.set('recite.seg', sg.dataset.rcSeg);
-      const y = $('#sheetBody').scrollTop;
-      renderSheet();
-      $('#sheetBody').scrollTop = y;
-      return true;
-    }
+    // (a page of its own over the panel, or back to it)
+    const vw = e.target.closest('[data-rc-view]');
+    if (vw) { store.set('recite.view', vw.dataset.rcView); renderSheet(); $('#sheetBody').scrollTop = 0; haptic(5); return true; }
     if (e.target.closest('[data-rc-review]')) { closeSheet(); start(null, weakAyas()); return true; }
     if (e.target.closest('[data-rc-test]')) { const t = testAyas(); if (t) { closeSheet(); start(null, t, { test: true }); } return true; }
     const pick = e.target.closest('[data-rc-pick]');

@@ -2218,17 +2218,11 @@ matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyThe
 
 let tab = 'suras';
 function openRecite() { openSheet('recite'); }
-// the same panel, on its settings («الإعدادات»)
-function openReciteSettings() {
-  store.set('recite.seg', 'set');
-  openSheet('recite');
-  requestAnimationFrame(() => {
-    const nav = $('#sheetBody .rc-seg');
-    if (nav) $('#sheetBody').scrollTop += nav.getBoundingClientRect().top - $('#sheetBody').getBoundingClientRect().top - 8;
-  });
-}
-function openSheet(t = tab) {
+// the same panel, on its settings page
+function openReciteSettings() { openSheet('recite', 'set'); }
+function openSheet(t = tab, view = '') {
   tab = t;
+  store.set('recite.view', view); // (التسميع's own pages: its main one, unless asked)
   railOpen(false);
   $('#sheetSub').textContent = `${K.name} · ${META.riwayat.find(r => r.id === R.id)?.name || ''} · صفحة ${ar(S.page)}`;
   closeActions();
