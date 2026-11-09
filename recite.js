@@ -1066,6 +1066,7 @@ const Recite = (() => {
   // Muaalem: the reading so far, looked up in the whole Quran (begun at any
   // word); the session then goes on with it, from that word
   const FIND_EVERY = 250, QUIET = 1500, FIND_MIN = 16, FOUND_GO = 1300;
+  const FIND_WORDS = 3; // words heard right at the place, at least (its lead over every other place says the rest)
   const FIND_MARGIN = 12; // heard sounds the best place must explain beyond any other
   // checked: the steps already seen to (after an update, or the model brought back mid-search)
   function findMu(checked) {
@@ -1211,7 +1212,7 @@ const Recite = (() => {
   function locateMu(h, conf, alts) {
     const all = Mu.locate(h, conf, alts, 6), right = x => x.ok / Math.max(1, x.ok + x.err);
     const top = all[0], other = all.slice(1).reduce((m, x) => Math.max(m, x.fit), 0);
-    const fits = all.filter(x => x.ok >= 4 && (right(x) >= 0.75 || x === top && right(x) >= 0.5 && x.fit - other >= 2.5 * FIND_MARGIN));
+    const fits = all.filter(x => x.ok >= FIND_WORDS && (right(x) >= 0.75 || x === top && right(x) >= 0.5 && x.fit - other >= 2.5 * FIND_MARGIN));
     if (!fits.length) return null;
     fits.forEach(x => { x.far = Math.abs(R.ayas[x.ai][2] - S.page); });
     fits.sort((a, b) => b.fit - a.fit || a.far - b.far);
