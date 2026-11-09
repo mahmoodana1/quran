@@ -1155,9 +1155,10 @@ const Recite = (() => {
     f.last = r ? r.g : null;
     if (r && !f.found) { f.found = true; syncBubble(); }
     // (far ahead of any other on five words or more, the next look agreeing is enough; on fewer, two
-    // looks: «فلا أقسم ب…» opens several ayas)
+    // looks: «فلا أقسم ب…» opens several ayas; a lead of one margin, on four words at least: three
+    // fit by chance after a false start, وجمع الشم… بل يريد read as …ومنكم من يريد)
     const lead = r ? r.fit - r.next : 0;
-    const sure = r && f.same >= 1 && (lead >= 2 * FIND_MARGIN && (r.ok >= 5 || f.same >= 2) || f.same >= 2 && (lead >= FIND_MARGIN || (n > 150 && f.same >= 4) || (quiet && (lead >= 3 || f.same >= 3))));
+    const sure = r && f.same >= 1 && (lead >= 2 * FIND_MARGIN && (r.ok >= 5 || f.same >= 2) || f.same >= 2 && (lead >= FIND_MARGIN && r.ok >= 4 || (n > 150 && f.same >= 4) || (quiet && (lead >= 3 || f.same >= 3))));
     if (!sure) { if (n > 320 || (quiet && Date.now() - f.grew > 6000)) { stopFind(); toast('لم أجد الآية — اقرأ أكثر من آية'); } return; }
     clearInterval(f.timer);
     Mu.boost(false);
@@ -1172,7 +1173,7 @@ const Recite = (() => {
   // the search made sure): { n words said, errs: [[i, type, got, want]] } in the session's words from there
   function reached(r, h, conf, alts) {
     const errs = [], s0 = R.ayas[r.ai][0], gone = [];
-    let n = 0, cut = 0, a = r.ai, w0 = r.w, at = 0;
+    let n = 0, cut = r.cut || 0, a = r.ai, w0 = r.w, at = cut; // (what was heard before it: a false start, left out)
     try {
       // aya by aya, as a session follows a reading (muFollow): the aya and the two after it lined up
       // with what was heard from it on; once the next is begun, this one is done
@@ -1264,7 +1265,10 @@ const Recite = (() => {
     if (!fits.length) return null;
     fits.forEach(x => { x.far = Math.abs(R.ayas[x.ai][2] - S.page); });
     fits.sort((a, b) => b.fit - a.fit || a.far - b.far);
-    return { ...fits[0], next: fits[1]?.fit ?? 0 };
+    // (its lead over every other place, not only those heard well enough to go to: a reading begun
+    // wrong, its place not yet clear, is no lead for the first place that fits a little)
+    const rest = all.filter(x => x !== fits[0] && Math.abs(x.g - fits[0].g) > 1).reduce((m, x) => Math.max(m, x.fit), 0);
+    return { ...fits[0], next: Math.max(fits[1]?.fit ?? 0, rest) };
   }
   function locate(text) {
     if (norm(text).trim().split(/\s+/).length < 2) return null;
@@ -2518,5 +2522,5 @@ const Recite = (() => {
 
   syncBubble();
 
-  return { start, cancel, paint, onTap, card, suraCard, showWord, prepResume, wordStats, resetWord, ago, restore, syncBubble, mic, panelHTML, mounted, onSheetClick, active: () => !!G };
+  return { start, cancel, paint, onTap, card, suraCard, showWord, prepResume, wordStats, resetWord, ago, restore, syncBubble, mic, panelHTML, mounted, onSheetClick, active: () => !!G, _g: () => G };
 })();

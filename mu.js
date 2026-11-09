@@ -659,10 +659,11 @@ const Mu = (() => {
   }
   const BUCKET = 8;    // letters: starts this close vote together
   const COMMON = 4000; // a run found in more places than this says little
-  // the places a reading most likely began, best first: [{ ai, w, g, fit, ok, err }]
+  // the places a reading most likely began, best first: [{ ai, w, g, fit, ok, err, cut }]
   // (fit: how many of the heard sounds its words said right account for, so the
   // same reading fits the same text equally wherever it is; ok, err: its words
-  // heard right and wrong there; g: the word counted from the Quran's start)
+  // heard right and wrong there; g: the word counted from the Quran's start; cut: the heard sounds
+  // before its first word, a false start, left out)
   function locate(heard, conf, alts, n = 10) {
     // an isti'adha or a basmala said first is set aside (the basmala is al-Fatiha's
     // first aya here, which would be found instead of the aya read after it)
@@ -673,6 +674,7 @@ const Mu = (() => {
       const found = locate(rest, conf && Match.unitConf(heard, conf).slice(lead.cut), alts && Match.unitAlts(heard, alts).slice(lead.cut), n);
       // al-Fatiha read from its start, its basmala and all: from its basmala
       if (lead.basmala) for (const x of found) if (x.ai === 1 && x.w === 0) Object.assign(x, { ai: 0, g: 0 });
+      for (const x of found) x.cut += lead.cut;
       return found;
     }
     const q = whole(), h = skeleton(heard).slice(0, 160), votes = new Map();
@@ -701,14 +703,18 @@ const Mu = (() => {
         g += k;
       }
       const st = Match.words(ex, heard, heard.length, false, { freeLead: true, freeStart: true, conf, alts });
-      const first = st.findIndex(x => x.state !== 'pre');
+      // begun at the first two words heard right together: words wrong before them (a word right
+      // among them at most, by chance) are a false start, a word or two of another aya said and
+      // left, not the words before the one read
+      const two = st.findIndex((x, i) => x.state === 'ok' && st[i + 1]?.state === 'ok');
+      const first = two > 0 && st.slice(0, two).filter(x => x.state === 'ok').length <= 1 ? two : st.findIndex(x => x.state === 'ok');
       if (first < 0) continue;
-      const ok = st.filter(x => x.state === 'ok').length, err = st.filter(x => x.state === 'err').length;
+      const ok = st.filter(x => x.state === 'ok').length, err = st.slice(first).filter(x => x.state === 'err').length;
       const said = new Uint8Array(heard.length + 1);
       for (const x of st) if (x.state === 'ok' && x.at) for (let k = x.at[0]; k < x.at[1]; k++) said[k] = 1;
       const g = words[first], [ai, w] = q.where(g);
       if (ai === 0) continue; // a basmala alone is not where a reading is
-      out.push({ ai, w, g, fit: said.reduce((a, b) => a + b, 0), ok, err });
+      out.push({ ai, w, g, fit: said.reduce((a, b) => a + b, 0), ok, err, cut: st[first].at?.[0] || 0 });
     }
     // the same place found from two votes: once, at its best
     out.sort((x, y) => y.fit - x.fit || x.err - y.err);
