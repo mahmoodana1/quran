@@ -32,12 +32,13 @@ const SEC = RATE;      // while a window can't yet be its full length (the first
 //   save: every SAVE_GAP s
 const DUTY = 0.5, MAX_GAP = 3, SAVE_GAP = 1.5;
 let rate = 'auto';
-// on a slow device (a read over SLOW_MS), auto: the full reads at most DUTY_FULL of the time, and
-// between them glances: reads of only the newest GLANCE s, which make nothing final, only show the
-// words being said sooner (their frames from GLANCE_CTX s in, the model having heard a little
-// before them; the earlier tentative ones kept), all at most DUTY_SHOW of the time. What is
-// marked comes from the full reads only, as before (a little later)
-const SLOW_MS = 300, DUTY_FULL = 0.4, DUTY_SHOW = 0.8, GLANCE_CTX = 0.4, GLANCE_MIN = 0.3;
+// on a slow device (a read over SLOW_MS), auto: the full reads as always (DUTY_FULL = DUTY: what is
+// marked is read exactly as before; spaced further, each read's first new sounds had less heard
+// before them, and harakat were heard worse), and between them glances: reads of only the newest
+// GLANCE s, which make nothing final, only show the words being said sooner (their frames from
+// GLANCE_CTX s in, the model having heard a little before them; the earlier tentative ones kept),
+// all at most DUTY_SHOW of the time
+const SLOW_MS = 300, DUTY_FULL = DUTY, DUTY_SHOW = 0.8, GLANCE_CTX = 0.4, GLANCE_MIN = 0.3;
 let GLANCE = 2; // s (on a CPU 1.6: a GPU prepares each length, warm() whole seconds only)
 let shortMs = 0, shownUpTo = 0; // how long a glance takes here, lately; up to when (s) the newest read went
 const slow = () => rate === 'auto' && stepMs > SLOW_MS;

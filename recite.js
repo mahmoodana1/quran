@@ -535,8 +535,9 @@ const Recite = (() => {
   // session only; the reader's own choice («سريع») is left alone FAST_OWN_MS
   const FAST_WIN = 150, FAST_AT = 12, FAST_OFF = 10.5, FAST_ON_MS = 4000, FAST_OFF_MS = 4000, FAST_OWN_MS = 30000;
   function speed(g) {
-    const m = g.mu, h = m.final + m.tent, at = m.at;
-    if (!at || at.length !== h.length || !at.length) return;
+    // (of the final sounds only: the tentative ones, of a glance's short read, run fast and loose)
+    const m = g.mu, all = m.final + m.tent, at = m.at, h = m.final;
+    if (!at || at.length !== all.length || !h.length) return;
     let n = 0, t = 0, next = null;
     for (let c = h.length - 1; c >= 0 && at[h.length - 1] - at[c] < FAST_WIN; c--) {
       if (c > 0 && h[c] === h[c - 1] && 'اۦۥں'.includes(h[c])) continue; // (a madd's run: one sound)
@@ -642,9 +643,12 @@ const Recite = (() => {
   }
   // each aya once said (or the last, as far as it was said), asked again of what the model heard (its frames' log-probabilities, ctc.js):
   // the aya as written scored against it with a word left out (each word marked so), with another
-  // word marked as heard in its place, and with each two neighbouring words the other way round. A
-  // word marked left out that the written aya fits clearly better (SKIP_BY) was said; one marked
-  // another that the written aya fits about as well as what was heard (WRONG_BY) is taken back too;
+  // word marked as heard in its place, with a word marked as any sounds at all, and with each two
+  // neighbouring words the other way round. A word marked left out that the written aya fits clearly
+  // better (SKIP_BY) was said; one marked another that the written aya fits about as well as what was
+  // heard (WRONG_BY) is taken back too; each only where the written word fits as well as any sounds
+  // there would (a word said otherwise does not: of words given another's audio, 4-5% pass; of words
+  // said right, 95%);
   // two words that fit clearly better the other way round (SWAP_BY) are marked so. A fast reading
   // the model writes out garbled still ranks so. (On 300 ayas by 12 reciters, at their pace and
   // 1.5x: every pair swapped in the audio caught and no pair said in order marked; no word cut out
@@ -662,6 +666,9 @@ const Recite = (() => {
     const texts = [w, ...w.map((_, i) => [...w.slice(0, i), ...w.slice(i + 1)])], asks = [];
     for (let i = 0; i < n; i++) {
       const k = k0 + i, e = g.errs[k];
+      // (a word marked: it as any sounds at all, which the written word must fit about as well as; a
+      // word said otherwise fits better than none there, and than what the matcher took it for)
+      if (RECHECK.includes(e)) { asks.push(['any', i]); texts.push([...w.slice(0, i), null, ...w.slice(i + 1)]); }
       if (e === 'wrong' && g.heard[k]?.got) { asks.push(['wrong', i]); texts.push([...w.slice(0, i), g.heard[k].got, ...w.slice(i + 1)]); }
       if (i + 1 < n && Match.units(w[i]).length >= 2 && Match.units(w[i + 1]).length >= 2 && w[i] !== w[i + 1]) {
         asks.push(['order', i]); texts.push([...w.slice(0, i), w[i + 1], w[i], ...w.slice(i + 2)]);
@@ -673,11 +680,13 @@ const Recite = (() => {
     return Mu.score(f0, f1, texts).then(sc => {
       if (G !== g || !sc || sc[0] == null || sc[0] / Math.max(1, f1 - f0) < FIT) return;
       let changed = 0, added = false;
-      const swaps = [], left = i => sc[1 + i];
-      for (let i = 0; i < n; i++) if (g.errs[k0 + i] === 'skip' && sc[0] - left(i) >= SKIP_BY) { delete g.errs[k0 + i]; delete g.heard[k0 + i]; changed++; }
+      const swaps = [], left = i => sc[1 + i], any = {};
+      asks.forEach(([kind, i], j) => { if (kind === 'any') any[i] = sc[1 + n + j]; });
+      const fits = i => sc[0] >= any[i];
+      for (let i = 0; i < n; i++) if (g.errs[k0 + i] === 'skip' && sc[0] - left(i) >= SKIP_BY && fits(i)) { delete g.errs[k0 + i]; delete g.heard[k0 + i]; changed++; }
       asks.forEach(([kind, i], j) => {
         const x = sc[1 + n + j], d = x - sc[0], k = k0 + i;
-        if (kind === 'wrong' && g.errs[k] === 'wrong' && d <= WRONG_BY) { delete g.errs[k]; delete g.heard[k]; changed++; }
+        if (kind === 'wrong' && g.errs[k] === 'wrong' && d <= WRONG_BY && fits(i)) { delete g.errs[k]; delete g.heard[k]; changed++; }
         if (kind === 'order' && d >= SWAP_BY && x >= Math.max(left(i), left(i + 1))) swaps.push([d, i]);
       });
       // (two words the other way round, and the aya as written then fits poorly about them: their
