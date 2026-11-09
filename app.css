@@ -2422,3 +2422,15 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 .apk-go:active { transform: scale(.98); }
 .apk-go svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 #apk.got .apk-steps li:first-child { opacity: .5; }
+
+/* iPhone's Safari: an arrow down to its share button, below the card */
+.in-point { display: flex; justify-content: center; align-items: center; gap: 6px; margin-top: -6px; font-size: 12.5px; font-weight: 700; color: var(--gold-ink); }
+.in-point svg { width: 22px; height: 22px; fill: none; stroke: var(--p-gold); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; animation: inPoint 1.3s ease-in-out infinite; }
+@keyframes inPoint { 50% { transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { .in-point svg { animation: none; } }
+#install.compact .in-hero { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 4px 12px; padding: 14px 14px 10px; }
+#install.compact .in-icon { width: 46px; height: 46px; border-radius: 12px; margin: 0; }
+#install.compact .in-hero h2 { font-size: 18px; }
+#install.compact .in-hero p { display: none; }
+#install.compact .in-perks { margin-top: 4px; padding-top: 8px; }
+#install.compact .in-list li { padding: 6px 4px; }

@@ -160,6 +160,12 @@ const Install = (() => {
       : `${s.note ? `<p class="in-note">${s.note}</p>` : ''}
          <ol class="in-list">${s.list.map((t, i) => `<li><i>${ar(i + 1)}</i><span>${t}</span></li>`).join('')}</ol>
          ${s.foot ? `<p class="in-note">${s.foot}</p>` : ''}`;
+    // iPhone's Safari: an arrow down to its share button, and «أضفته» to stop asking
+    $('#inPoint').hidden = !(here && OS === 'ios' && BROWSER === 'safari' && /iPhone|iPod/.test(ua));
+    $('#inDone').hidden = !(here && OS === 'ios');
+    // (popped up on its own on a phone: this phone's steps only, and the green plate small, all in sight)
+    $('#install .in-other').hidden = auto && OS === 'ios';
+    $('#install').classList.toggle('compact', auto && OS !== 'desktop');
     const go = $('#inGo');
     go.hidden = !(oneTap || (s && s.copy && here));
     go.innerHTML = oneTap ? `${svg('screen')}ثبّت الآن` : `${svg('copy')}نسخ الرابط`;
@@ -209,7 +215,7 @@ const Install = (() => {
   // ---- when to offer it on its own: after a little reading, not over anything else,
   // then again a week after «لاحقًا», at most three times in all
   function due() {
-    if (APK || installed() || store.get('install.done', false)) return false;  // (Android: the app instead)
+    if (APK || IOS || installed() || store.get('install.done', false)) return false;  // (Android, iPhone: as the site opens, below)
     const asked = store.get('install.asked', 0), last = store.get('install.later', 0);
     return asked < 3 && Date.now() - last > 7 * 864e5;
   }
@@ -248,6 +254,22 @@ const Install = (() => {
     setTimeout(t, ms);
   }
 
+  // ---- iPhone: added to the home screen, it is the app (full screen, offline, the microphone
+  // too); its card opens as the site opens, on each of the first five visits until added
+  let iosVisit = false;
+  if (IOS && !installed()) try { if (!sessionStorage.getItem('ios.seen')) { sessionStorage.setItem('ios.seen', '1'); iosVisit = true; } } catch {}
+  if (iosVisit && !store.get('install.done', false) && store.get('ios.shown', 0) < 5) {
+    let tries = 0;
+    const t = () => {
+      if (busy() && ++tries < 40) { setTimeout(t, 4000); return; }
+      if (busy()) return;
+      store.set('ios.shown', store.get('ios.shown', 0) + 1);
+      open(true);
+    };
+    setTimeout(t, 1500);
+  }
+  $('#inDone').onclick = () => { store.set('install.done', true); hide($('#install')); toast('افتح القرآن من شاشتك الرئيسية'); };
+
   // ---- the Android app's card
   function apkOpen() { show($('#apk')); }
   function apkLater() { hide($('#apk')); }
@@ -275,7 +297,7 @@ const Install = (() => {
     if (installed() && !APK) return '';
     return `<button class="in-row" data-install>
       <span class="in-row-ico"><img src="icons/icon-192.png" alt=""></span>
-      <span class="in-row-txt"><b>${APK ? 'حمّل تطبيق أندرويد' : 'ثبّت التطبيق على جهازك'}</b><small>${APK ? 'القرآن بملء الشاشة، يتحدّث مع الموقع وحده' : 'يفتح من شاشتك الرئيسية ويعمل دون إنترنت'}</small></span>
+      <span class="in-row-txt"><b>${APK ? 'حمّل تطبيق أندرويد' : IOS ? 'أضف التطبيق إلى شاشتك' : 'ثبّت التطبيق على جهازك'}</b><small>${APK ? 'القرآن بملء الشاشة، يتحدّث مع الموقع وحده' : 'يفتح من شاشتك الرئيسية بملء الشاشة ويعمل دون إنترنت'}</small></span>
       <svg viewBox="0 0 24 24" class="go"><path d="M14.5 6l-6 6 6 6"/></svg>
     </button>`;
   }
@@ -283,6 +305,7 @@ const Install = (() => {
   // ---- wiring
   window.addEventListener('beforeinstallprompt', e => {
     e.preventDefault();
+    if (IOS) return;  // (none there; only a desktop browser posing as one)
     deferred = e;
     if (!$('#install').hidden) paint();
     if (ripe) armTap();
