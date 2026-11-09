@@ -58,6 +58,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag=android-v1.${{ github.run_number }}
-          gh release create "$tag" quran.apk --latest --title "تطبيق أندرويد ١.${{ github.run_number }}" --notes "حمّل quran.apk وثبّته (اسمح بالتثبيت من هذا المصدر إن سُئلت). التطبيق يفتح القرآن بملء الشاشة، ويتحدّث مع الموقع من تلقاء نفسه.
-
-Download quran.apk and install it (allow installing from this source if asked). The app opens the Quran full screen and updates with the site by itself."
+          printf '%s\n\n%s\n' \
+            'حمّل quran.apk وثبّته (اسمح بالتثبيت من هذا المصدر إن سُئلت). التطبيق يفتح القرآن بملء الشاشة، ويتحدّث مع الموقع من تلقاء نفسه.' \
+            'Download quran.apk and install it (allow installing from this source if asked). The app opens the Quran full screen and updates with the site by itself.' > notes.md
+          gh release create "$tag" quran.apk --latest --title "تطبيق أندرويد ١.${{ github.run_number }}" --notes-file notes.md
