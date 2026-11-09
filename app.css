@@ -2539,3 +2539,41 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 
 /* (held for its page: no text selected, no callout) */
 .pp-c, .pp-rev, .pp-plan, .rc-sura, .rc-tile { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+
+/* the surah page: the journey, what needs care, a word of hope */
+.pp-se-x .pp-str { align-items: center; }
+.pp-se-x .pp-str em { margin-inline-start: 8px; font-style: normal; font-size: 12px; opacity: .85; }
+.pp-se-card { padding: 12px 14px; border-radius: 16px; background: var(--surface); border: .5px solid color-mix(in srgb, var(--p-gold) 35%, var(--line)); }
+.pp-se-miles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin-bottom: 6px; }
+.pp-se-miles span { display: flex; flex-direction: column; gap: 5px; }
+.pp-se-miles i { position: relative; height: 8px; border-radius: 4px; overflow: hidden; background: color-mix(in srgb, var(--p-green) 12%, transparent); }
+.pp-se-miles i::after { content: ""; position: absolute; inset: 0; transform-origin: right; transform: scaleX(var(--f)); background: linear-gradient(90deg, var(--p-green-2), var(--p-green)); border-radius: inherit; }
+.pp-se-miles small { font-size: 11.5px; font-weight: 600; color: var(--muted); text-align: center; }
+.pp-se-miles .on small { color: var(--p-ink); font-weight: 800; }
+.pp-se-miles .on small::after { content: " ✓"; color: var(--p-gold); }
+.pp-se-miles .next small { color: var(--gold-ink); font-weight: 800; }
+.pp-se-facts.flat { padding: 0; border: 0; background: none; }
+.pp-se-pages { display: flex; flex-wrap: wrap; gap: 5px; }
+.pp-se-pages button { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 34px; }
+.pp-se-pages i { position: relative; width: 26px; height: 34px; border-radius: 4px; overflow: hidden; background: color-mix(in srgb, var(--muted) 12%, transparent); border: .5px solid var(--line); }
+.pp-se-pages i::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--f) * 100%); background: linear-gradient(180deg, var(--p-green), var(--p-green-2)); }
+.pp-se-pages .weak i { box-shadow: inset 0 0 0 1.5px var(--c-marks, #c0392b); }
+.pp-se-pages small { font-size: 10.5px; color: var(--muted); }
+.pp-se-pages button:active { transform: scale(.92); }
+.pp-se-need { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+.pp-se-need:empty { display: none; }
+.pp-se-need button { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; text-align: start; background: color-mix(in srgb, var(--p-green) 6%, var(--sheet)); border: .5px solid var(--line); }
+.pp-se-need button[hidden] { display: none; }
+.pp-se-need button > svg { width: 20px; height: 20px; flex: none; fill: none; stroke: var(--p-green); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.pp-se-need button > svg:last-child { width: 16px; height: 16px; stroke: var(--muted); }
+.pp-se-need span { flex: 1; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.pp-se-need b { font-size: 14px; font-weight: 800; color: var(--ink); }
+.pp-se-need small { font-size: 12px; color: var(--muted); }
+.pp-se-trend { margin: 8px 2px 0; font-size: 13px; font-weight: 600; line-height: 1.7; }
+.pp-se-trend.up { color: var(--p-ink); }
+.pp-se-trend.down { color: var(--c-marks, #b3261e); }
+.pp-se-hope { display: flex; flex-direction: column; gap: 4px; margin: 18px 0 10px; padding: 14px 16px; border-radius: 3px; text-align: center; color: var(--p-on);
+  background: var(--p-pattern) 0 0 / 30px 30px, linear-gradient(160deg, var(--p-green), var(--p-green-2));
+  box-shadow: inset 0 0 0 4px var(--p-green-2), inset 0 0 0 5px color-mix(in srgb, var(--p-gold) 70%, transparent); }
+.pp-se-hope b { font-size: 15px; font-weight: 800; line-height: 1.7; color: #f1dfae; }
+.pp-se-hope small { font-size: 12px; line-height: 1.8; opacity: .85; }

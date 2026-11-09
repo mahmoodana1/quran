@@ -1895,10 +1895,16 @@ const Recite = (() => {
     const el = document.querySelector('[data-sim-of]');
     if (!el || typeof similarOf !== 'function') return;
     const x = +el.dataset.simOf;
-    Promise.all(suraAyas(x).map(ai => similarOf(ai))).then(r => {
+    const list = suraAyas(x);
+    Promise.all(list.map(ai => similarOf(ai))).then(r => {
       if (!el.isConnected) return;
-      const n = r.filter(q => q.n).length;
-      el.textContent = n ? `${ar(n)} من آياتها` : 'لا شيء يُذكر';
+      const n = r.filter(q => q.n).length, btn = el.closest('[data-rc-simtop]');
+      if (!n || !btn) return;
+      // (the closest likeness: the aya to compare first)
+      let top = -1, best = -1;
+      r.forEach((q, i) => { const c = Math.max(-1, ...q.list.map(y => y.close)); if (c > best) { best = c; top = list[i]; } });
+      el.textContent = `${ayaCount(n)} منها تشبه آيات أخرى`;
+      btn.dataset.rcSimtop = top; btn.hidden = false;
     });
   }
   // ayas marked memorized (known already: not today's new ones) or not
@@ -2175,54 +2181,99 @@ const Recite = (() => {
         <p class="pp-none" hidden>لا سورة بهذا الاسم</p>`;
     }
 
-    // ---- a surah's own page (its edit button): how much of it is memorized and its revision; its
-    // numbers from the sessions (how often, how right, its words most missed, the time it takes); what
-    // is good to know of it (where revealed, its words and letters, pages, its ayas that have
-    // mutashabihat); and its ayas, memorized or not. Read only: changing what is memorized is done in
-    // an edit mode of its own, each change pending until confirmed (twice: what changes said first)
+    // ---- a surah's own page (its edit button, or the card held): the reader's own way through it. How
+    // much is memorized and when it was revised; the journey (its quarters as milestones, the pace so
+    // far and when, at it, the surah is done); what needs care (its pages by strength, the weakest a
+    // tap from a session, the weak ayas, its ayas that read like others elsewhere); the reader's numbers
+    // in it (sessions, accuracy and its trend, mistakes by kind, words most missed); a little to know
+    // and to hope for. Its ayas below, read only: changed in an edit mode of its own, each change
+    // pending until confirmed (twice: what changes said first)
     function suraHTML(x) {
       if (!sizes[x]) return '';
-      const a0 = R.suraStart[x], N = sizes[x], k = got[x], f = k / N, pl0 = store.get(planKey(), null)?.s;
+      const a0 = R.suraStart[x], N = sizes[x], k = got[x], f = k / N, pl0 = store.get(planKey(), null), plan = pl0?.s === x ? planInfo(l) : null;
       const ayas = Array.from({ length: N }, (_, i) => a0 + i), inS = ai => ai >= a0 && ai < a0 + N;
       const weakIn = weak.filter(([ai]) => inS(ai)).map(([ai]) => ai), weakSet = new Set(weakIn);
       const rv = revisions(l).find(r => r.s === x), ed = suraEdit?.s === x ? suraEdit : null;
       const [, , , , place] = META.suras[x - 1];
-      // the sessions that went over it, and its mistakes in them
-      const ss = l.sessions.filter(q => (q.from != null && q.to != null && q.from <= a0 + N - 1 && q.to >= a0) || (q.list || []).some(([ai]) => inS(ai)));
-      const errsIn = ss.flatMap(q => (q.list || []).filter(([ai]) => inS(ai)));
-      const wordsIn = ss.reduce((t, q) => { if (q.from == null || !q.words || !q.to) return t; const lo = Math.max(q.from, a0), hi = Math.min(q.to, a0 + N - 1); return t + (hi >= lo ? q.words * (hi - lo + 1) / Math.max(1, q.to - q.from + 1) : 0); }, 0);
+      const fmtD = t => esc(fmt({ day: 'numeric', month: 'long' }).format(new Date(t)));
+      const days = n => n === 1 ? 'يوم' : n === 2 ? 'يومين' : n <= 10 ? `${ar(n)} أيام` : `${ar(n)} يومًا`;
+
+      // the journey: when each aya was memorized (first said whole; those marked known have no date)
+      const when = ayas.map(ai => l.first?.[ai] > 1e9 ? l.first[ai] : said[ai] > 1e9 && l.first?.[ai] !== 1 ? said[ai] : 0).filter(Boolean).sort((p, q) => p - q);
+      const firstAt = when[0], activeDays = new Set(when.map(t => day(t))).size;
+      const recent = when.filter(t => t > Date.now() - 14 * 864e5).length; // (the last two weeks)
+      const perDay = plan && !plan.finished ? plan.per : recent >= 3 ? recent / 14 : activeDays ? when.length / Math.max(1, daysAgo(firstAt) + 1) : 0;
+      const left = N - k, eta = perDay > 0 && left ? Math.ceil(left / perDay) : 0;
+      const marks = [[.25, 'ربعها'], [.5, 'نصفها'], [.75, 'ثلاثة أرباعها'], [1, 'كلها']];
+      const next = marks.find(([q]) => k < Math.ceil(q * N));
+      // its pages, each by how much of it is memorized and whether a weak spot is in it
+      const pages = []; for (const ai of ayas) { const p = R.ayas[ai][2]; let g = pages[pages.length - 1]; if (!g || g.p !== p) pages.push(g = { p, list: [] }); g.list.push(ai); }
+      for (const g of pages) { g.got = g.list.filter(ai => said[ai]).length; g.weak = g.list.filter(ai => weakSet.has(ai)).length; }
+      const known = pages.filter(g => g.got), worst = known.filter(g => g.weak).sort((p, q) => q.weak / q.list.length - p.weak / p.list.length)[0];
+      // the sessions that went over it, and its mistakes in them (oldest first, for the trend)
+      const ss = l.sessions.filter(q => (q.from != null && q.to != null && q.from <= a0 + N - 1 && q.to >= a0) || (q.list || []).some(([ai]) => inS(ai))).slice().reverse();
+      const share = q => { if (q.from == null || !q.words || q.to == null) return 0; const lo = Math.max(q.from, a0), hi = Math.min(q.to, a0 + N - 1); return hi >= lo ? q.words * (hi - lo + 1) / Math.max(1, q.to - q.from + 1) : 0; };
+      const errsIn = ss.flatMap(q => (q.list || []).filter(([ai]) => inS(ai))), wordsIn = ss.reduce((t, q) => t + share(q), 0);
+      const accOf = list => { const w = list.reduce((t, q) => t + share(q), 0), e = list.reduce((t, q) => t + (q.list || []).filter(([ai]) => inS(ai)).length, 0); return w >= 10 ? Math.max(0, 1 - e / w) : null; };
       const acc = wordsIn >= 10 ? Math.max(0, 1 - errsIn.length / wordsIn) : null;
+      const half = Math.floor(ss.length / 2), was = ss.length >= 4 ? accOf(ss.slice(0, half)) : null, now = ss.length >= 4 ? accOf(ss.slice(half)) : null;
       const kinds = {}; for (const [, , e] of errsIn) kinds[e] = (kinds[e] || 0) + 1;
       const wc = new Map(); for (const [ai, wi] of errsIn) if (wi >= 0) { const q = ai + ':' + wi; wc.set(q, (wc.get(q) || 0) + 1); }
       const missed = [...wc].sort((p, q) => q[1] - p[1]).slice(0, 4);
-      const firstAt = Math.min(...ayas.map(ai => (l.first?.[ai] > 1e9 ? l.first[ai] : said[ai]) || Infinity));
-      // its length, and the time it takes (the reader's own pace, in their sessions, else a usual one)
+      // its length: words, letters (each a good deed, and ten like it), the time it takes at the reader's pace
       const words = ayas.reduce((t, ai) => t + ayaTokens(ai).length, 0);
       const letters = ayas.reduce((t, ai) => t + ayaTokens(ai).join('').replace(/[^ء-يٱ]/g, '').length, 0);
       const pace = (q => q.words > 200 ? Math.min(1.4, Math.max(0.45, q.secs / q.words)) : 0.75)(l.sessions.reduce((t, q) => ({ secs: t.secs + (q.secs || 0), words: t.words + (q.secs ? q.words || 0 : 0) }), { secs: 0, words: 0 }));
-      const mins = Math.max(1, Math.round(words * pace / 60));
+      const mins = Math.max(1, Math.round(words * pace / 60)), minsLeft = Math.round(ayas.filter(ai => !said[ai]).reduce((t, ai) => t + ayaTokens(ai).length, 0) * pace / 60);
       const p0 = R.ayas[a0][2], p1 = R.ayas[a0 + N - 1][2];
-      const fmtD = t => esc(fmt({ day: 'numeric', month: 'long' }).format(new Date(t)));
+      const big = n => ar(n.toLocaleString('en').replace(/,/g, '٬'));
       const stat = (v, t) => `<div><b>${v}</b><small>${t}</small></div>`;
       const fact = (t, v) => `<li><small>${t}</small><b>${v}</b></li>`;
       setTimeout(fillSim); // (once the page is in)
       // (each aya as memorized now, or as it will be once the changes pending are kept)
       const isOn = ai => ed?.pend.has(ai) ? ed.pend.get(ai) : !!said[ai];
       const add = ed ? [...ed.pend].filter(([ai, v]) => v && !said[ai]).length : 0, del = ed ? [...ed.pend].filter(([ai, v]) => !v && said[ai]).length : 0;
+      // a word of encouragement, for where the reader is in it
+      const cheer = k >= N ? (rv?.n >= 3 ? 'ثابتة في صدرك، ما شاء الله. مراجعة بين حين وآخر تبقيها كذلك.' : 'أتممتها! المراجعات القادمة هي التي تثبّتها، فلا تفوّتها.')
+        : !k ? `${N <= 20 ? 'سورة قصيرة: ' : ''}${N <= 10 ? 'تحفظها في جلسة أو جلستين.' : `بخمس آيات في اليوم تتمّها في ${days(Math.ceil(N / 5))}.`}`
+        : next && Math.ceil(next[0] * N) - k <= 3 ? `${ayaCount(Math.ceil(next[0] * N) - k)} وتبلغ ${next[1]}!`
+        : f >= .5 ? `تجاوزت نصفها، ولم يبقَ إلا ${ayaCount(left)}${minsLeft ? ` (نحو ${ar(Math.max(1, minsLeft))} دقيقة تلاوةً)` : ''}.` : `بدأت، والبداية أصعب ما فيها. ${ayaCount(left)} باقية.`;
       return `<section class="pp-se">
         <div class="pp-se-top">
           <div class="pp-plan-r" style="--f:${f}"><span><b>${ar(Math.round(f * 100))}٪</b><small>${ar(k)}/${ar(N)}</small></span></div>
           <div class="pp-se-x">
             <b>${k >= N ? 'محفوظة كاملة' : k ? `${ayaCount(k)} محفوظة` : 'لم تحفظ منها شيئًا بعد'}</b>
-            <small>${rv ? `المراجعة ${dueText(rv)}` : k ? 'تدخل جدول المراجعة بعد ثلاث آيات' : 'ابدأ بها خطة حفظ'}${firstAt < Infinity ? ` · بدأت حفظها ${fmtD(firstAt)}` : ''}</small>
-            ${rv ? `<span class="pp-str" aria-label="${ar(rv.n)} مراجعات متقنة">${[0, 1, 2, 3, 4].map(j => `<i${j < Math.min(5, rv.n) ? ' class="on"' : ''}></i>`).join('')}</span>` : ''}
+            <small>${cheer}</small>
+            ${rv ? `<span class="pp-str" aria-label="${ar(rv.n)} مراجعات متقنة">${[0, 1, 2, 3, 4].map(j => `<i${j < Math.min(5, rv.n) ? ' class="on"' : ''}></i>`).join('')}<em>المراجعة ${dueText(rv)}</em></span>` : ''}
           </div>
         </div>
         <div class="pp-se-acts">
           ${k ? `<button data-rc-rev="${x}">${ICONS.review}<span>راجعها</span></button>` : ''}
-          ${x === pl0 ? `<button class="on" disabled>${ICONS.seed}<span>خطتك الآن</span></button>` : `<button data-rc-plan="${x}">${ICONS.seed}<span>احفظها</span></button>`}
+          ${plan ? `<button class="on" disabled>${ICONS.seed}<span>خطتك الآن</span></button>` : k < N ? `<button data-rc-plan="${x}">${ICONS.seed}<span>${k ? 'أكمل حفظها' : 'احفظها'}</span></button>` : ''}
           <button data-rc-open="${x}">${ICONS.go}<span>في المصحف</span></button>
         </div>
+
+        <div class="pp-sub-h">رحلتك فيها</div>
+        <div class="pp-se-card">
+          <div class="pp-se-miles">${marks.map(([q, t]) => { const need = Math.ceil(q * N), on = k >= need; return `<span class="${on ? 'on' : ''}${next?.[0] === q ? ' next' : ''}"><i style="--f:${Math.min(1, Math.max(0, (k - Math.ceil((q - .25) * N)) / Math.max(1, need - Math.ceil((q - .25) * N))))}"></i><small>${t}</small></span>`; }).join('')}</div>
+          <ul class="pp-se-facts flat">
+            ${firstAt ? fact('بدأتها', `${fmtD(firstAt)} · منذ ${days(Math.max(1, daysAgo(firstAt)))}`) : ''}
+            ${activeDays ? fact('أيام حفظت فيها منها', ar(activeDays)) : ''}
+            ${perDay ? fact('وتيرتك', `${perDay < 1 ? 'أقل من آية' : Number.isInteger(+perDay.toFixed(1)) ? ayaCount(Math.round(perDay)) : ar(perDay.toFixed(1)).replace('.', '٫') + ' آية'} في اليوم`) : ''}
+            ${eta ? fact('تتمّها على وتيرتك', `${eta <= 1 ? 'غدًا' : `في ${days(eta)}`} · ${fmtD(Date.now() + eta * 864e5)}`) : ''}
+            ${k >= N && when.length ? fact('أتممتها في', days(Math.max(1, daysAgo(when[0]) - daysAgo(when[when.length - 1]) + 1))) : ''}
+          </ul>
+        </div>
+
+        ${k ? `<div class="pp-sub-h">ما يحتاج عنايتك<small>صفحاتها، كل صفحة بما حفظت منها${weakIn.length ? '، والأحمر فيه مواضع ضعف' : ''}</small></div>
+        <div class="pp-se-card">
+          <div class="pp-se-pages">${pages.map(g => `<button data-rc-pg="${g.list[0]},${g.list[g.list.length - 1]}" class="${g.got === g.list.length ? 'full' : g.got ? 'part' : ''}${g.weak ? ' weak' : ''}" style="--f:${g.got / g.list.length}" aria-label="صفحة ${ar(g.p)}"><i></i><small>${ar(g.p)}</small></button>`).join('')}</div>
+          <div class="pp-se-need">
+            ${weakIn.length ? `<button data-rc-weaks="${x}">${ICONS.fix}<span><b>${ayaCount(weakIn.length)} فيها ضعف</b><small>ثبّتها الآن في جلسة قصيرة</small></span>${ICONS.go}</button>` : ''}
+            ${worst ? `<button data-rc-pg="${worst.list[0]},${worst.list[worst.list.length - 1]}">${ICONS.review}<span><b>أضعف صفحاتها: ${ar(worst.p)}</b><small>الآيات ${ar(R.ayas[worst.list[0]][1])}–${ar(R.ayas[worst.list[worst.list.length - 1]][1])} · سمّعها</small></span>${ICONS.go}</button>` : ''}
+            <button data-rc-simtop="0" hidden>${ICONS.find}<span><b data-sim-of="${x}">…</b><small>قارنها بما يشبهها لئلا تلتبس عليك</small></span>${ICONS.go}</button>
+          </div>
+        </div>` : ''}
 
         ${ss.length ? `<div class="pp-sub-h">أرقامك فيها</div>
         <div class="pp-se-stats">
@@ -2231,20 +2282,22 @@ const Recite = (() => {
           ${stat(ar(errsIn.length), 'خطأ')}
           ${stat(lastIn[x] ? ago(lastIn[x]) : '—', 'آخر تسميع')}
         </div>
+        ${was != null && now != null && Math.abs(now - was) >= .02 ? `<p class="pp-se-trend ${now > was ? 'up' : 'down'}">${now > was ? `دقّتك فيها تتحسّن: من ${ar(Math.round(was * 100))}٪ إلى ${ar(Math.round(now * 100))}٪ في جلساتك الأخيرة` : `دقّتك فيها نزلت من ${ar(Math.round(was * 100))}٪ إلى ${ar(Math.round(now * 100))}٪ — وقتها للمراجعة`}</p>` : ''}
         ${errsIn.length ? `<div class="rc-kinds pp-se-kinds">${Object.entries(kinds).sort((p, q) => q[1] - p[1]).slice(0, 4).map(([e, c]) =>
           `<div class="rc-kind"><span class="rc-mk rc-${e}"></span><span class="k">${KIND_SHORT[e] || TYPES[e] || e}</span><span class="rc-kbar"><i style="width:${Math.max(4, Math.round(c / errsIn.length * 100))}%"></i></span><b>${ar(c)}</b></div>`).join('')}</div>` : ''}
         ${missed.length ? `<div class="rc-often-h">كلمات تخطئ فيها هنا</div><div class="rc-often">${missed.map(([q, c]) => { const [ai, wi] = q.split(':').map(Number);
           return `<button data-rc-aya="${ai}"><b style="font-family:${R.font}">${esc(ayaTokens(ai)[wi] || '')}</b><small>آية ${ar(R.ayas[ai][1])}</small><i>${ar(c)}×</i></button>`; }).join('')}</div>` : ''}` : ''}
 
-        <div class="pp-sub-h">تعرّف عليها</div>
+        <div class="pp-se-hope">
+          <b>${big(letters)} حرفًا، بكل حرف حسنة، والحسنة بعشر أمثالها</b>
+          <small>تلاوتها كاملة نحو ${big(letters * 10)} حسنة بإذن الله · «من قرأ حرفًا من كتاب الله فله به حسنة، والحسنة بعشر أمثالها» (الترمذي)</small>
+        </div>
         <ul class="pp-se-facts">
           ${fact('نزلت', place === 'makkah' ? 'مكية' : 'مدنية')}
-          ${fact('ترتيبها في المصحف', ar(x))}
           ${fact('صفحاتها', p0 === p1 ? `صفحة ${ar(p0)}` : `${ar(p0)}–${ar(p1)} · ${ar(p1 - p0 + 1)} ${p1 - p0 + 1 <= 10 ? 'صفحات' : 'صفحة'}`)}
           ${fact('الجزء', ar(R.ayas[a0][3]) + (R.ayas[a0 + N - 1][3] !== R.ayas[a0][3] ? `–${ar(R.ayas[a0 + N - 1][3])}` : ''))}
-          ${fact('كلماتها', `${ar(words)} كلمة · ${ar(letters)} حرف`)}
-          ${fact('تسميعها كاملة', mins >= 60 ? `نحو ${ar(+(mins / 60).toFixed(1))} ${mins < 120 ? 'ساعة' : 'ساعات'}`.replace('.', '٫') : `نحو ${ar(mins)} ${mins <= 10 && mins > 2 ? 'دقائق' : 'دقيقة'}`)}
-          ${fact('لها متشابهات', `<span data-sim-of="${x}">…</span>`)}
+          ${fact('كلماتها', `${big(words)} كلمة`)}
+          ${fact('تلاوتها كاملة', mins >= 60 ? `نحو ${ar(+(mins / 60).toFixed(1))} ${mins < 120 ? 'ساعة' : 'ساعات'}`.replace('.', '٫') : `نحو ${ar(mins)} ${mins <= 10 && mins > 2 ? 'دقائق' : 'دقيقة'}`)}
         </ul>
 
         <div class="pp-sub-h">آياتها<small>${ed ? (ed.range != null ? (ed.range < 0 ? 'اضغط أول آية في المدى' : 'والآن آخر آية فيه') : 'اضغط آية لتغيّرها، ثم احفظ التغييرات') : 'المحفوظة بالأخضر'}</small></div>
@@ -2465,22 +2518,33 @@ const Recite = (() => {
     store.set('recite.editS', x); store.set('recite.view', 'sura'); suraEdit = null;
     renderSheet(); $('#sheetBody').scrollTop = 0; haptic(5);
   }
-  // a long press on a surah's card: its page too (the tap that ends it does nothing else)
+  // a long press on a surah's card: its page too (the tap that ends it does nothing else). By touch
+  // where there is touch (a phone's pointer events are cancelled as a press turns into the system's own
+  // long press), and Android's long press itself (contextmenu) as well
   {
     const CARDS = '.pp-c, .pp-rev, .pp-plan, .rc-sura, .rc-tile';
+    const editOf = el => { const card = el?.closest?.(CARDS); return card && (card.matches('[data-rc-edit]') ? card : card.querySelector('[data-rc-edit]')); };
     let t = null, x0 = 0, y0 = 0, fired = false, eatUntil = 0;
     const stop = () => { clearTimeout(t); t = null; };
-    $('#sheetBody').addEventListener('pointerdown', e => {
-      const card = e.target.closest(CARDS), ed = card && (card.matches('[data-rc-edit]') ? card : card.querySelector('[data-rc-edit]'));
-      if (!ed) return;
-      x0 = e.clientX; y0 = e.clientY; stop();
-      t = setTimeout(() => { t = null; fired = true; haptic(15); openSura(+ed.dataset.rcEdit); }, 480);
-    });
-    $('#sheetBody').addEventListener('pointermove', e => { if (t && Math.hypot(e.clientX - x0, e.clientY - y0) > 10) stop(); });
-    ['pointerup', 'pointercancel', 'scroll'].forEach(k => $('#sheetBody').addEventListener(k, () => { stop(); if (fired) { fired = false; eatUntil = Date.now() + 400; } }, true));
+    const fire = ed => { stop(); if (fired) return; fired = true; eatUntil = Date.now() + 900; haptic(15); openSura(+ed.dataset.rcEdit); };
+    const down = (el, x, y) => { const ed = editOf(el); if (!ed) return; x0 = x; y0 = y; fired = false; stop(); t = setTimeout(() => fire(ed), 450); };
+    const move = (x, y) => { if (t && Math.hypot(x - x0, y - y0) > 12) stop(); };
+    const up = () => { stop(); if (fired) { fired = false; eatUntil = Date.now() + 400; } };
+    const body = $('#sheetBody');
+    if ('ontouchstart' in window) {
+      body.addEventListener('touchstart', e => { if (e.touches.length === 1) down(e.target, e.touches[0].clientX, e.touches[0].clientY); else stop(); }, { passive: true });
+      body.addEventListener('touchmove', e => move(e.touches[0].clientX, e.touches[0].clientY), { passive: true });
+      body.addEventListener('touchend', up, { passive: true });
+      body.addEventListener('touchcancel', up, { passive: true });
+    } else {
+      body.addEventListener('pointerdown', e => down(e.target, e.clientX, e.clientY));
+      body.addEventListener('pointermove', e => move(e.clientX, e.clientY));
+      body.addEventListener('pointerup', up);
+      body.addEventListener('pointercancel', up);
+    }
+    body.addEventListener('contextmenu', e => { const ed = editOf(e.target); if (!ed) return; e.preventDefault(); if (!fired && Date.now() > eatUntil) fire(ed); });
     // (the click of the release only)
-    $('#sheetBody').addEventListener('click', e => { if (Date.now() < eatUntil) { eatUntil = 0; e.stopPropagation(); e.preventDefault(); } }, true);
-    $('#sheetBody').addEventListener('contextmenu', e => { if (e.target.closest(CARDS)) e.preventDefault(); });
+    body.addEventListener('click', e => { if (Date.now() < eatUntil) { eatUntil = 0; e.stopPropagation(); e.preventDefault(); } }, true);
   }
   function onSheetClick(e) {
     // a surah's page, from its edit button (before the card it is on)
@@ -2532,6 +2596,17 @@ const Recite = (() => {
       toast(`حُذف تقدّمك في ${suraName(x)}`);
       return true;
     }
+    const pg = e.target.closest('[data-rc-pg]');
+    if (pg) {
+      const [a, b] = pg.dataset.rcPg.split(',').map(Number), sd = log().said || {}, list = Array.from({ length: b - a + 1 }, (_, i) => a + i);
+      closeSheet();
+      if (list.some(ai => sd[ai])) start(null, list, { kind: 'rev' }); else start(a);
+      return true;
+    }
+    const wk = e.target.closest('[data-rc-weaks]');
+    if (wk) { const x = +wk.dataset.rcWeaks, list = weakAyas().filter(ai => R.ayas[ai][0] === x); if (list.length) { closeSheet(); start(null, list); } return true; }
+    const sm = e.target.closest('[data-rc-simtop]');
+    if (sm && +sm.dataset.rcSimtop > 0) { closeSheet(); openTafsir(+sm.dataset.rcSimtop, 'similar'); return true; }
     const op = e.target.closest('[data-rc-open]');
     if (op) { closeSheet(); goTo(R.ayas[R.suraStart[+op.dataset.rcOpen]][2]); return true; }
     const pf = e.target.closest('[data-rc-pf]');
