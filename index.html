@@ -236,6 +236,24 @@
   <button id="micPillX" class="x-btn" aria-label="إيقاف"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round"/></svg></button>
 </div>
 
+<!-- the dock's mic, first time: what it does -->
+<section id="micIntro" class="modal" hidden>
+  <div class="card rc-intro">
+    <div class="rc-badge"><svg viewBox="0 0 24 24"><path d="M12 3.5a3 3 0 00-3 3v5a3 3 0 006 0v-5a3 3 0 00-3-3zM6.5 11a5.5 5.5 0 0011 0M12 16.5v4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></div>
+    <h2>ابحث بصوتك</h2>
+    <p class="rc-lead">اقرأ من أي موضع تحفظه، فأجد الآية في المصحف، ثم أتابعك كلمةً كلمة من حيث وصلت، دون أن تتوقف.</p>
+    <div class="rc-points">
+      <div><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h10M4 17h13"/></svg><span>يكفي سطر أو نحوه؛ وإن تشابهت آيات انتظرتُ حتى أتيقّن</span></div>
+      <div><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg><span>حين أجدها أعرضها لحظة ثم أكمل معك التسميع؛ وإن لم تكن هي فالمس «ليست هذه الآية»</span></div>
+      <div><svg viewBox="0 0 24 24"><rect x="5.5" y="10.5" width="13" height="9.5" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 017 0v2.5"/></svg><span>يعمل على جهازك دون إنترنت، وصوتك لا يغادره</span></div>
+    </div>
+    <div class="actions">
+      <button id="miGo" class="primary">ابدأ</button>
+      <button id="miLater">ليس الآن</button>
+    </div>
+  </div>
+</section>
+
 <!-- recitation, first time: the speech model is downloaded on request -->
 <section id="recIntro" class="modal" hidden>
   <div class="card rc-intro">
@@ -309,7 +327,7 @@
 </section>
 <section id="recFound" class="rc-found" hidden>
   <div class="rf-aya" id="rfAya"></div>
-  <span class="rf-go">اضغط في أي مكان للمتابعة</span>
+  <span class="rf-go">وجدتها — تابِع القراءة<i class="rf-bar"><b></b></i></span>
   <div class="rf-acts">
     <button id="rfAgain" class="rf-again">ليست هذه الآية؟ أعد البحث</button>
     <button id="rfCancel" class="rf-cancel">إلغاء</button>
@@ -342,6 +360,7 @@
 <!-- always-visible switcher: reader / recitation (once used) / all other panels -->
 <nav id="dock" aria-label="التنقل">
   <button id="dockQuran" class="on" aria-label="القرآن"><svg viewBox="0 0 24 24"><path d="M12 6.5C10 5 7 4.5 3.5 5v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5zM12 6.5v13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></button>
+  <span class="dock-mid"><button id="dockMic" aria-label="اقرأ آيةً لأجدها"><svg viewBox="0 0 24 24"><path d="M12 3.5a3 3 0 00-3 3v5a3 3 0 006 0v-5a3 3 0 00-3-3zM6.5 11a5.5 5.5 0 0011 0M12 16.5v4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></button></span>
   <button id="dockPanels" aria-label="اللوحات"><svg viewBox="0 0 28 28"><g fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="4" width="8.5" height="8.5" rx="2.6"/><rect x="15.5" y="4" width="8.5" height="8.5" rx="2.6"/><rect x="4" y="15.5" width="8.5" height="8.5" rx="2.6"/><rect x="15.5" y="15.5" width="8.5" height="8.5" rx="2.6"/></g></svg></button>
 </nav>
 

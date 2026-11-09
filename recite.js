@@ -1060,12 +1060,12 @@ const Recite = (() => {
     if (!F) return;
     clearInterval(F.timer);
     F = null;
-    if (MU()) Mu.stop(); else Listen.stop();
+    if (MU()) { Mu.boost(false); Mu.stop(); } else Listen.stop();
     syncBubble();
   }
   // Muaalem: the reading so far, looked up in the whole Quran (begun at any
   // word); the session then goes on with it, from that word
-  const FIND_EVERY = 500, QUIET = 1500;
+  const FIND_EVERY = 250, QUIET = 1500, FIND_MIN = 16, FOUND_GO = 1300;
   const FIND_MARGIN = 12; // heard sounds the best place must explain beyond any other
   // checked: the steps already seen to (after an update, or the model brought back mid-search)
   function findMu(checked) {
@@ -1074,6 +1074,7 @@ const Recite = (() => {
       F = { voice: false, d: null, n: 0, grew: 0, same: 0, last: null };
       syncBubble();
       const f = F;
+      Mu.boost(true); // (read as often as the device can while looking: the search is short, its speed what counts)
       Mu.start(d => {
         if (F !== f) return;
         f.d = d;
@@ -1094,7 +1095,7 @@ const Recite = (() => {
     const h = d.final + d.tent, n = Match.units(h).length;
     if (n !== f.n) { f.n = n; f.grew = Date.now(); }
     const quiet = Date.now() - f.grew > QUIET;
-    if (n < 24) return;
+    if (n < FIND_MIN) return;
     if (quiet && f.quietAt === n) return; // nothing new since the last quiet check
     // a look takes longer as the reading grows (most of a second on a slow
     // phone): keep the page free between looks at least as long as a look took
@@ -1105,9 +1106,12 @@ const Recite = (() => {
     f.same = r && f.last != null && Math.abs(r.g - f.last) <= 1 ? f.same + 1 : 0;
     f.last = r ? r.g : null;
     if (r && !f.found) { f.found = true; syncBubble(); }
-    const sure = r && f.same >= 2 && (r.fit - r.next >= FIND_MARGIN || (n > 150 && f.same >= 4) || (quiet && (r.fit - r.next >= 3 || f.same >= 3)));
+    // (far ahead of any other, the next look agreeing is enough)
+    const lead = r ? r.fit - r.next : 0;
+    const sure = r && f.same >= 1 && (lead >= 2 * FIND_MARGIN || f.same >= 2 && (lead >= FIND_MARGIN || (n > 150 && f.same >= 4) || (quiet && (lead >= 3 || f.same >= 3))));
     if (!sure) { if (n > 320 || (quiet && Date.now() - f.grew > 6000)) { stopFind(); toast('لم أجد الآية — اقرأ أكثر من آية'); } return; }
     clearInterval(f.timer);
+    Mu.boost(false);
     const said = reached(r, h, d.conf, d.alts);
     // the search ends, but not its listening: what the reader goes on to say while the aya is shown
     // is kept, and the session, begun on a tap, goes on with it (nothing of the reading lost)
@@ -1174,8 +1178,14 @@ const Recite = (() => {
       aya.append(c, ' ');
     });
     box.classList.remove('landing');
+    // (it goes on by itself after FOUND_GO, as the line under it fills; a tap goes at once)
+    const bar = box.querySelector('.rf-bar');
+    bar.classList.remove('run'); void bar.offsetWidth; bar.classList.add('run');
+    clearTimeout(box.auto);
+    box.auto = setTimeout(() => box.onclick?.({ target: box }), FOUND_GO);
     box.onclick = e => {
       box.onclick = null;
+      clearTimeout(box.auto);
       if (e.target.closest('#rfCancel')) { hide(box); S.focus = null; paintMarks(); if (!G) Mu.stop(); return; }
       // not the aya read: what was heard is let go, and the search begins again, listening afresh
       if (e.target.closest('#rfAgain')) { hide(box); S.focus = null; paintMarks(); Mu.stop().then(() => { if (!G && !F) findMu(true); }); return; }
@@ -1196,8 +1206,12 @@ const Recite = (() => {
   }
   // where the reading fits best: { ai, w, g, fit, next (the runner-up's fit) },
   // equal fits going to the one nearest the page open
+  // (most of its words heard right; or, a noisy or fast reading, half of them, the place far ahead of
+  // any other all the same)
   function locateMu(h, conf, alts) {
-    const fits = Mu.locate(h, conf, alts, 6).filter(x => x.ok >= 4 && x.ok / (x.ok + x.err) >= 0.75);
+    const all = Mu.locate(h, conf, alts, 6), right = x => x.ok / Math.max(1, x.ok + x.err);
+    const top = all[0], other = all.slice(1).reduce((m, x) => Math.max(m, x.fit), 0);
+    const fits = all.filter(x => x.ok >= 4 && (right(x) >= 0.75 || x === top && right(x) >= 0.5 && x.fit - other >= 2.5 * FIND_MARGIN));
     if (!fits.length) return null;
     fits.forEach(x => { x.far = Math.abs(R.ayas[x.ai][2] - S.page); });
     fits.sort((a, b) => b.fit - a.fit || a.far - b.far);

@@ -98,6 +98,16 @@ $('#dockPanels').onclick = () => {
   if (panelOpen($('#adhkar'))) Adhkar.close();
   else if (!panelOpen($('#sheet')) && !panelOpen($('#library'))) openSheet();
 };
+// the mic in the middle: read an aya and it is found, and the recitation goes on from it (the first
+// time, what it does is said first)
+$('#dockMic').onclick = () => {
+  if (typeof Recite === 'undefined') return;
+  haptic(8);
+  if (store.get('mic.told', false) || Recite.active()) return Recite.mic();
+  show($('#micIntro'));
+};
+$('#miGo').onclick = () => { store.set('mic.told', true); hide($('#micIntro')); Recite.mic(); };
+$('#miLater').onclick = () => { store.set('mic.told', true); hide($('#micIntro')); };
 $('#dockQuran').onclick = () => {
   closeSheet();
   hide($('#library'));
@@ -370,7 +380,7 @@ function renderPage(p) {
   let html = `<header class="phead">
     <button class="sura-btn" data-act="suras"><span>${suraName(fa[0])}</span><i class="chev">${icon('chev')}</i></button>
     <span class="pnum">${ar(p)}</span>
-    <div class="side"><span class="juz">الجزء ${ar(fa[3])}</span><button class="bm-btn${marked ? ' on' : ''}" data-act="bm" aria-label="علامة">${icon(marked ? 'bmOn' : 'bm')}</button><button class="mic-btn" data-act="mic" aria-label="اقرأ آيةً لأجدها">${icon('mic')}</button></div>
+    <div class="side"><span class="juz">الجزء ${ar(fa[3])}</span><button class="bm-btn${marked ? ' on' : ''}" data-act="bm" aria-label="علامة">${icon(marked ? 'bmOn' : 'bm')}</button></div>
   </header>${ORNAMENT}<div class="lines" style="font-family:${R.glyph ? `qcf-p${p}` : R.font}">`;
 
   const n = opening ? lines.reduce((m, l, i) => (l ? i + 1 : m), 0) : 15;
@@ -606,7 +616,7 @@ wordAudio.addEventListener('error', () => { sayEl?.classList.remove('say'); if (
 // closes it as its own close button does; never while that button is hidden or disabled
 // (the model downloading, say). The install card has its own outside tap (install.js).
 (() => {
-  const CLOSE = { khEdit: '#khCancel', done: '#doneLater', recIntro: '#riLater', recPrep: '#rpCancel', recDone: '#rdOk', install: '#inLater' };
+  const CLOSE = { khEdit: '#khCancel', done: '#doneLater', recIntro: '#riLater', micIntro: '#miLater', recPrep: '#rpCancel', recDone: '#rdOk', install: '#inLater' };
   const closer = m => { const b = $(CLOSE[m.id]); return b && !b.hidden && !b.disabled && b.offsetParent !== null ? b : null; };
   for (const id of Object.keys(CLOSE)) {
     const m = $('#' + id), card = m?.querySelector('.card');

@@ -54,7 +54,7 @@ let base = 0;                                      // samples written before thi
 let kept = [], keptP = [], keptA = [], keptL = [], readUpTo = 0;
 let tid = [], tp = [], ta = []; // the tentative frames after the final ones (by absolute frame), as last read // final frames (by absolute frame number), how sure each was, its runner-ups, all its sounds' log-probabilities (ctc.js), and up to when (s)
 const KEEP_L = 15000; // frames (10 min) whose log-probabilities are kept
-let live = false, looping = null, stepMs = 0; // stepMs: how long a read takes here, lately
+let live = false, looping = null, stepMs = 0, gpu = false; // stepMs: how long a read takes here, lately
 
 async function fetchParts(variant) {
   const man = await (await fetch(BASE + 'muaalem/manifest.json', { cache: 'no-cache' })).json();
@@ -103,6 +103,7 @@ async function load({ variant, ep, threads, shared }) {
   const t1 = performance.now();
   session = await ort.InferenceSession.create(bytes, { executionProviders: [ep], graphOptimizationLevel: 'all' });
   if (ep === 'wasm') GLANCE = 1.6;
+  gpu = ep !== 'wasm';
   await ids(new Float32Array(RATE * WIN)); // warm up (shader compilation on the GPU)
   postMessage({ type: 'ready', fromCache, loadMs: performance.now() - t1, totalMs: performance.now() - t0, ep, threads: ort.env.wasm.numThreads });
 }
@@ -173,7 +174,7 @@ async function step(final) {
   let e = to(QUANT, n), st = e - WIN * RATE;
   const behind = Math.max(0, (kept.length - Math.round(0.5 * RATE / FRAME)) * FRAME);
   if (behind < st) st = e - (e - behind <= CATCH * RATE ? CATCH : MAX_WIN) * RATE;
-  if (st < 0) { e = to(SEC, n); st = 0; } // all heard so far, in whole seconds
+  if (st < 0) { e = to(gpu ? SEC : QUANT, n); st = 0; } // all heard so far (on a GPU, in whole seconds)
   if (!final && (e <= 0 || e / RATE <= readUpTo)) return false; // nothing new on the grid yet
   const f0 = st / FRAME;
   const t0 = performance.now();

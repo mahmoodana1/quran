@@ -789,14 +789,49 @@ svg { fill: currentColor; }
 
 /* ---------- bottom switcher ---------- */
 /* the strip under the page art: two full-width halves, icon only */
+/* with the mic raised in the middle, in a round notch cut into the strip (its background, a layer
+   of its own: a mask on the strip would cut the mic too) */
 #dock {
   position: fixed; z-index: 35; left: 0; right: 0; bottom: 0;
   height: calc(40px + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
-  display: grid; grid-template-columns: 1fr 1fr;
-  background: color-mix(in srgb, var(--paper) 90%, transparent);
-  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
-  border-top: .5px solid var(--line);
+  display: grid; grid-template-columns: 1fr 84px 1fr;
+  --dock-bg: color-mix(in srgb, var(--paper) 90%, transparent); --dock-line: .5px solid var(--line);
+  --notch: radial-gradient(circle at 50% 2px, transparent 31.5px, #000 32.5px);
 }
+#dock::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background: var(--dock-bg); border-top: var(--dock-line);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  -webkit-mask: var(--notch); mask: var(--notch);
+}
+.dock-mid { position: relative; }
+/* the notch's own rim, below the strip's edge */
+.dock-mid::before {
+  content: ''; position: absolute; left: 50%; top: 2px; width: 64px; height: 64px; border-radius: 50%;
+  transform: translate(-50%, -50%); border: var(--dock-line); clip-path: inset(50% 0 0 0); pointer-events: none;
+}
+#dockMic {
+  position: absolute; left: 50%; top: 2px; width: 54px; height: 54px; border-radius: 50%;
+  transform: translate(-50%, -50%); display: grid; place-items: center;
+  color: var(--p-on, #fff); background: linear-gradient(160deg, var(--p-green, var(--accent)), var(--p-green-2, var(--accent)));
+  box-shadow: 0 0 0 1px var(--p-gold, transparent), 0 6px 14px rgba(30, 20, 5, .24), 0 1px 2px rgba(30, 20, 5, .2);
+  transition: transform .25s cubic-bezier(.2,.9,.3,1), box-shadow .25s ease;
+}
+#dock #dockMic { opacity: 1; color: var(--p-on, #fff); }
+#dockMic svg { width: 25px; height: 25px; }
+#dockMic:active { transform: translate(-50%, -50%) scale(.93); }
+/* listening for an aya: a ring breathing out of it */
+.rc-find #dockMic::after {
+  content: ''; position: absolute; inset: -1px; border-radius: 50%; pointer-events: none;
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--p-green, var(--accent)) 45%, transparent);
+  animation: micRing 1.4s ease-out infinite;
+}
+@keyframes micRing { to { box-shadow: 0 0 0 14px transparent; } }
+/* in a session, the reciting bar has its own: the mic away, the notch closed */
+.rc-on #dockMic { transform: translate(-50%, -50%) scale(0); pointer-events: none; }
+.rc-on #dock { --notch: none; }
+.rc-on .dock-mid::before { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .rc-find #dockMic::after { animation: none; } }
 #dock button {
   display: grid; place-items: center; color: var(--muted); opacity: .6;
   transition: color .25s ease, opacity .25s ease, background-color .2s ease;
@@ -966,7 +1001,7 @@ svg { fill: currentColor; }
 .kh-warn { color: var(--danger); }
 
 /* bottom switcher */
-#dock { background: color-mix(in srgb, var(--p-bg) 94%, transparent); border-top: 1px solid var(--p-rule); }
+#dock { --dock-bg: color-mix(in srgb, var(--p-bg) 94%, transparent); --dock-line: 1px solid var(--p-rule); }
 #dock button + button { border-inline-start: 1px solid var(--p-rule); }
 #dock button.on { color: var(--p-ink); }
 
@@ -1424,10 +1459,6 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 
 /* the header mic: recite and the aya is found */
 .phead .side { gap: 14px; }
-.phead .mic-btn { padding: 4px; color: var(--muted); }
-.phead .mic-btn svg { width: 22px; height: 22px; display: block; }
-.rc-find .phead .mic-btn { color: var(--accent); }
-.rc-on .phead .mic-btn { display: none; }
 /* listening: a pill over the header row, never over the text */
 .mic-pill {
   position: fixed; z-index: 25; top: calc(env(safe-area-inset-top) + 5px); left: 50%; transform: translateX(-50%);
@@ -1848,7 +1879,12 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 .rf-aya .w { display: inline-block; padding: .18em 0; transition: transform .62s cubic-bezier(.25,.8,.25,1), opacity .4s ease; }
 .rf-aya .w.rf-before { opacity: .35; }
 @keyframes rfIn { from { transform: translateY(10px); opacity: 0; } }
-.rf-go { font-size: 14px; font-weight: 600; color: var(--muted); letter-spacing: .2px; animation: rfPulse 2.2s ease-in-out infinite; transition: opacity .3s ease; }
+.rf-go { display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--muted); letter-spacing: .2px; transition: opacity .3s ease; }
+/* the moment before the recitation goes on by itself */
+.rf-bar { display: block; width: 120px; height: 3px; border-radius: 3px; overflow: hidden; background: color-mix(in srgb, var(--muted) 22%, transparent); }
+.rf-bar b { display: block; height: 100%; width: 100%; border-radius: inherit; background: var(--accent); transform-origin: right; transform: scaleX(0); }
+.rf-bar.run b { animation: rfFill 1.3s linear forwards; }
+@keyframes rfFill { to { transform: scaleX(1); } }
 @keyframes rfPulse { 50% { opacity: .45; } }
 .rf-acts { display: flex; flex-direction: column; align-items: center; gap: 4px; transition: opacity .3s ease; }
 .rf-again {
@@ -1867,4 +1903,4 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 .up-ver:empty { display: none; }
 .rc-found.landing { background-color: transparent; -webkit-backdrop-filter: blur(0) saturate(1); backdrop-filter: blur(0) saturate(1); cursor: default; }
 .rc-found.landing .rf-go, .rc-found.landing .rf-acts { opacity: 0; animation: none; }
-@media (prefers-reduced-motion: reduce) { .rf-go, .rf-aya { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .rf-aya { animation: none; } }
