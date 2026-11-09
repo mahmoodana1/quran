@@ -2439,9 +2439,9 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 /* (quiet: a faint pencil, no circle; its tap area larger than it looks) */
 .pp-pen {
   position: absolute; top: 4px; inset-inline-end: 4px; z-index: 1; width: 30px; height: 30px; display: grid; place-items: center;
-  color: currentColor; opacity: .38; transition: opacity .15s ease;
+  color: currentColor; opacity: .45; transition: opacity .15s ease;
 }
-.pp-pen svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.pp-pen svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .pp-pen:active { opacity: .8; }
 .pp-c .pp-pen { color: var(--p-on, #fff); opacity: .45; }
 .pp-rev, .pp-plan, .rc-sura { position: relative; }
@@ -2536,3 +2536,6 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 .pp-se-save button.pri { color: var(--p-on); background: linear-gradient(160deg, var(--p-green), var(--p-green-2)); border-color: var(--p-gold); }
 .pp-se-save button.pri.sure { background: var(--p-gold); color: #2a1f0a; }
 .pp-se-save button:disabled { opacity: .4; }
+
+/* (held for its page: no text selected, no callout) */
+.pp-c, .pp-rev, .pp-plan, .rc-sura, .rc-tile { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }

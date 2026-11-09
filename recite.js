@@ -2459,17 +2459,33 @@ const Recite = (() => {
     $('.pp-none').hidden = !!shown;
   }
   document.addEventListener('input', e => { if (e.target.closest?.('[data-rc-pick-q]')) pickFilter(); });
+  function openSura(x) {
+    const from = store.get('recite.view', '') || '';
+    if (from !== 'sura') store.set('recite.editFrom', from);
+    store.set('recite.editS', x); store.set('recite.view', 'sura'); suraEdit = null;
+    renderSheet(); $('#sheetBody').scrollTop = 0; haptic(5);
+  }
+  // a long press on a surah's card: its page too (the tap that ends it does nothing else)
+  {
+    const CARDS = '.pp-c, .pp-rev, .pp-plan, .rc-sura, .rc-tile';
+    let t = null, x0 = 0, y0 = 0, fired = false, eatUntil = 0;
+    const stop = () => { clearTimeout(t); t = null; };
+    $('#sheetBody').addEventListener('pointerdown', e => {
+      const card = e.target.closest(CARDS), ed = card && (card.matches('[data-rc-edit]') ? card : card.querySelector('[data-rc-edit]'));
+      if (!ed) return;
+      x0 = e.clientX; y0 = e.clientY; stop();
+      t = setTimeout(() => { t = null; fired = true; haptic(15); openSura(+ed.dataset.rcEdit); }, 480);
+    });
+    $('#sheetBody').addEventListener('pointermove', e => { if (t && Math.hypot(e.clientX - x0, e.clientY - y0) > 10) stop(); });
+    ['pointerup', 'pointercancel', 'scroll'].forEach(k => $('#sheetBody').addEventListener(k, () => { stop(); if (fired) { fired = false; eatUntil = Date.now() + 400; } }, true));
+    // (the click of the release only)
+    $('#sheetBody').addEventListener('click', e => { if (Date.now() < eatUntil) { eatUntil = 0; e.stopPropagation(); e.preventDefault(); } }, true);
+    $('#sheetBody').addEventListener('contextmenu', e => { if (e.target.closest(CARDS)) e.preventDefault(); });
+  }
   function onSheetClick(e) {
     // a surah's page, from its edit button (before the card it is on)
     const ed = e.target.closest('[data-rc-edit]');
-    if (ed && !e.target.closest('[data-rc-from]')) {
-      e.stopPropagation();
-      const from = store.get('recite.view', '') || '';
-      if (from !== 'sura') store.set('recite.editFrom', from);
-      store.set('recite.editS', +ed.dataset.rcEdit); store.set('recite.view', 'sura'); suraEdit = null;
-      renderSheet(); $('#sheetBody').scrollTop = 0; haptic(5);
-      return true;
-    }
+    if (ed && !e.target.closest('[data-rc-from]')) { e.stopPropagation(); openSura(+ed.dataset.rcEdit); return true; }
     // the surah page's edit mode: on, each aya, a stretch, all or none, kept (twice) or let go
     const eo = e.target.closest('[data-rc-edit-on]');
     if (eo) { suraEdit = { s: +eo.dataset.rcEditOn, pend: new Map(), range: null }; rerender(); haptic(8); return true; }
