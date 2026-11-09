@@ -3,7 +3,7 @@
 // requests data with ?v=N, so bumping DATA_VERSION there fetches new copies.
 // Hafs page fonts (verses.quran.foundation) are cached as pages are opened.
 // Recitation audio: see audioResponse below.
-const VERSION = 'quran-v136';
+const VERSION = 'quran-v137';
 const TAFSIR = 'tafsir-saadi';
 // recitation files saved by the app (or while listening); kept across versions.
 // Hafs: aya files from everyayah.com; the other riwayat: surah files from

@@ -1,7 +1,7 @@
 'use strict';
 
 // bump when data/ or fonts/ change so phones fetch the new files
-const DATA_VERSION = 6;
+const DATA_VERSION = 7;
 // Each riwaya is heard from a reciter who recites it. Hafs: Yasser Al-Dosari,
 // one file per aya (everyayah.com). The others: one file per surah
 // (mp3quran.net) and when each aya starts in it, data/audio/<riwaya>.json
@@ -1417,7 +1417,7 @@ function differ(a, b) {
 async function similarHTML(ai) {
   const { list, n } = await similarOf(ai);
   if (!list.length) return '<div class="tf-wait">لا آيات تشبه هذه الآية في ألفاظها</div>';
-  const me = ayaWords(ai), kind = x => x.close >= 85 ? 'شبه متطابقة' : x.close >= 60 ? 'متقاربة جدًا' : x.close >= 50 ? 'متقاربة' : `تشتركان في ${ar(x.run)} كلمات متتالية`;
+  const me = ayaWords(ai), key = w => w.map(simNorm).join(' '), kind = x => key(ayaWords(x.ai)) === key(me) ? 'متطابقة' : x.close >= 85 ? 'شبه متطابقة' : x.close >= 60 ? 'متقاربة جدًا' : x.close >= 50 ? 'متقاربة' : `تشتركان في ${ar(x.run)} كلمات متتالية`;
   return `<p class="sm-note">آيات تتشابه ألفاظها بهذه الآية، يلتبس بعضها ببعض في الحفظ. المُبرَز ما تختلف فيه، فانتبه له.</p>
     <div class="sm-me"><small>هذه الآية · ${ayaLabel(ai)}</small><p style="font-family:${R.font}">${differ(ayaWords(list[0].ai), me)}</p></div>
     ${list.map(x => `<button class="sm-it" data-sim="${x.ai}"><span class="sm-h"><b>${ayaLabel(x.ai)}</b><small>ص ${ar(R.ayas[x.ai][2])}</small><span class="sm-tag${x.close >= 85 ? ' hi' : ''}">${kind(x)}</span></span>
