@@ -150,7 +150,7 @@ const Mu = (() => {
   function reset() {
     worker?.terminate();
     worker = null; ready = false; loading = null; warmed = false;
-    clips?.forEach(r => r(null)); clips?.clear();
+    scores?.forEach(r => r(null)); scores?.clear();
   }
   // every length of window it will read, read once (on a GPU: it prepares them all now,
   // not during the recitation); progress(0..1). On a CPU there is nothing to prepare.
@@ -222,7 +222,7 @@ const Mu = (() => {
         if (d.type === 'text') { fails = 0; trackPace(d); onText?.(d); }
         if (d.type === 'flushed') { const f = onFlushed; onFlushed = null; f?.(); }
         if (d.type === 'recording') { const f = onRecording; onRecording = null; f?.(d.samples); }
-        if (d.type === 'clip') { clips.get(d.id)?.(d.samples); clips.delete(d.id); }
+        if (d.type === 'scored') { scores.get(d.id)?.(d.scores); scores.delete(d.id); }
         if (d.type === 'error') {
           if (!ready) { reset(); reject(new Error(d.message)); return; }
           console.warn('Muaalem:', d.message);
@@ -457,13 +457,14 @@ const Mu = (() => {
 
   // ---- the last minutes heard, as a WAV file (16 kHz, 16-bit), to share when
   // the recognition goes wrong; null when nothing was heard yet
-  // the recitation's audio between two of the model's frames (40 ms, as in `at`): 16 kHz samples
-  const clips = new Map();
-  let clipId = 0;
-  function clip(from, to) {
+  // how well each text (its words, in the phonetic script) fits what was heard between two of the model's
+  // frames (40 ms, as in `at`): its log-probability (ctc.js), null where those frames are gone
+  const scores = new Map();
+  let scoreId = 0;
+  function score(from, to, texts) {
     if (!worker || !ready) return Promise.resolve(null);
-    const id = ++clipId;
-    return new Promise(r => { clips.set(id, r); worker.postMessage({ type: 'clip', id, from, to }); });
+    const id = ++scoreId;
+    return new Promise(r => { scores.set(id, r); worker.postMessage({ type: 'score', id, from, to, texts }); });
   }
   function recording() {
     if (!worker || !ready) return Promise.resolve(kept);
@@ -718,6 +719,6 @@ const Mu = (() => {
     CANDS, BASE_IDS, choice, mb, probe, saved, savedVariants, use, bench: () => store.get('mu.bench', null), remove, load, prime, start, listen, stop, sounds, expect, expect2, locate, opening,
     ready: () => ready, listening: () => !!mic, quiet, pace: () => ({ pace, near: refs ? refs.r.filter((_, i) => paceMask & 1 << i).map(([r]) => r) : [] }), lost: f => { onLost = f; }, sound: () => actx, info: () => info, recording,
     reprobe: () => { store.set('mu.choice', null); reset(); },
-    rate, setRate, boost, clip, warm, warmed: () => warmed, micCheck, micWhy: () => micErr, toCpu, lighter, dead: f => { onDead = f; },
+    rate, setRate, boost, score, warm, warmed: () => warmed, micCheck, micWhy: () => micErr, toCpu, lighter, dead: f => { onDead = f; },
   };
 })();

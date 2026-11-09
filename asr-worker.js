@@ -1,6 +1,5 @@
 // Speech recognition for التسميع outside Hafs, off the main thread: Tarteel's
-// Whisper models fine-tuned on Quran recitation (ONNX), run by transformers.js;
-// and in Hafs, deepdml's, a second opinion on fast readings (verify.js).
+// Whisper models fine-tuned on Quran recitation (ONNX), run by transformers.js.
 // The model is downloaded once on request and kept in the browser's cache
 // ('transformers-cache'); after that it works offline and audio never leaves
 // the device.

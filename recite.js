@@ -59,6 +59,8 @@ const Recite = (() => {
   const errs = n => n === 1 ? 'خطأ واحد' : n === 2 ? 'خطآن' : n <= 10 ? `${ar(n)} أخطاء` : `${ar(n)} خطأ`;
   const ayaCount = n => n === 1 ? 'آية' : n === 2 ? 'آيتان' : n <= 10 ? `${ar(n)} آيات` : `${ar(n)} آية`;
   const ayaTokens = ai => R.text[ai].replace(/\s*[٠-٩]+$/, '').split(' ');
+  // (the second model once downloaded for Hafs, 111 MB, replaced by ctc.js: let go of)
+  try { caches.open('transformers-cache').then(c => c.keys().then(ks => ks.forEach(r => r.url.includes('/deepdml/') && c.delete(r)))).catch(() => {}); store.set('verify.ok', null); } catch {}
   const wordText = w => ayaTokens(w.ai)[w.wi] || '';
 
   // every word of an aya, wherever its lines fall
@@ -156,7 +158,7 @@ const Recite = (() => {
   async function prep(then, intent, after) {
     const run = ++prepRun;
     prepThen = then; prepIntent = intent;
-    ['update', 'mic', 'model', 'warm', 'check'].forEach(id => prepStep(id, ''));
+    ['update', 'mic', 'model', 'warm'].forEach(id => prepStep(id, ''));
     $('#rpGo').hidden = true;
     $('#rpLead').textContent = intent?.killed ? `أغلق الهاتف التطبيق أثناء القراءة ليوفّر الذاكرة${intent.light ? '، فاخترنا طريقة أخف لا تُثقل عليه' : ''}. نكمل من حيث توقفت.`
       : intent?.fresh ? 'أنعشنا التطبيق قبل أن تبدأ، لتمضي القراءة دون انقطاع.'
@@ -245,23 +247,6 @@ const Recite = (() => {
     if (!live()) return;
     if (!Mu.ready()) { modelFail(); return; }
     prepStep('warm', 'done', 'جاهز');
-    // 5. the second model, which hears each aya again once said (verify.js): needed, downloaded once
-    if (!Verify.ready()) {
-      const first = !(await Verify.saved()) && !Verify.loadedBefore();
-      if (!live()) return;
-      const say = p => first ? `يُنزَّل مرة واحدة (${ar(Verify.MB)} م.ب)، ولا غنى عنه: يراجع كل آية بعد قراءتها… ${ar(Math.round(p * 100))}٪` : `يُحمَّل من جهازك… ${ar(Math.round(p * 100))}٪`;
-      prepStep('check', 'doing', say(0));
-      if (first) reveal();
-      try { await Verify.load(p => live() && prepStep('check', 'doing', say(p))); }
-      catch {
-        if (!live()) return;
-        prepStep('check', 'fail', 'تعذّر تنزيله — تأكد من الاتصال بالإنترنت ثم أعد المحاولة؛ لا يبدأ التسميع دونه');
-        ask('أعد المحاولة', () => prep(then, intent, after));
-        return;
-      }
-      if (!live()) return;
-    }
-    prepStep('check', 'done', 'جاهز');
     // after a reload the page may have no tap yet to let sound and the microphone start: on at once
     // if the browser lets it (the reading not paused at all), else one tap asked for
     if (after) {
@@ -302,7 +287,7 @@ const Recite = (() => {
     if (F) stopFind();
     if (G?.run) pause();
     prepRun++;
-    ['update', 'mic', 'model', 'warm', 'check'].forEach(id => prepStep(id, ''));
+    ['update', 'mic', 'model', 'warm'].forEach(id => prepStep(id, ''));
     prepStep('update', 'done', '');
     prepStep('mic', 'fail', 'لا يصل منه صوت — إن فصلت سماعة أو غيّرت الميكروفون، أعد تحميل التطبيق، وتعود جلستك كما هي');
     $('#rpLead').textContent = 'توقف الميكروفون عن إرسال الصوت، فأوقفنا التسميع مؤقتًا.';
@@ -357,7 +342,6 @@ const Recite = (() => {
   // from an aya to the end of its surah, or just the ayas given (a review or a test);
   // opts.test hides the words, opts.seed is the phrase that found the aya (bubble)
   function start(from, review, opts = {}) {
-    if (MU()) Verify.load().catch(() => {}); // (a session not prepared again, brought back or carried on: loaded now)
     // (a surah carried on into the next: the session goes on as it is, never prepared again)
     // a reading going on (into the next surah, found by reciting) or a session brought back paused only needs the
     // model; anything else the reader begins is checked first, on its screen (withModel → prep)
@@ -478,8 +462,7 @@ const Recite = (() => {
           const m = g.mu, all = m.final + m.tent, c0 = Match.charAt(all, m.cut);
           // (to the end of its last word heard)
           const ce = m.endAt > m.cut ? Math.min(m.at.length - 1, Match.charAt(all, m.endAt)) : m.at.length - 1;
-          (m.c < g.ayas.length && m.at?.length ? recheck(g, g.ayas[m.c], m.starts[m.c] + m.w0, g.words[m.starts[m.c]].of - m.w0, m.at[c0], m.at[ce] + 10,
-            heardHow(m.conf.slice(c0, ce + 1), Match.units(all.slice(c0, ce + 1)).length, Match.units(Mu.expect(g.ayas[m.c], m.w0).ph).length)) : Promise.resolve())
+          (m.c < g.ayas.length && m.at?.length ? recheck(g, g.ayas[m.c], m.starts[m.c] + m.w0, m.at[c0], m.at[ce] + 10) : Promise.resolve())
             .finally(() => g.checked?.());
           return;
         }
@@ -641,7 +624,7 @@ const Recite = (() => {
         break;
       }
       paceAdd(m.tjSeen); m.tjAt = null;
-      if (m.at) { const c1 = c0 + Match.charAt(sub, st[n0].at[0]); recheck(G, G.ayas[m.c], m.starts[m.c] + m.w0, n0, m.at[c0], m.at[c1], heardHow(m.conf.slice(c0, c1), Match.units(all.slice(c0, c1)).length, Match.units(cur.ph).length)); }
+      if (m.at) recheck(G, G.ayas[m.c], m.starts[m.c] + m.w0, m.at[c0], m.at[c0 + Match.charAt(sub, st[n0].at[0])]);
       goneAdd(gones, m.goneAt, ex, st, cur, n0, wi => m.starts[m.c] + m.w0 + wi);
       // (each one, at its word in the session)
       for (const [k, pk] of Object.entries(m.letSeen || {})) {
@@ -657,45 +640,59 @@ const Recite = (() => {
     paint();
     paintBar();
   }
-  // an aya done that the phonetic model heard poorly (heardHow(): at any pace, a reader may hurry
-  // for a few words), or with a word marked left out or another, heard again by the second model
-  // (verify.js): a word marked left out or another that it heard in its place is taken back, and two
-  // words it heard clearly the other way round marked so. Its audio asked for at once (frames
-  // [from, to), as in `at`), before another stretch can begin; from 1.2 s before it, cut there at the
-  // pause before the aya. Each aya alone: that model, taught on single ayas, writes the first aya it
-  // hears and stops (two together, or the end of the one before, and this one goes unheard). On a
-  // device it keeps waiting (RECHECK_BUSY ayas), only those with a word marked
-  const RECHECK = ['skip', 'wrong'], RECHECK_PAD = 8, RECHECK_LEAD = 30, RECHECK_BUSY = 2;
-  // how well the phonetic model heard an aya: how sure it was of its sounds (on average, and how
-  // many it was unsure of), and how many of the aya's sounds it heard. Readings at a usual pace:
-  // 0.93 to 0.99 sure, at most 8% unsure, all heard; fast ones mostly 0.78 to 0.90, 11 to 36% unsure.
-  // Under these, the aya is heard again (with a word marked left out or another, always)
-  const SURE_MEAN = 0.92, SURE_LOW = 0.1, SURE_COVER = 0.9;
-  function heardHow(conf, got, want) {
-    if (!conf?.length) return { weak: true };
-    let t = 0, low = 0;
-    for (const c of conf) { t += c; if (c < 0.75) low++; }
-    const mean = t / conf.length, unsure = low / conf.length, cover = got / Math.max(1, want);
-    return { mean, unsure, cover, weak: mean < SURE_MEAN || unsure > SURE_LOW || cover < SURE_COVER };
-  }
-  function recheck(g, ai, k0, n, from, to, how) {
-    if (!Verify.ready() || from == null || to == null) return Promise.resolve();
-    const ks = [], at = new Map();
-    for (let k = k0; k < k0 + n; k++) { at.set(g.words[k].wi, k); if (RECHECK.includes(g.errs[k])) ks.push(k); }
-    if (!ks.length && (!how?.weak || Verify.busy() >= RECHECK_BUSY)) return Promise.resolve();
-    const f0 = Math.max(0, from - RECHECK_LEAD);
-    return Mu.clip(f0, to + RECHECK_PAD).then(a => Verify.hear(a, (from - f0) * 0.04)).then(text => {
-      if (G !== g || !text) return;
-      const words = ayaTokens(ai), said = Verify.heard(words, text);
-      let n = 0, added = false;
-      for (const k of ks) if (said.has(g.words[k].wi) && RECHECK.includes(g.errs[k])) { delete g.errs[k]; delete g.heard[k]; n++; }
-      for (const i of Verify.swapped(words, text)) {
-        const a = at.get(i), b = at.get(i + 1);
-        if (a == null || b == null || (g.errs[a] && g.errs[a] !== 'order') || (g.errs[b] && g.errs[b] !== 'order')) continue;
-        for (const k of [a, b]) if (g.errs[k] !== 'order') { g.errs[k] = 'order'; g.heard[k] = { got: words[i + 1] + ' ' + words[i], want: words[i] + ' ' + words[i + 1] }; n++; added = true; }
+  // each aya once said (or the last, as far as it was said), asked again of what the model heard (its frames' log-probabilities, ctc.js):
+  // the aya as written scored against it with a word left out (each word marked so), with another
+  // word marked as heard in its place, and with each two neighbouring words the other way round. A
+  // word marked left out that the written aya fits clearly better (SKIP_BY) was said; one marked
+  // another that the written aya fits about as well as what was heard (WRONG_BY) is taken back too;
+  // two words that fit clearly better the other way round (SWAP_BY) are marked so. A fast reading
+  // the model writes out garbled still ranks so. (On 300 ayas by 12 reciters, at their pace and
+  // 1.5x: every pair swapped in the audio caught and no pair said in order marked; no word cut out
+  // taken back, 97% of the words said whose mark would be taken back; of the words heard otherwise
+  // in a correct reading, about a third within WRONG_BY.) Frames [from, to), as in `at`
+  // Not where the aya fits what was heard poorly as a whole (FIT, per frame; a reading's ayas fit
+  // at -0.3 to -0.9): its bounds misplaced, any other reading fits better
+  const RECHECK = ['skip', 'wrong'], SKIP_BY = 4, WRONG_BY = 1.5, SWAP_BY = 6, FIT = -2, EXT = 75;
+  function recheck(g, ai, k0, from, to) {
+    if (from == null || to == null || !g.words[k0]) return Promise.resolve();
+    // (the words reached only: a session ended in the middle of an aya)
+    const w0 = g.words[k0].wi, cur = Mu.expect(ai, w0), w = cur.spans.map(sp => cur.ph.slice(...sp)).slice(0, Math.max(1, g.pos - k0)), n = w.length;
+    // (each word left out, asked of every aya: a swap must fit better than either of its two words
+    // left out, too; else it is one word barely said, not two the other way round)
+    const texts = [w, ...w.map((_, i) => [...w.slice(0, i), ...w.slice(i + 1)])], asks = [];
+    for (let i = 0; i < n; i++) {
+      const k = k0 + i, e = g.errs[k];
+      if (e === 'wrong' && g.heard[k]?.got) { asks.push(['wrong', i]); texts.push([...w.slice(0, i), g.heard[k].got, ...w.slice(i + 1)]); }
+      if (i + 1 < n && Match.units(w[i]).length >= 2 && Match.units(w[i + 1]).length >= 2 && w[i] !== w[i + 1]) {
+        asks.push(['order', i]); texts.push([...w.slice(0, i), w[i + 1], w[i], ...w.slice(i + 2)]);
+      }
+    }
+    // (EXT frames more either side: the aya's bounds as the matcher put them may be a second or two
+    // off, its first words left in the aya before; each reading finds where it lies, ctc.js)
+    const f0 = Math.max(0, from - EXT), f1 = to + EXT;
+    return Mu.score(f0, f1, texts).then(sc => {
+      if (G !== g || !sc || sc[0] == null || sc[0] / Math.max(1, f1 - f0) < FIT) return;
+      let changed = 0, added = false;
+      const swaps = [], left = i => sc[1 + i];
+      for (let i = 0; i < n; i++) if (g.errs[k0 + i] === 'skip' && sc[0] - left(i) >= SKIP_BY) { delete g.errs[k0 + i]; delete g.heard[k0 + i]; changed++; }
+      asks.forEach(([kind, i], j) => {
+        const x = sc[1 + n + j], d = x - sc[0], k = k0 + i;
+        if (kind === 'wrong' && g.errs[k] === 'wrong' && d <= WRONG_BY) { delete g.errs[k]; delete g.heard[k]; changed++; }
+        if (kind === 'order' && d >= SWAP_BY && x >= Math.max(left(i), left(i + 1))) swaps.push([d, i]);
+      });
+      // (two words the other way round, and the aya as written then fits poorly about them: their
+      // neighbours too fit better swapped; the likeliest swap only, of those sharing a word)
+      const took = new Set();
+      for (const [, i] of swaps.sort((a, b) => b[0] - a[0])) {
+        const k = k0 + i, a = g.errs[k], b = g.errs[k + 1];
+        if (took.has(i) || took.has(i + 1)) continue;
+        if ((a && a !== 'order' && !RECHECK.includes(a)) || (b && b !== 'order' && !RECHECK.includes(b))) continue;
+        took.add(i); took.add(i + 1);
+        const t = ayaTokens(ai), x = t[w0 + i] || '', y = t[w0 + i + 1] || '';
+        for (const q of [k, k + 1]) if (g.errs[q] !== 'order') { g.errs[q] = 'order'; g.heard[q] = { got: y + ' ' + x, want: x + ' ' + y }; changed++; added = true; }
       }
       if (added && !g.done) chime();
-      if (!n) return;
+      if (!changed) return;
       paint(); paintBar();
       if (g.done && !$('#recDone').hidden) paintDone();
     });
@@ -1312,11 +1309,11 @@ const Recite = (() => {
 
   // ---- the end of a session
 
-  // (its last aya heard by the second model first, a few seconds at most)
-  const CHECK_WAIT = 8000;
+  // (its last aya asked again first, a moment at most)
+  const CHECK_WAIT = 3000;
   function finish() {
     if (!G || G.done) return;
-    const g = G, wait = MU() && Verify.ready() && g.run;
+    const g = G, wait = MU() && g.run;
     const checked = wait ? new Promise(r => { g.checked = r; setTimeout(r, CHECK_WAIT); }) : null;
     pause();
     g.done = true;
@@ -1486,7 +1483,7 @@ const Recite = (() => {
   function walk(i) {
     document.querySelectorAll('.w.rc-walk').forEach(el => el.classList.remove('rc-walk'));
     const list = G.walk;
-    while (list && i < list.length && list[i].aya == null && !G.errs[list[i].k]) i++; // (taken back since: verify.js)
+    while (list && i < list.length && list[i].aya == null && !G.errs[list[i].k]) i++; // (taken back since: recheck())
     if (!list || i >= list.length) { G.walk = null; G.tap = null; hide($('#recWord')); paintDone(); show($('#recDone')); return; }
     G.walkI = i;
     const { k, aya } = list[i], w = G.words[k];
@@ -1954,7 +1951,6 @@ const Recite = (() => {
           <span class="rc-chips">${[['auto', 'تلقائي'], ['fast', 'الأسرع'], ['save', 'موفّر']].map(([k, t]) => `<button data-rc-rate="${k}"${Mu.rate() === k ? ' class="on"' : ''}>${t}</button>`).join('')}</span></div>` : ''}
         <div class="row rc-model"><span class="main"><span class="t">نموذج التعرّف على التلاوة</span><span class="s" id="rcModelS">…</span></span><span id="rcModelB"></span></div>
         ${MU() ? `<div class="rc-models" id="rcModels"></div>
-        <div class="row rc-model"><span class="main"><span class="t">نموذج المراجعة</span><span class="s" id="rcVerifyS">…</span></span><span id="rcVerifyB"></span></div>
         <div class="row rc-model" id="rcDiag" hidden><span class="main"><span class="t">تسجيل آخر جلسة</span><span class="s">إن أخطأ التعرّف، شارك هذا التسجيل (آخر ٥ دقائق) لنحسّنه</span></span><button class="rc-not" data-rc-diag>مشاركة</button></div>` : ''}
       </div>` + helpHTML();
     }
@@ -1986,23 +1982,8 @@ const Recite = (() => {
     });
   }
 
-  // the second model's row (verify.js): saved or not, and downloaded from here too
-  async function paintVerify(p) {
-    const s = $('#rcVerifyS'), b = $('#rcVerifyB');
-    if (!s) return;
-    const kept = await Verify.saved(), have = kept || Verify.ready() || Verify.loadedBefore();
-    s.textContent = p != null ? `يُنزَّل… ${ar(Math.round(p * 100))}٪`
-      : (kept ? `على جهازك · ${ar(Verify.MB)} م.ب`
-        : have ? `يعمل · لم يحفظه المتصفح (مساحته ممتلئة؟) فيُنزَّل مع كل فتح للتطبيق · ${ar(Verify.MB)} م.ب`
-        : `غير منزّل · ${ar(Verify.MB)} م.ب · يُنزَّل قبل التسميع، ولا غنى عنه`)
-        + ' · يسمع كل آية بعد قراءتها مرة أخرى، فيُسقط ما عُلِّم خطأً ويكشف تقديم الكلمات وتأخيرها';
-    b.innerHTML = have || p != null ? '' : '<button class="rc-not">تنزيل</button>';
-    b.firstChild && (b.firstChild.onclick = () => Verify.load(x => paintVerify(x)).then(() => paintVerify(), () => { paintVerify(); toast('تعذّر تنزيله — تأكد من الاتصال بالإنترنت'); }));
-  }
-
   // the Muaalem models, each with how fast it ran in this device's test
   async function paintModels(testing) {
-    paintVerify();
     const box = $('#rcModels'), s = $('#rcModelS'), b = $('#rcModelB');
     if (!box) return;
     const have = await Mu.savedVariants(), bench = Mu.bench(), c = Mu.choice();
@@ -2010,6 +1991,9 @@ const Recite = (() => {
     s.textContent = testing ? `نختبر النماذج على جهازك… ${testing}`
       : bench ? `الأسرع على جهازك يُختار له (اختبرناه ${ago(bench.at)}): ٤ بت على المعالج الرسومي، و٨ بت على المعالج`
       : 'لم نختبرها على جهازك بعد';
+    // (on how many of the processor's cores it runs: one only where the browser doesn't allow more)
+    const inf = Mu.info();
+    if (!testing && inf?.ep === 'wasm') s.textContent += inf.threads > 1 ? ` · يعمل على ${ar(inf.threads)} أنوية` : ' · يعمل على نواة واحدة (لا يسمح المتصفح بأكثر)';
     b.innerHTML = `<button class="rc-not" data-rc-model="probe"${testing ? ' disabled' : ''}>${bench ? 'اختبر من جديد' : 'اختبر جهازك'}</button>`;
     const diag = $('#rcDiag');
     if (diag) diag.hidden = !Mu.ready();
