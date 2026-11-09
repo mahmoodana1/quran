@@ -235,6 +235,8 @@ svg { fill: currentColor; }
 }
 .page-orn svg { width: min(70%, 320px); height: 18px; display: block; }
 .page.opening .page-orn { opacity: .45; }
+/* (the one below: none, the mic sits there; its space kept, the text still centred) */
+.lines ~ .page-orn svg { visibility: hidden; }
 
 .pfoot { flex: none; height: calc(40px + env(safe-area-inset-bottom)); } /* room for the bottom switcher */
 
@@ -825,7 +827,7 @@ svg { fill: currentColor; }
   height: calc(40px + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
   display: grid; grid-template-columns: 1fr 84px 1fr;
   --dock-bg: color-mix(in srgb, var(--paper) 90%, transparent); --dock-line: .5px solid var(--line);
-  --nr: 31.5px; transition: --nr .32s cubic-bezier(.2,.9,.3,1);
+  --nr: 31.5px; --my: 11px; transition: --nr .32s cubic-bezier(.2,.9,.3,1);
 }
 /* (the notch's radius, animated: it closes as the mic goes) */
 @property --nr { syntax: '<length>'; inherits: true; initial-value: 31.5px; }
@@ -833,17 +835,17 @@ svg { fill: currentColor; }
   content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
   background: var(--dock-bg); border-top: var(--dock-line);
   -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
-  -webkit-mask: radial-gradient(circle at 50% 2px, transparent var(--nr), #000 calc(var(--nr) + 1px));
-  mask: radial-gradient(circle at 50% 2px, transparent var(--nr), #000 calc(var(--nr) + 1px));
+  -webkit-mask: radial-gradient(circle at 50% var(--my), transparent var(--nr), #000 calc(var(--nr) + 1px));
+  mask: radial-gradient(circle at 50% var(--my), transparent var(--nr), #000 calc(var(--nr) + 1px));
 }
 .dock-mid { position: relative; }
 /* the notch's own rim, below the strip's edge */
 .dock-mid::before {
-  content: ''; position: absolute; left: 50%; top: 2px; width: calc(var(--nr) * 2 + 1px); height: calc(var(--nr) * 2 + 1px); border-radius: 50%;
+  content: ''; position: absolute; left: 50%; top: var(--my); width: calc(var(--nr) * 2 + 1px); height: calc(var(--nr) * 2 + 1px); border-radius: 50%;
   transform: translate(-50%, -50%); border: var(--dock-line); clip-path: inset(50% 0 0 0); pointer-events: none; transition: opacity .25s ease;
 }
 #dockMic {
-  position: absolute; left: 50%; top: 2px; width: 54px; height: 54px; border-radius: 50%;
+  position: absolute; left: 50%; top: var(--my); width: 54px; height: 54px; border-radius: 50%;
   transform: translate(-50%, -50%); display: grid; place-items: center;
   color: var(--p-on, #fff); background: linear-gradient(160deg, var(--p-green, var(--accent)), var(--p-green-2, var(--accent)));
   box-shadow: 0 0 0 1px var(--p-gold, transparent), 0 6px 14px rgba(30, 20, 5, .24), 0 1px 2px rgba(30, 20, 5, .2);
