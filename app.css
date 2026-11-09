@@ -2434,3 +2434,73 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 #install.compact .in-hero p { display: none; }
 #install.compact .in-perks { margin-top: 4px; padding-top: 8px; }
 #install.compact .in-list li { padding: 6px 4px; }
+
+/* ---- a surah card's edit button, and the surah's own page (recite.js suraHTML) ---- */
+.pp-pen {
+  position: absolute; top: 6px; inset-inline-end: 6px; z-index: 1; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  color: var(--p-ink, var(--ink)); background: color-mix(in srgb, var(--surface) 85%, transparent); border: .5px solid color-mix(in srgb, var(--p-gold) 55%, transparent);
+}
+.pp-pen svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.pp-pen:active { transform: scale(.9); }
+.pp-rev, .pp-plan, .rc-sura { position: relative; }
+.pp-rev { padding-inline-end: 38px; }
+.rc-sura .pp-pen { position: static; flex: none; margin-inline-end: 6px; }
+
+.pp-se-top { display: flex; align-items: center; gap: 16px; padding: 14px; border-radius: 3px; color: var(--p-on);
+  background: var(--p-pattern) 0 0 / 30px 30px, linear-gradient(160deg, var(--p-green), var(--p-green-2));
+  box-shadow: inset 0 0 0 4px var(--p-green-2), inset 0 0 0 5px color-mix(in srgb, var(--p-gold) 70%, transparent); }
+.pp-se-top .pp-plan-r { flex: none; }
+.pp-se-top .pp-plan-r b, .pp-se-top .pp-plan-r small { color: var(--p-on); }
+.pp-se-x { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pp-se-x b { font-size: 17px; font-weight: 800; }
+.pp-se-x small { font-size: 12.5px; line-height: 1.7; opacity: .85; }
+.pp-se-x .pp-str i.on { background: var(--p-gold); }
+.pp-se-acts { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; margin-top: 12px; }
+.pp-se-acts button { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px; border-radius: 14px; font-size: 13px; font-weight: 700;
+  color: var(--ink); background: var(--surface); border: .5px solid color-mix(in srgb, var(--p-gold) 45%, var(--line)); }
+.pp-se-acts button.on { color: var(--p-ink); background: color-mix(in srgb, var(--p-green) 10%, var(--surface)); }
+.pp-se-acts svg { width: 20px; height: 20px; fill: none; stroke: var(--p-green); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.pp-se-acts button:active { transform: scale(.96); }
+.pp-sub-h small { display: block; margin-top: 2px; font-size: 12px; font-weight: 500; color: var(--muted); }
+.pp-se-tools { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.pp-se-tools button { padding: 7px 12px; border-radius: 99px; font-size: 12.5px; font-weight: 700; color: var(--ink); background: var(--surface); border: .5px solid var(--line); }
+.pp-se-tools button.on { color: var(--p-on); background: linear-gradient(160deg, var(--p-green), var(--p-green-2)); border-color: var(--p-gold); }
+.pp-ayas { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 6px; }
+.pp-ayas button { height: 40px; border-radius: 11px; font-size: 14px; font-weight: 700; color: var(--muted); background: var(--surface); border: .5px solid var(--line); transition: background-color .15s ease, color .15s ease; }
+.pp-ayas button.on { color: var(--p-on); background: linear-gradient(160deg, var(--p-green), var(--p-green-2)); border-color: color-mix(in srgb, var(--p-gold) 60%, transparent); }
+.pp-ayas button.weak { box-shadow: inset 0 -3px 0 var(--c-marks, #c0392b); }
+.pp-ayas button.anchor { outline: 2px solid var(--p-gold); outline-offset: 1px; }
+.pp-ayas.ranging button:not(.anchor) { border-style: dashed; }
+.pp-ayas button:active { transform: scale(.92); }
+.pp-se-leg { margin-top: 10px; }
+.pp-se-leg i { display: inline-block; width: 14px; height: 14px; border-radius: 4px; vertical-align: -2px; margin-inline-end: 4px; background: var(--surface); border: .5px solid var(--line); }
+.pp-se-leg i.on { background: var(--p-green); }
+.pp-se-leg i.weak { box-shadow: inset 0 -3px 0 var(--c-marks, #c0392b); }
+.pp-wipe { display: block; margin: 18px auto 4px; padding: 8px 14px; font-size: 13px; font-weight: 600; color: var(--danger, #b3261e); }
+.pp-wipe.sure { border-radius: 99px; color: #fff; background: var(--danger, #b3261e); }
+
+/* the picker: search, filters, every surah a tile */
+.pp-find { position: sticky; top: 46px; z-index: 1; display: flex; align-items: center; gap: 8px; padding: 0 12px; height: 44px; border-radius: 14px;
+  background: var(--surface); border: .5px solid color-mix(in srgb, var(--p-gold) 50%, var(--line)); box-shadow: 0 4px 12px rgba(30, 20, 5, .06); }
+.pp-find svg { width: 18px; height: 18px; flex: none; fill: none; stroke: var(--muted); stroke-width: 1.8; stroke-linecap: round; }
+.pp-find input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: none; font: inherit; font-size: 15px; color: var(--ink); }
+.pp-fl { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 10px -16px 12px; padding: 0 16px; }
+.pp-fl::-webkit-scrollbar { display: none; }
+.pp-fl button { flex: none; padding: 7px 13px; border-radius: 99px; font-size: 13px; font-weight: 700; color: var(--muted); background: var(--surface); border: .5px solid var(--line); }
+.pp-fl button.on { color: var(--p-on); background: linear-gradient(160deg, var(--p-green), var(--p-green-2)); border-color: var(--p-gold); }
+.pp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+.pp-g { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 1px; padding: 10px 11px 11px; border-radius: 14px; text-align: start; overflow: hidden;
+  background: var(--surface); border: .5px solid var(--line); }
+.pp-g[hidden] { display: none; }
+.pp-g-n { font-size: 11px; font-weight: 800; color: var(--gold-ink, var(--muted)); }
+.pp-g b { font-size: 16px; font-weight: 800; color: var(--ink); }
+.pp-g small { font-size: 11.5px; color: var(--muted); }
+.pp-g-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: color-mix(in srgb, var(--p-green) 12%, transparent); }
+.pp-g-bar i { display: block; height: 100%; background: var(--p-green); }
+.pp-g-ok { position: absolute; top: 8px; inset-inline-end: 8px; width: 18px; height: 18px; border-radius: 50%; display: grid; place-items: center; background: var(--p-green); }
+.pp-g-ok svg { width: 12px; height: 12px; fill: none; stroke: var(--p-on); stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.pp-g.cur { border-color: var(--p-gold); box-shadow: inset 0 0 0 1px var(--p-gold); background: color-mix(in srgb, var(--p-gold) 10%, var(--surface)); }
+.pp-g.full { background: color-mix(in srgb, var(--p-green) 7%, var(--surface)); }
+.pp-g:active { transform: scale(.96); }
+.pp-none { text-align: center; color: var(--muted); font-size: 13.5px; padding: 20px 0; }
+.pp-se-top .pp-plan-r { background: radial-gradient(closest-side, var(--p-green-2) 79%, transparent 81%), conic-gradient(var(--p-gold) calc(var(--f) * 360deg), color-mix(in srgb, var(--p-on) 18%, transparent) 0); }

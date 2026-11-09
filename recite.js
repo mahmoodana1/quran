@@ -1882,13 +1882,34 @@ const Recite = (() => {
     return out;
   }
 
+  // a surah card's edit button: its own page (a span: inside a button)
+  const pen = s => `<span class="pp-pen" data-rc-edit="${s}" role="button" aria-label="عدّل ${suraName(s)}">${ICONS.fix}</span>`;
+  // a name as typed: no harakat, one alif
+  const simple = t => t.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED\u0640]/g, '').replace(/[ٱأإآ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه');
+  let rangeAt = null; // the surah page: the aya a stretch begins at, while one is chosen
+  // ayas marked memorized (known already: not today's new ones) or not
+  function markSaid(list, on) {
+    const l = log();
+    l.said ||= {}; l.first ||= {};
+    for (const a of list) {
+      if (on) { if (!l.said[a]) { l.said[a] = Date.now(); l.first[a] = 1; } }
+      else { delete l.said[a]; delete l.first[a]; }
+    }
+    store.set(key(), l);
+    weakMap = null;
+    const y = $('#sheetBody').scrollTop;
+    renderSheet();
+    $('#sheetBody').scrollTop = y;
+  }
+  const suraAyas = x => Array.from({ length: suraSizes()[x] }, (_, i) => R.suraStart[x] + i);
+
   // the 114 surahs as tiles, by how much of each was recited
   function mapHTML(got, sizes, weakIn) {
     let tiles = '';
     for (let s = 1; s <= 114; s++) {
       const f = sizes[s] ? got[s] / sizes[s] : 0;
       const lvl = f === 0 ? 0 : f < 1 / 3 ? 1 : f < 2 / 3 ? 2 : f < 1 ? 3 : 4;
-      tiles += `<button class="rc-tile l${lvl}${weakIn.has(s) ? ' weak' : ''}" data-rc-sura="${s}" aria-label="${suraName(s)}: ${ar(got[s])} من ${ar(sizes[s])}">${ar(s)}</button>`;
+      tiles += `<button class="rc-tile l${lvl}${weakIn.has(s) ? ' weak' : ''}" data-rc-edit="${s}" aria-label="${suraName(s)}: ${ar(got[s])} من ${ar(sizes[s])}">${ar(s)}</button>`;
     }
     return `<details class="rc-map"><summary class="row"><span class="main"><span class="t">خريطة السور</span><span class="s">كل سورة بلون ما سمّعته منها</span></span><svg viewBox="0 0 24 24" class="go"><path d="M14.5 6l-6 6 6 6"/></svg></summary>
       <div class="rc-tiles">${tiles}</div>
@@ -1918,7 +1939,7 @@ const Recite = (() => {
     plus: '<svg viewBox="0 0 24 24"><path d="M12 6v12M6 12h12"/></svg>',
     flame: '<svg viewBox="0 0 24 24"><path d="M12 21c-3.6 0-6-2.4-6-5.6 0-3.4 2.6-5 3.4-8.4 1.9 1.3 2.6 3 2.6 4.6 1-.6 1.6-1.7 1.8-2.9 1.6 1.4 4.2 3.6 4.2 6.7 0 3.2-2.4 5.6-6 5.6z"/></svg>',
   };
-  const VIEWS = { log: 'السجل', set: 'إعدادات التسميع', pick: 'اختر سورة تحفظها', revs: 'جدول المراجعة', weak: 'مواضع الضعف', suras: 'سوري' };
+  const VIEWS = { log: 'السجل', set: 'إعدادات التسميع', pick: 'اختر سورة تحفظها', revs: 'جدول المراجعة', weak: 'مواضع الضعف', suras: 'سوري', sura: '' };
   const PER = [3, 5, 10, 15, 20]; // ayas a day the plan may take
 
   // ---- the plan: one surah memorized at a time, so many new ayas a day (store recite.plan.<riwaya>
@@ -1977,8 +1998,10 @@ const Recite = (() => {
     const today = l.days?.[day()] || 0, run = streak(l), pl = planInfo(l), revs = revisions(l, pl && !pl.finished ? pl.s : 0);
     const n = Object.keys(said).filter(k => R.ayas[+k]).length;
     const fmt = o => new Intl.DateTimeFormat('ar-u-nu-arab', o);
-    if (view) return `<div class="pp pp-sub"><div class="pp-bar"><button class="pp-back" data-rc-view="" aria-label="رجوع">${ICONS.back}</button><b>${VIEWS[view] || ''}</b></div>
-      <div class="pp-subb">${view === 'log' ? logHTML() : view === 'set' ? setHTML() : view === 'pick' ? pickHTML() : view === 'revs' ? revsHTML() : view === 'weak' ? weakHTML(weak) : view === 'suras' ? memoHTML() : ''}</div></div>`;
+    const es = store.get('recite.editS', 0);
+    if (view === 'sura' && !sizes[es]) { store.set('recite.view', ''); return panelHTML(); }
+    if (view) return `<div class="pp pp-sub"><div class="pp-bar"><button class="pp-back" data-rc-view="${view === 'sura' ? store.get('recite.editFrom', '') : ''}" aria-label="رجوع">${ICONS.back}</button><b>${view === 'sura' ? `سورة ${suraName(es)}` : VIEWS[view] || ''}</b></div>
+      <div class="pp-subb">${view === 'log' ? logHTML() : view === 'set' ? setHTML() : view === 'pick' ? pickHTML() : view === 'revs' ? revsHTML() : view === 'weak' ? weakHTML(weak) : view === 'suras' ? memoHTML() : view === 'sura' ? suraHTML(es) : ''}</div></div>`;
 
     const hr = new Date().getHours(), hi = hr < 5 ? 'ليلة مباركة' : hr < 12 ? 'صباح الخير' : hr < 18 ? 'طاب يومك' : 'مساء النور';
     let h = `<div class="pp">
@@ -2018,7 +2041,7 @@ const Recite = (() => {
       const end = new Date(Date.now() + pl.days * 864e5);
       h += `<div class="pp-h"><b>رحلة الحفظ</b><button data-rc-view="pick">${pl.finished ? 'سورة جديدة' : 'غيّر'}</button></div>
         <section class="pp-plan">
-          <div class="pp-plan-r" style="--f:${f}"><span><b>${suraName(pl.s)}</b><small>${ar(Math.round(f * 100))}٪</small></span></div>
+          ${pen(pl.s)}<div class="pp-plan-r" style="--f:${f}"><span><b>${suraName(pl.s)}</b><small>${ar(Math.round(f * 100))}٪</small></span></div>
           <div class="pp-plan-x">
             <b>${pl.finished ? 'أتممتها، ما شاء الله' : `${ayaCount(pl.left)} باقية`}</b>
             <small>${pl.finished ? 'دخلت جدول المراجعة' : `تتمّها ${pl.days <= 1 ? 'غدًا' : `في ${ar(pl.days)} ${pl.days <= 10 ? 'أيام' : 'يومًا'}`} · ${esc(fmt({ weekday: 'long', day: 'numeric', month: 'long' }).format(end))}`}</small>
@@ -2032,7 +2055,7 @@ const Recite = (() => {
     if (revs.length) {
       h += `<div class="pp-h"><b>المراجعة</b><button data-rc-view="revs">الجدول كله</button></div>
         <div class="pp-revs">${revs.slice(0, 8).map(r => `<button class="pp-rev ${r.due > 0 ? 'late' : r.due === 0 ? 'now' : 'later'}" data-rc-rev="${r.s}">
-          <small>${r.due > 0 ? `متأخرة ${ar(r.due)}` : r.due === 0 ? 'اليوم' : r.due === -1 ? 'غدًا' : `بعد ${ar(-r.due)} أيام`}</small>
+          ${pen(r.s)}<small>${r.due > 0 ? `متأخرة ${ar(r.due)}` : r.due === 0 ? 'اليوم' : r.due === -1 ? 'غدًا' : `بعد ${ar(-r.due)} أيام`}</small>
           <b>${suraName(r.s)}</b>
           <span class="pp-str">${[0, 1, 2, 3, 4].map(j => `<i${j < Math.min(5, r.n) ? ' class="on"' : ''}></i>`).join('')}</span></button>`).join('')}</div>`;
     }
@@ -2122,15 +2145,56 @@ const Recite = (() => {
           <span class="rc-mic" data-rc-start="${ai}" aria-label="سمّع الآية">${MIC}</span></button>`;
       }).join('') + `</div><p class="rc-hint">تُتقَن الآية بقراءتها صحيحة في ${ar(MASTER_DAYS)} أيام مختلفة، فتخرج من هنا.</p>`;
     }
-    // a surah to memorize: the ones begun, then the short ones from the end of the mushaf, or any
+    // a surah to memorize: all 114 as tiles, found by name or number as typed, or by a filter (begun,
+    // juz 'amma, tabarak, the long ones); each with how much of it is memorized, the plan's marked
     function pickHTML() {
-      const begun = Array.from({ length: 114 }, (_, i) => i + 1).filter(x => got[x] && got[x] < sizes[x]).sort((a, b) => lastIn[b] - lastIn[a]).slice(0, 6);
-      const next = []; for (let x = 114; x >= 1 && next.length < 9; x--) if (!got[x]) next.push(x);
-      const tile = (x, sub) => `<button class="pp-pick-t" data-rc-plan="${x}"><b>${suraName(x)}</b><small>${sub}</small></button>`;
-      return `<p class="rc-hint">اختر سورة، ثم كم آية تحفظ كل يوم: يصير لك ورد يومي وموعد لإتمامها، وتدخل جدول المراجعة حين تتمّها.</p>
-        ${begun.length ? `<div class="pp-sub-h">بدأتها</div><div class="pp-pick">${begun.map(x => tile(x, `${ar(got[x])} من ${ar(sizes[x])}`)).join('')}</div>` : ''}
-        <div class="pp-sub-h">من آخر المصحف</div><div class="pp-pick">${next.map(x => tile(x, ayaCount(sizes[x]))).join('')}</div>
-        <label class="rc-pick-any"><span>أو أي سورة</span><select data-rc-plan-sel><option value="">اختر…</option>${Array.from({ length: 114 }, (_, i) => `<option value="${i + 1}">${ar(i + 1)} · ${suraName(i + 1)} (${ar(sizes[i + 1])} آية)</option>`).join('')}</select></label>`;
+      const pl0 = store.get(planKey(), null)?.s, juzOf = x => R.ayas[R.suraStart[x]][3];
+      const begun = x => got[x] > 0 && got[x] < sizes[x];
+      const fl = [['all', 'الكل'], ...(Array.from({ length: 114 }, (_, i) => i + 1).some(begun) ? [['begun', 'بدأتها']] : []), ['amma', 'جزء عمّ'], ['tabarak', 'جزء تبارك'], ['short', 'قصيرة'], ['long', 'الطوال']];
+      const tag = x => [begun(x) && 'begun', juzOf(x) === 30 && 'amma', juzOf(x) === 29 && 'tabarak', sizes[x] <= 20 && 'short', sizes[x] >= 100 && 'long'].filter(Boolean).join(' ');
+      return `<div class="pp-find"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5 5"/></svg><input type="search" data-rc-pick-q placeholder="ابحث باسم السورة أو رقمها" autocomplete="off"></div>
+        <div class="pp-fl">${fl.map(([k, t], i) => `<button data-rc-pf="${k}"${i ? '' : ' class="on"'}>${t}</button>`).join('')}</div>
+        <div class="pp-grid">${Array.from({ length: 114 }, (_, i) => i + 1).map(x => {
+          const f = sizes[x] ? got[x] / sizes[x] : 0, full = f >= 1;
+          return `<button class="pp-g${x === pl0 ? ' cur' : ''}${full ? ' full' : ''}" data-rc-plan="${x}" data-k="${tag(x)}" data-q="${x} ${esc(simple(suraName(x)))}">
+            <span class="pp-g-n">${ar(x)}</span><b>${suraName(x)}</b><small>${full ? 'محفوظة' : x === pl0 ? 'خطتك الآن' : got[x] ? `${ar(got[x])} من ${ar(sizes[x])}` : ayaCount(sizes[x])}</small>
+            ${got[x] && !full ? `<span class="pp-g-bar"><i style="width:${Math.max(4, Math.round(f * 100))}%"></i></span>` : ''}${full ? `<span class="pp-g-ok">${ICONS.check}</span>` : ''}</button>`;
+        }).join('')}</div>
+        <p class="pp-none" hidden>لا سورة بهذا الاسم</p>`;
+    }
+
+    // ---- a surah's own page (its edit button): how much of it is memorized, its revision, and each of its
+    // ayas, a tap to mark it memorized (known already) or not (to memorize again); all of it at once, or
+    // a stretch from one aya to another; its progress wiped; made the plan; revised; opened in the mushaf
+    function suraHTML(x) {
+      if (!sizes[x]) return '';
+      const a0 = R.suraStart[x], N = sizes[x], k = got[x], f = k / N, pl0 = store.get(planKey(), null)?.s;
+      const weakSet = new Set(weak.map(([ai]) => ai)), rv = revisions(l).find(r => r.s === x), range = rangeAt != null;
+      return `<section class="pp-se">
+        <div class="pp-se-top">
+          <div class="pp-plan-r" style="--f:${f}"><span><b>${ar(Math.round(f * 100))}٪</b><small>${ar(k)}/${ar(N)}</small></span></div>
+          <div class="pp-se-x">
+            <b>${k >= N ? 'محفوظة كاملة' : k ? `${ayaCount(k)} محفوظة` : 'لم تحفظ منها شيئًا بعد'}</b>
+            <small>${ayaCount(N)} · الجزء ${ar(R.ayas[a0][3])}${rv ? ` · المراجعة: ${dueText(rv)}` : ''}${weakSet.size ? ` · ${ar([...weakSet].filter(ai => R.ayas[ai][0] === x).length)} مواضع ضعف` : ''}</small>
+            ${rv ? `<span class="pp-str">${[0, 1, 2, 3, 4].map(j => `<i${j < Math.min(5, rv.n) ? ' class="on"' : ''}></i>`).join('')}</span>` : ''}
+          </div>
+        </div>
+        <div class="pp-se-acts">
+          ${k ? `<button data-rc-rev="${x}">${ICONS.review}<span>راجعها</span></button>` : ''}
+          ${x === pl0 ? `<button class="on" disabled>${ICONS.seed}<span>خطتك الآن</span></button>` : `<button data-rc-plan="${x}">${ICONS.seed}<span>احفظها</span></button>`}
+          <button data-rc-open="${x}">${ICONS.go}<span>في المصحف</span></button>
+        </div>
+        <div class="pp-sub-h">آياتها<small>${range ? 'اضغط آخر آية في المدى' : 'اضغط آية لتعلّمها محفوظة، أو لتزيلها'}</small></div>
+        <div class="pp-se-tools">
+          <button data-rc-range${range ? ' class="on"' : ''}>${range ? 'إلغاء التحديد' : 'حدّد من آية إلى آية'}</button>
+          <button data-rc-all="1">كلها محفوظة</button>
+          <button data-rc-all="0">لا شيء</button>
+        </div>
+        <div class="pp-ayas${range ? ' ranging' : ''}">${Array.from({ length: N }, (_, i) => a0 + i).map(ai =>
+          `<button data-rc-tog="${ai}" class="${said[ai] ? 'on' : ''}${weakSet.has(ai) ? ' weak' : ''}${ai === rangeAt ? ' anchor' : ''}">${ar(R.ayas[ai][1])}</button>`).join('')}</div>
+        <div class="rc-legend pp-se-leg"><span><i class="on"></i>محفوظة</span><span><i class="weak"></i>فيها ضعف</span><span><i></i>لم تُحفظ</span></div>
+        ${k ? `<button class="pp-wipe" data-rc-wipe="${x}">احذف تقدّمك في السورة كله</button>` : ''}
+      </section>`;
     }
 
     // ---- حفظي: the whole so far, and each surah begun, to go on with
@@ -2139,11 +2203,11 @@ const Recite = (() => {
       if (!n) return `<p class="rc-empty">ما تسمّعه كاملًا من الآيات يُعَدّ هنا، سورةً سورة، لتعود إليه وتتابع.</p>` + helpHTML();
       let h = `<div class="group-label">سورك · الأحدث أولًا</div><div class="group">` + begun.map(s => {
         const f = got[s] / sizes[s], nx = nextIn(s, said), doneS = got[s] >= sizes[s];
-        return `<div class="row rc-sura" data-rc-sura="${s}"><span class="num">${ar(s)}</span>
+        return `<div class="row rc-sura" data-rc-edit="${s}"><span class="num">${ar(s)}</span>
           <span class="main"><span class="t">${suraName(s)}</span>
           <span class="rc-bar${doneS ? ' full' : ''}"><i style="width:${Math.max(3, Math.round(f * 100))}%"></i></span>
           <span class="s">${doneS ? 'كاملة' : `${ar(got[s])} من ${ar(sizes[s])} آية`} · ${ago(lastIn[s])}</span></span>
-          <button class="rc-cont" data-rc-from="${nx}" aria-label="تابع ${suraName(s)} من الآية ${ar(R.ayas[nx][1])}">${MIC}<span>${doneS ? 'أعدها' : `من ${ar(R.ayas[nx][1])}`}</span></button></div>`;
+          ${pen(s)}<button class="rc-cont" data-rc-from="${nx}" aria-label="تابع ${suraName(s)} من الآية ${ar(R.ayas[nx][1])}">${MIC}<span>${doneS ? 'أعدها' : `من ${ar(R.ayas[nx][1])}`}</span></button></div>`;
       }).join('') + '</div>';
       return h + mapHTML(got, sizes, new Set(weak.map(([ai]) => R.ayas[ai][0])));
     }
@@ -2309,8 +2373,67 @@ const Recite = (() => {
     renderSheet();
     toast(`خطتك: ${suraName(s)}`);
   }
-  document.addEventListener('change', e => { const sel = e.target.closest?.('[data-rc-plan-sel]'); if (sel && sel.value) setPlan(+sel.value); });
+  // the picker: the tiles that fit what is typed and the filter chosen
+  function pickFilter() {
+    const q = $('[data-rc-pick-q]'), k = $('.pp-fl .on')?.dataset.rcPf || 'all';
+    if (!q) return;
+    const t = simple(q.value.trim()).replace(/^سوره\s*/, ''), num = /^[0-9٠-٩]+$/.test(t) ? +t.replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)) : null;
+    let shown = 0;
+    document.querySelectorAll('.pp-g').forEach(g => {
+      const [n, ...nm] = g.dataset.q.split(' '), name = nm.join(' ');
+      const ok = (k === 'all' || g.dataset.k.split(' ').includes(k)) && (!t || (num != null ? +n === num : name.includes(t) || name.replace(/^ال/, '').startsWith(t.replace(/^ال/, ''))));
+      g.hidden = !ok; if (ok) shown++;
+    });
+    $('.pp-none').hidden = !!shown;
+  }
+  document.addEventListener('input', e => { if (e.target.closest?.('[data-rc-pick-q]')) pickFilter(); });
   function onSheetClick(e) {
+    // a surah's page, from its edit button (before the card it is on)
+    const ed = e.target.closest('[data-rc-edit]');
+    if (ed && !e.target.closest('[data-rc-from]')) {
+      e.stopPropagation();
+      const from = store.get('recite.view', '') || '';
+      if (from !== 'sura') store.set('recite.editFrom', from);
+      store.set('recite.editS', +ed.dataset.rcEdit); store.set('recite.view', 'sura'); rangeAt = null;
+      renderSheet(); $('#sheetBody').scrollTop = 0; haptic(5);
+      return true;
+    }
+    const tg = e.target.closest('[data-rc-tog]');
+    if (tg) {
+      const ai = +tg.dataset.rcTog;
+      if (rangeAt == null) { markSaid([ai], !log().said?.[ai]); haptic(5); return true; }
+      if (rangeAt === -1) { rangeAt = ai; markSaid([], true); toast('والآن آخر آية في المدى'); return true; }
+      if (rangeAt === ai) { rangeAt = null; markSaid([], true); return true; }
+      const [x, y] = [Math.min(rangeAt, ai), Math.max(rangeAt, ai)];
+      rangeAt = null;
+      markSaid(Array.from({ length: y - x + 1 }, (_, i) => x + i), true);
+      toast(`عُلّمت ${ayaCount(y - x + 1)} محفوظة`); haptic(10);
+      return true;
+    }
+    if (e.target.closest('[data-rc-range]')) {
+      // (begun: the first aya tapped; a stretch on the next)
+      if (rangeAt != null) rangeAt = null; else { rangeAt = -1; toast('اضغط أول آية في المدى'); }
+      const y = $('#sheetBody').scrollTop; renderSheet(); $('#sheetBody').scrollTop = y;
+      return true;
+    }
+    const all = e.target.closest('[data-rc-all]');
+    if (all) { markSaid(suraAyas(store.get('recite.editS', 0)), all.dataset.rcAll === '1'); haptic(8); return true; }
+    const wipe = e.target.closest('[data-rc-wipe]');
+    if (wipe) {
+      // (twice: the first tap asks)
+      if (!wipe.classList.contains('sure')) { wipe.classList.add('sure'); wipe.textContent = 'اضغط مرة أخرى لحذفه'; setTimeout(() => { if (wipe.isConnected) { wipe.classList.remove('sure'); wipe.textContent = 'احذف تقدّمك في السورة كله'; } }, 3500); return true; }
+      const x = +wipe.dataset.rcWipe, l = log(), list = suraAyas(x);
+      for (const a of list) delete l.ayas[a];
+      if (l.rev) delete l.rev[x];
+      store.set(key(), l);
+      markSaid(list, false);
+      toast(`حُذف تقدّمك في ${suraName(x)}`);
+      return true;
+    }
+    const op = e.target.closest('[data-rc-open]');
+    if (op) { closeSheet(); goTo(R.ayas[R.suraStart[+op.dataset.rcOpen]][2]); return true; }
+    const pf = e.target.closest('[data-rc-pf]');
+    if (pf) { pf.parentElement.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === pf)); pickFilter(); return true; }
     const one = e.target.closest('[data-rc-start]');
     if (one) { e.stopPropagation(); closeSheet(); start(+one.dataset.rcStart); return true; }
     if (e.target.closest('[data-rc-resume]')) { closeSheet(); start(resumeAya()); return true; }
