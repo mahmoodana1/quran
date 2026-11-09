@@ -2016,18 +2016,18 @@ const Recite = (() => {
     const cards = [];
     if (pl && !pl.finished) {
       const met = pl.todayN >= pl.per, a0 = pl.portion[0], a1 = pl.portion[pl.portion.length - 1];
-      cards.push({ c: 'green', icon: ICONS.seed, k: 'حفظ جديد', t: suraName(pl.s), s: met ? `أتممت ورد اليوم · ${ayaCount(pl.todayN)}` : `الآيات ${ar(R.ayas[a0][1])}${a1 !== a0 ? '–' + ar(R.ayas[a1][1]) : ''}`, f: Math.min(1, pl.todayN / pl.per), done: met, act: 'data-rc-new' });
+      cards.push({ c: 'green', icon: ICONS.seed, k: 'حفظ جديد', t: suraName(pl.s), s: met ? `أتممت ورد اليوم · ${ayaCount(pl.todayN)}` : `الآيات ${ar(R.ayas[a0][1])}${a1 !== a0 ? '–' + ar(R.ayas[a1][1]) : ''}`, f: Math.min(1, pl.todayN / pl.per), done: met, act: 'data-rc-new', edit: pl.s });
     } else cards.push({ c: 'green', icon: ICONS.seed, k: 'حفظ جديد', t: pl?.finished ? 'سورة جديدة؟' : 'ابدأ رحلة حفظ', s: pl?.finished ? `أتممت ${suraName(pl.s)}، ما شاء الله` : 'اختر سورة وكم آية في اليوم', act: 'data-rc-view="pick"', go: ICONS.plus });
     const due = revs.filter(r => r.due >= 0);
-    if (due.length) cards.push({ c: 'amber', icon: ICONS.review, k: 'مراجعة', t: suraName(due[0].s), s: dueText(due[0]) + (due.length > 1 ? ` · و${ar(due.length - 1)} غيرها` : ''), act: `data-rc-rev="${due[0].s}"` });
-    else if (revs.length) cards.push({ c: 'amber', icon: ICONS.review, k: 'مراجعة', t: 'لا شيء مستحق', s: `التالية: ${suraName(revs[0].s)} ${dueText(revs[0])}`, done: true, act: `data-rc-rev="${revs[0].s}"` });
+    if (due.length) cards.push({ c: 'amber', icon: ICONS.review, k: 'مراجعة', t: suraName(due[0].s), s: dueText(due[0]) + (due.length > 1 ? ` · و${ar(due.length - 1)} غيرها` : ''), act: `data-rc-rev="${due[0].s}"`, edit: due[0].s });
+    else if (revs.length) cards.push({ c: 'amber', icon: ICONS.review, k: 'مراجعة', t: 'لا شيء مستحق', s: `التالية: ${suraName(revs[0].s)} ${dueText(revs[0])}`, done: true, act: `data-rc-rev="${revs[0].s}"`, edit: revs[0].s });
     if (weak.length) cards.push({ c: 'coral', icon: ICONS.fix, k: 'تثبيت', t: `${ar(weak.length)} ${weak.length <= 10 && weak.length > 2 ? 'مواضع' : 'موضعًا'}`, s: 'آيات أخطأت فيها تنتظرك', act: 'data-rc-review' });
     cards.push({ c: 'sky', icon: MIC, k: fresh ? 'ابدأ التسميع' : 'تابع', t: ayaLabel(at), s: esc(ayaTokens(at).slice(0, 4).join(' ')) + ' …', act: 'data-rc-resume', verse: true });
     if (testAyas()) cards.push({ c: 'violet', icon: ICONS.test, k: 'اختبرني', t: 'آيات مخفية', s: 'من موضع سمّعته من قبل', act: 'data-rc-test' });
     cards.push({ c: 'ink', icon: ICONS.find, k: 'ابحث بصوتك', t: 'اقرأ ونجدها', s: 'من أي موضع في المصحف', act: 'data-rc-find' });
     const doneN = cards.filter(x => x.done).length, wird = cards.filter(x => ['green', 'amber', 'coral'].includes(x.c)).length;
     h += `<div class="pp-h"><b>ورد اليوم</b><small>${ar(doneN)} من ${ar(wird)}</small></div>
-      <div class="pp-cards">${cards.map((x, i) => `<button class="pp-c ${x.c}${x.done ? ' done' : ''}" ${x.act} style="--i:${i}">
+      <div class="pp-cards">${cards.map((x, i) => `<button class="pp-c ${x.c}${x.done ? ' done' : ''}" ${x.act} style="--i:${i}">${x.edit ? pen(x.edit) : ''}
         <span class="pp-c-i">${x.icon}</span>
         <span class="pp-c-k">${x.k}</span>
         <b class="pp-c-t">${x.t}</b>
