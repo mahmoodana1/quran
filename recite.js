@@ -25,6 +25,7 @@
 // closeSheet and flashAya from app.js at call time.
 const Recite = (() => {
   const AYA_TYPES = { skip: 'تجاوزت الآية كلها', order: 'قرأتها في غير موضعها: بعد التي تليها' };
+  const KIND_SHORT = { wrong: 'كلمة بأخرى', haraka: 'حركة', skip: 'تجاوز', hint: 'تلميح', madd: 'مدّ', ghunna: 'غنّة وإدغام', order: 'تقديم وتأخير', heavy: 'تفخيم وترقيق', near: 'حروف متقاربة', maddlong: 'مدّ زائد', maddnone: 'مدّ ناقص' };
   const TYPES = { wrong: 'قرأتها بكلمة أخرى', haraka: 'أخطأت في حركتها', skip: 'تجاوزتها', hint: 'احتجت تلميحًا', madd: 'لم تعطِ المدّ حقّه', ghunna: 'أخطأت في الغنّة أو الإدغام', order: 'قدّمتها أو أخّرتها عن جارتها',
     heavy: 'خلطت بين حرف مفخّم ونظيره المرقّق', near: 'أبدلت حرفًا بحرف قريب منه', maddlong: 'زدت في المدّ الطبيعي', maddnone: 'مددت حرفًا لا مدّ فيه' };
   const MASTER_DAYS = 3;
@@ -1827,6 +1828,13 @@ const Recite = (() => {
     : n === 2 ? 'يومان متتاليان' : n <= 10 ? `${ar(n)} أيام متتالية` : `${ar(n)} يومًا متتاليًا`;
 
   // days in a row with a session, up to today (or yesterday, before today's)
+  // the most days in a row ever recited
+  function longest(l) {
+    const ds = Object.keys(l.days || {}).map(k => { const [y, m, d] = k.split('-').map(Number); return Math.round(new Date(y, m - 1, d) / 864e5); }).sort((a, b) => a - b);
+    let best = 0, n = 0;
+    ds.forEach((d, i) => { n = i && d - ds[i - 1] === 1 ? n + 1 : 1; best = Math.max(best, n); });
+    return best;
+  }
   function streak(l) {
     const d = new Date();
     if (!l.days?.[day(d)]) d.setDate(d.getDate() - 1);
@@ -1898,15 +1906,32 @@ const Recite = (() => {
     for (const k of Object.keys(said)) { const a = R.ayas[+k]; if (a) { got[a[0]]++; lastIn[a[0]] = Math.max(lastIn[a[0]], said[k]); } }
     const words = ayaTokens(at), open = words.slice(0, 7).join(' ') + (words.length > 7 ? ' …' : '');
     const today = l.days?.[day()] || 0, run = streak(l);
-    const runTxt = run === 1 ? 'يوم' : run === 2 ? 'يومان' : run <= 10 ? `${ar(run)} أيام` : `${ar(run)} يومًا`;
     let html = `<section class="rc-go">
       <div class="rc-go-h"><span class="rc-go-l">${fresh ? 'ابدأ من هنا' : 'تابع من حيث توقفت'}</span>
-        ${run ? `<span class="rc-run" title="${streakText(run)}" aria-label="${streakText(run)}">${ICONS.flame}${runTxt}</span>` : ''}</div>
+        </div>
       <div class="rc-go-t">${ayaLabel(at)}</div>
       <div class="rc-go-v" style="font-family:${R.font}">${esc(open)}</div>
       <div class="rc-go-p"><span class="rc-bar"><i style="width:${Math.round(got[s0] / sizes[s0] * 100)}%"></i></span><small>${ar(got[s0])} من ${ar(sizes[s0])}</small></div>
       <button class="rc-go-b" data-rc-resume>${MIC}${fresh ? 'ابدأ التسميع' : 'تابع التسميع'}</button>
     </section>`;
+
+    // ---- the days in a row recited (the streak), the longest, and this week day by day: each day a
+    // circle, filled when something was recited (today's ring filling toward the goal, if one is set)
+    if (!fresh) {
+      const best = Math.max(run, longest(l)), wk = [], now = new Date();
+      for (let i = 6; i >= 0; i--) { const d = new Date(now); d.setDate(now.getDate() - i); wk.push(d); }
+      const LET = ['ح', 'ن', 'ث', 'ر', 'خ', 'ج', 'س'];
+      html += `<section class="rc-streak${run ? '' : ' cold'}">
+        <div class="rc-sk-h"><span class="rc-sk-f">${ICONS.flame}</span>
+          <span class="rc-sk-n"><b>${ar(run)}</b><small>${run ? (run === 1 ? 'يوم متتالٍ' : 'أيام متتالية') : 'ابدأ سلسلتك اليوم'}</small></span>
+          ${best > 1 ? `<span class="rc-sk-best">أطولها<b>${ar(best)}</b></span>` : ''}</div>
+        <ol class="rc-week">${wk.map((d, i) => {
+          const n = l.days?.[day(d)] || 0, isToday = i === 6, f = isToday && goal ? Math.min(1, today / goal) : n ? 1 : 0;
+          return `<li class="${n ? 'on' : ''}${isToday ? ' now' : ''}" title="${n ? ayaCount(n) : 'لا تسميع'}"><span class="d" style="--f:${f}">${n ? '<svg viewBox="0 0 24 24"><path d="M6 12.5l4 4 8-9"/></svg>' : ''}</span><small>${LET[d.getDay()]}</small></li>`;
+        }).join('')}</ol>
+        ${goal ? `<p class="rc-sk-goal">${today >= goal ? 'بلغت هدف اليوم، ما شاء الله' : `${ayaCount(goal - today)} لبلوغ هدف اليوم`}</p>` : ''}
+      </section>`;
+    }
 
     // ---- the whole so far, in one strip: today (against the goal), ayas, surahs, share
     const n = Object.keys(said).filter(k => R.ayas[+k]).length, pct = n / R.ayas.length * 100;
@@ -1945,9 +1970,41 @@ const Recite = (() => {
       return h + mapHTML(got, sizes, new Set(weak.map(([ai]) => R.ayas[ai][0])));
     }
 
+    // ---- the mistakes at a glance (the last 30 days of sessions): of which kind, how right the last
+    // sessions were, and the words got wrong most often (each a tap from its aya)
+    function insightsHTML() {
+      const since = Date.now() - 30 * 864e5, ss = l.sessions.filter(x => x.t >= since && x.words);
+      if (!ss.length) return '';
+      const kinds = {}, words = new Map();
+      for (const x of ss) for (const [ai, wi, e] of x.list || []) {
+        kinds[e] = (kinds[e] || 0) + 1;
+        if (wi >= 0 && R.ayas[ai]) { const k = ai + ':' + wi; words.set(k, (words.get(k) || 0) + 1); }
+      }
+      const total = Object.values(kinds).reduce((a, b) => a + b, 0), top = Math.max(1, ...Object.values(kinds));
+      let h = '<section class="rc-ins">';
+      if (total) h += `<div class="rc-ins-h"><b>${errs(total)}</b><small>في آخر ٣٠ يومًا · ${ar(ss.length)} ${ss.length === 1 ? 'جلسة' : ss.length === 2 ? 'جلستان' : ss.length <= 10 ? 'جلسات' : 'جلسة'}</small></div>
+        <div class="rc-kinds">${Object.entries(kinds).sort((a, b) => b[1] - a[1]).map(([e, c]) =>
+          `<div class="rc-kind"><span class="rc-mk rc-${e}"></span><span class="k">${KIND_SHORT[e] || TYPES[e] || e}</span><span class="rc-kbar"><i style="width:${Math.max(4, Math.round(c / top * 100))}%"></i></span><b>${ar(c)}</b></div>`).join('')}</div>`;
+      // (how right each of the last sessions was: its words said without a mistake; oldest first)
+      const last = ss.slice(0, 12).reverse();
+      if (last.length >= 2) {
+        const acc = last.map(x => Math.max(0, 1 - x.errs / x.words)), mean = acc.reduce((a, b) => a + b, 0) / acc.length;
+        h += `<div class="rc-acc"><div class="rc-acc-h"><span>دقّتك في آخر الجلسات</span><b>${ar(Math.round(mean * 100))}٪</b></div>
+          <div class="rc-acc-bars" role="img" aria-label="دقة آخر ${ar(last.length)} جلسات، من الأقدم إلى الأحدث">${last.map((x, i) =>
+            `<span title="${ago(x.t)} · ${ar(Math.round(acc[i] * 100))}٪"><i style="height:${Math.max(6, Math.round(acc[i] * 100))}%"></i></span>`).join('')}</div>
+          <div class="rc-acc-x"><small>الأقدم</small><small>الأحدث</small></div></div>`;
+      }
+      const often = [...words].filter(([, c]) => c >= 2).sort((a, b) => b[1] - a[1]).slice(0, 6);
+      if (often.length) h += `<div class="rc-often-h">كلمات تتكرر أخطاؤك فيها</div><div class="rc-often">${often.map(([k, c]) => {
+        const [ai, wi] = k.split(':').map(Number);
+        return `<button data-rc-aya="${ai}"><b style="font-family:${R.font}">${esc(ayaTokens(ai)[wi] || '')}</b><small>${ayaLabel(ai)}</small><i>${ar(c)}×</i></button>`;
+      }).join('')}</div>`;
+      return h + '</section>';
+    }
+
     // ---- الأخطاء: what to go over, and what was mastered
     function errsHTML() {
-      let h = '';
+      let h = insightsHTML();
       if (weak.length) {
         h += `<p class="rc-hint">كل آية تُتقَن بعد قراءتها صحيحة في ${ar(MASTER_DAYS)} أيام مختلفة. المس الآية لتراها في المصحف، أو الميكروفون لتسمّعها.</p>`;
         h += '<div class="group">' + weak.map(([ai, a]) => {

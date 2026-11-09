@@ -51,6 +51,7 @@
     <button data-act="play"><i><svg viewBox="0 0 24 24"><path d="M8.5 5.5v13l10.5-6.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></i><span>استماع</span></button>
     <button data-act="recite"><i><svg viewBox="0 0 24 24"><path d="M12 3.5a3 3 0 00-3 3v5a3 3 0 006 0v-5a3 3 0 00-3-3zM6.5 11a5.5 5.5 0 0011 0M12 16.5v4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></i><span>تسميع</span></button>
     <button data-act="tafsir"><i><svg viewBox="0 0 24 24"><path d="M12 6.5C10 5 7 4.5 3.5 5v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5zM12 6.5v13" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></i><span>تفسير</span></button>
+    <button data-act="similar"><i><svg viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="11" height="8" rx="2"/><rect x="9.5" y="11" width="11" height="8" rx="2"/></g></svg><b id="abSim" hidden></b></i><span>متشابهات</span></button>
     <button data-act="copy"><i><svg viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="12" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M15.5 8.5V6a2.5 2.5 0 00-2.5-2.5H7A2.5 2.5 0 004.5 6v7A2.5 2.5 0 007 15.5h1.5" fill="none" stroke="currentColor" stroke-width="1.7"/></svg></i><span>نسخ</span></button>
     <button data-act="bookmark"><i><svg viewBox="0 0 24 24"><path d="M6.5 4.5h11v15.5l-5.5-3.8-5.5 3.8z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></i><span>علامة</span></button>
   </div>
@@ -130,12 +131,13 @@
   <div class="tf-grip"></div>
   <div class="tf-head">
     <button id="tfClose" class="tf-icon" aria-label="إغلاق"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round"/></svg></button>
-    <div class="tf-title"><b id="tfTitle"></b><small>تفسير السعدي</small></div>
+    <div class="tf-title"><b id="tfTitle"></b><small id="tfSub">تفسير السعدي</small></div>
     <div class="tf-nav">
       <button id="tfPrev" class="tf-icon" aria-label="الآية السابقة"><svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <button id="tfNext" class="tf-icon" aria-label="الآية التالية"><svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     </div>
   </div>
+  <nav class="tf-seg" id="tfSeg"><button data-tf="tafsir" class="on">التفسير</button><button data-tf="similar">المتشابهات<i id="tfSimN" hidden></i></button></nav>
   <div id="tfBody" class="tf-body"></div>
 </section>
 
@@ -145,21 +147,24 @@
     <button id="sheetClose" class="txt-btn">تم</button>
     <div class="sheet-title"><h1 id="sheetTitle">الفهرس</h1><small id="sheetSub"></small></div>
     <div class="head-tools">
-      <button id="setBtn" class="lib-btn set-btn" aria-label="الإعدادات"><svg viewBox="0 0 24 24"><path d="M12 2.8l1.6 2.3 2.7-.8.6 2.8 2.8.6-.8 2.7 2.3 1.6-2.3 1.6.8 2.7-2.8.6-.6 2.8-2.7-.8L12 21.2l-1.6-2.3-2.7.8-.6-2.8-2.8-.6.8-2.7L2.8 12l2.3-1.6-.8-2.7 2.8-.6.6-2.8 2.7.8z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.5"/></svg></button>
+      <button id="railBtn" class="lib-btn rail-btn" aria-label="إظهار القائمة أو إخفاؤها"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><path d="M14.5 4.5v15"/><path d="M16.8 9h1.6M16.8 12h1.6"/></g></svg></button>
     </div>
   </div>
   <div class="search">
     <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15.5 15.5L21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
     <input id="q" type="search" placeholder="ابحث عن سورة أو آية… (مثال: البقرة ٢٥٥)" autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="search">
   </div>
-  <nav class="tabs" id="tabs">
-    <button data-tab="suras" class="on"><span>السور</span></button>
-    <button data-tab="adhkar"><span>الأذكار</span></button>
-    <button data-tab="recite"><span>التسميع</span></button>
-    <button data-tab="marks"><span>العلامات</span></button>
-    <button data-tab="prayer"><span>الصلاة</span></button>
+  <div class="sheet-main">
+  <nav class="rail" id="tabs" aria-label="اللوحات">
+    <button data-tab="suras" class="on"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6.5C10 5 7 4.5 3.5 5v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5zM12 6.5v13"/></g></svg><span>السور</span></button>
+    <button data-tab="recite"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3.5a3 3 0 00-3 3v5a3 3 0 006 0v-5a3 3 0 00-3-3zM6.5 11a5.5 5.5 0 0011 0M12 16.5v4"/></g></svg><span>التسميع</span></button>
+    <button data-tab="adhkar"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1.6"/><circle cx="17.5" cy="7.3" r="1.6"/><circle cx="19.6" cy="12.6" r="1.6"/><circle cx="17.5" cy="17.8" r="1.6"/><circle cx="6.5" cy="7.3" r="1.6"/><circle cx="4.4" cy="12.6" r="1.6"/><circle cx="6.5" cy="17.8" r="1.6"/><path d="M12 19.5v2.5"/></g></svg><span>الأذكار</span></button>
+    <button data-tab="marks"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6.5 3.5h11v17l-5.5-4-5.5 4z"/></g></svg><span>العلامات</span></button>
+    <button data-tab="prayer"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20.5h16M5.5 20.5V11c0-3.5 3-5 6.5-7.5 3.5 2.5 6.5 4 6.5 7.5v9.5M10 20.5v-4a2 2 0 014 0v4"/></g></svg><span>الصلاة</span></button>
+    <button data-tab="settings" class="rail-set"><svg viewBox="0 0 24 24" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8l1.6 2.3 2.7-.8.6 2.8 2.8.6-.8 2.7 2.3 1.6-2.3 1.6.8 2.7-2.8.6-.6 2.8-2.7-.8L12 21.2l-1.6-2.3-2.7.8-.6-2.8-2.8-.6.8-2.7L2.8 12l2.3-1.6-.8-2.7 2.8-.6.6-2.8 2.7.8z"/><circle cx="12" cy="12" r="3.2"/></g></svg><span>الإعدادات</span></button>
   </nav>
   <div id="sheetBody"></div>
+  </div>
 </section>
 
 <!-- adhkar: one dhikr per card, counted down by tapping -->

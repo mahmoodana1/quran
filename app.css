@@ -377,8 +377,15 @@ svg { fill: currentColor; }
   100% { background: color-mix(in srgb, var(--c-marks) 0%, transparent); }
 }
 
-.acts-row { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
-.acts-row button { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; color: var(--ink); }
+.acts-row { display: grid; grid-template-columns: repeat(6, 1fr); gap: 5px; }
+.acts-row button { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 11.5px; color: var(--ink); white-space: nowrap; }
+.acts-row button.dim { opacity: .45; }
+.acts-row i { position: relative; }
+/* how many similar ayas there are */
+.acts-row i b {
+  position: absolute; top: 3px; inset-inline-end: 5px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 9px;
+  display: grid; place-items: center; font-size: 10.5px; font-weight: 800; font-style: normal; color: var(--p-on); background: var(--p-gold);
+}
 .acts-row i {
   width: 100%; height: 44px; border-radius: 14px; display: grid; place-items: center;
   background: color-mix(in srgb, var(--accent) 8%, transparent); color: var(--accent);
@@ -675,7 +682,7 @@ svg { fill: currentColor; }
 @keyframes cardOut { to { transform: scale(.96); opacity: 0; } }
 .book { animation: bookIn .5s cubic-bezier(.2,.9,.3,1) both; animation-delay: calc(var(--i, 0) * 60ms); }
 @keyframes bookIn { from { opacity: 0; transform: translateY(16px); } }
-.row, .phead button, .tabs button, .txt-btn, .lib-btn { transition: background-color .2s ease, opacity .2s ease, transform .15s ease; }
+.row, .phead button, .rail button, .txt-btn, .lib-btn { transition: background-color .2s ease, opacity .2s ease, transform .15s ease; }
 .phead button:active, .txt-btn:active, .lib-btn:active { opacity: .5; }
 #sheetBody .group { animation: fadeIn .3s ease both; }
 @keyframes fadeIn { from { opacity: 0; } }
@@ -713,6 +720,28 @@ svg { fill: currentColor; }
   animation: tfIn .38s cubic-bezier(.2,.9,.3,1);
 }
 @keyframes tfIn { from { transform: translateY(100%); } }
+/* the tafsir sheet's two: the tafsir, and the ayas worded like this one */
+.tf-seg { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; margin: 2px 16px 6px; padding: 3px; border-radius: 12px; background: color-mix(in srgb, var(--muted) 10%, transparent); }
+.tf-seg button { padding: 6px 0; border-radius: 9px; font-size: 13.5px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.tf-seg button.on { background: var(--surface); color: var(--p-ink); font-weight: 700; box-shadow: 0 1px 3px rgba(0, 0, 0, .1), 0 0 0 .5px var(--line); }
+.tf-seg i { display: inline-grid; place-items: center; min-width: 17px; height: 17px; padding: 0 4px; margin-inline-start: 5px; border-radius: 9px;
+  font-style: normal; font-size: 11px; font-weight: 800; color: var(--p-on); background: var(--p-gold); vertical-align: 1px; }
+.sm-note { margin: 2px 0 12px; font-size: 13.5px; line-height: 1.8; color: var(--muted); }
+.sm-me, .sm-it { display: block; width: 100%; text-align: start; margin-bottom: 10px; padding: 10px 14px 6px; border-radius: 16px; animation: fadeIn .3s ease both; }
+.sm-me { background: color-mix(in srgb, var(--p-green) 9%, transparent); border: 1px solid color-mix(in srgb, var(--p-green) 25%, transparent); }
+.sm-me small { font-size: 12px; font-weight: 700; color: var(--p-ink); }
+.sm-it { background: var(--surface); border: .5px solid var(--line); }
+.sm-it:active { transform: scale(.985); }
+.sm-h { display: flex; align-items: center; gap: 8px; }
+.sm-h b { font-size: 14px; color: var(--ink); }
+.sm-h small { font-size: 12px; color: var(--muted); }
+.sm-tag { margin-inline-start: auto; padding: 2px 8px; border-radius: 99px; font-size: 11.5px; font-weight: 600; white-space: nowrap;
+  color: var(--muted); background: color-mix(in srgb, var(--muted) 12%, transparent); }
+.sm-tag.hi { color: var(--gold-ink); background: color-mix(in srgb, var(--p-gold) 18%, transparent); }
+.sm-me p, .sm-it p { margin: 6px 0 4px; font-size: 22px; line-height: 2; color: var(--ink); }
+.sm-me mark, .sm-it mark { color: inherit; background: color-mix(in srgb, var(--p-gold) 30%, transparent); border-radius: 6px; padding: 0 3px;
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--p-gold) 80%, transparent); }
+.sm-more { text-align: center; font-size: 12.5px; color: var(--muted); }
 #tafsir.leaving { animation: tfOut .28s cubic-bezier(.4,0,.8,.4) forwards; }
 @keyframes tfOut { to { transform: translateY(100%); } }
 .tf-grip { width: 38px; height: 5px; border-radius: 3px; background: var(--rule); margin: 8px auto 2px; }
@@ -873,18 +902,40 @@ svg { fill: currentColor; }
 .search { background: none; border-radius: 0; border-bottom: 1px solid var(--p-rule); padding: 0 4px; margin: 6px 16px 10px; }
 .search:focus-within { background: none; box-shadow: none; border-bottom-color: var(--p-ink); color: var(--p-ink); }
 
-/* tabs: words on a rule, a gold diamond marks the one you're on */
-.tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0; margin: 0 16px 6px; padding: 0; background: none; border-bottom: 1px solid var(--p-rule); }
-.tabs button {
-  position: relative; padding: 10px 0 13px; border-radius: 0; font-size: 14.5px; font-weight: 500; color: var(--muted);
-  background: none; box-shadow: none;
-}
-.tabs button.on { color: var(--ink); font-weight: 800; background: none; box-shadow: none; }
-.tabs button.on::after {
-  content: ""; position: absolute; bottom: -5px; left: 50%; width: 8px; height: 8px; margin-left: -4px;
-  background: var(--p-gold); transform: rotate(45deg); box-shadow: 0 0 0 3px var(--p-bg);
-}
 #sheetBody { padding-top: 4px; }
+
+/* ---- the panels' side rail: each panel an icon and its name, the one open a small green plate
+   ringed in gold (as the mushaf's surah cartouches); put away by the button in the head (rail-off),
+   the panel then the whole width. Beside the words on a wide screen */
+.sheet-main { flex: 1; min-height: 0; display: flex; }
+.sheet-main #sheetBody { flex: 1; min-width: 0; }
+.rail {
+  flex: none; width: 70px; display: flex; flex-direction: column; gap: 4px; overflow: hidden auto;
+  padding: 6px 6px calc(64px + env(safe-area-inset-bottom)); border-inline-end: 1px solid var(--p-rule);
+  transition: width .28s cubic-bezier(.2,.9,.3,1), padding .28s ease, opacity .2s ease, border-color .2s ease;
+}
+.rail button {
+  position: relative; flex: none; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 10px 2px 8px; border-radius: 14px; color: var(--muted); font-size: 11.5px; font-weight: 600; white-space: nowrap;
+}
+.rail button svg { width: 23px; height: 23px; }
+.rail button:active { transform: scale(.94); }
+.rail button.on {
+  color: var(--p-on); font-weight: 700;
+  background: var(--p-pattern) 0 0 / 22px 22px, linear-gradient(160deg, var(--p-green), var(--p-green-2));
+  box-shadow: inset 0 0 0 1px var(--p-gold), inset 0 0 0 2.5px var(--p-green-2), inset 0 0 0 3.2px color-mix(in srgb, var(--p-gold) 45%, transparent), 0 3px 10px rgba(30, 20, 5, .2);
+}
+.rail button.on svg { stroke: var(--p-on); }
+.rail .rail-set { margin-top: auto; }
+.searching .rail button.on { background: none; box-shadow: none; color: var(--muted); }
+#sheet.rail-off .rail { width: 0; padding-inline: 0; opacity: 0; border-color: transparent; pointer-events: none; }
+.rail-btn.on { color: var(--p-ink); background: color-mix(in srgb, var(--p-green) 12%, transparent); }
+.rail-btn svg { width: 22px; height: 22px; }
+@media (min-width: 760px) {
+  .rail { width: 196px; padding-inline: 10px; }
+  .rail button { flex-direction: row; gap: 12px; padding: 11px 14px; font-size: 14.5px; }
+}
+@media (prefers-reduced-motion: reduce) { .rail { transition: none; } }
 
 /* sections: flat, ruled like an index page */
 .group { background: none; border: 0; border-radius: 0; box-shadow: none; margin-bottom: 8px; overflow: visible; }
@@ -1567,6 +1618,69 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 .rc-st.met > small { color: var(--p-ink); font-weight: 700; }
 
 .rc-quick { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+.rc-quick .tx b { font-size: clamp(12.5px, 3.6vw, 15px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.rc-quick .tx small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+
+/* ---- the streak: the days in a row, the longest, and the week, day by day */
+.rc-streak {
+  margin: 0 0 12px; padding: 14px 14px 12px; border-radius: 20px; background: var(--surface);
+  border: .5px solid var(--line); box-shadow: 0 1px 3px rgba(0, 0, 0, .05);
+}
+.rc-sk-h { display: flex; align-items: center; gap: 10px; }
+.rc-sk-f { width: 42px; height: 42px; flex: none; border-radius: 14px; display: grid; place-items: center;
+  background: color-mix(in srgb, #e6a23c 16%, transparent); }
+.rc-sk-f svg { width: 26px; height: 26px; fill: #e39b2f; }
+.rc-streak.cold .rc-sk-f { background: color-mix(in srgb, var(--muted) 12%, transparent); }
+.rc-streak.cold .rc-sk-f svg { fill: var(--faint); }
+.rc-sk-n { display: flex; flex-direction: column; min-width: 0; }
+.rc-sk-n b { font-size: 26px; font-weight: 800; line-height: 1.15; color: var(--ink); font-variant-numeric: tabular-nums; }
+.rc-sk-n small { font-size: 12.5px; color: var(--muted); }
+.rc-sk-best { margin-inline-start: auto; display: flex; flex-direction: column; align-items: center; font-size: 11.5px; color: var(--muted); }
+.rc-sk-best b { font-size: 17px; font-weight: 800; color: var(--p-ink); }
+.rc-week { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.rc-week li { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.rc-week .d {
+  --f: 0; position: relative; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center;
+  background: conic-gradient(var(--p-green) calc(var(--f) * 360deg), color-mix(in srgb, var(--muted) 16%, transparent) 0);
+}
+.rc-week .d::before { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--surface); }
+.rc-week li.on .d::before { background: var(--p-green); }
+.rc-week .d svg { position: relative; width: 16px; height: 16px; fill: none; stroke: var(--p-on); stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.rc-week small { font-size: 12px; color: var(--muted); }
+.rc-week li.now small { color: var(--ink); font-weight: 800; }
+.rc-week li.now .d { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px color-mix(in srgb, var(--p-gold) 70%, transparent); }
+.rc-sk-goal { margin: 10px 0 0; text-align: center; font-size: 12.5px; color: var(--muted); }
+
+/* ---- the mistakes at a glance: their kinds, the last sessions' accuracy, the words most often wrong */
+.rc-ins { margin: 12px 0 14px; padding: 14px; border-radius: 20px; background: var(--surface); border: .5px solid var(--line); }
+.rc-ins-h { display: flex; align-items: baseline; gap: 8px; margin-bottom: 10px; }
+.rc-ins-h b { font-size: 19px; font-weight: 800; color: var(--ink); }
+.rc-ins-h small { font-size: 12.5px; color: var(--muted); }
+.rc-kinds { display: flex; flex-direction: column; gap: 9px; }
+.rc-kind { display: grid; grid-template-columns: 18px minmax(70px, auto) 1fr auto; align-items: center; gap: 8px; font-size: 13.5px; }
+.rc-kind .k { color: var(--ink); white-space: nowrap; }
+.rc-kind b { font-size: 13.5px; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 1.5em; text-align: end; }
+.rc-kbar { height: 8px; border-radius: 4px; background: color-mix(in srgb, var(--muted) 12%, transparent); overflow: hidden; }
+.rc-kbar i { display: block; height: 100%; border-radius: 4px; background: color-mix(in srgb, var(--c-marks) 75%, transparent); }
+.rc-acc { margin-top: 16px; padding-top: 12px; border-top: .5px solid var(--line); }
+.rc-acc-h { display: flex; justify-content: space-between; align-items: baseline; font-size: 13.5px; color: var(--ink); }
+.rc-acc-h b { font-size: 17px; font-weight: 800; color: var(--p-ink); }
+.rc-acc-bars { display: flex; align-items: flex-end; gap: 4px; height: 64px; margin-top: 10px; padding-bottom: 1px; border-bottom: 1px solid var(--line); }
+.rc-acc-bars span { flex: 1; height: 100%; display: flex; align-items: flex-end; }
+.rc-acc-bars i { display: block; width: 100%; border-radius: 4px 4px 0 0; background: var(--p-green); opacity: .85; }
+.rc-acc-bars span:last-child i { opacity: 1; }
+.rc-acc-x { display: flex; justify-content: space-between; margin-top: 3px; }
+.rc-acc-x small { font-size: 11px; color: var(--faint); }
+.rc-often-h { margin: 16px 0 8px; padding-top: 12px; border-top: .5px solid var(--line); font-size: 13.5px; color: var(--ink); }
+.rc-often { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
+.rc-often button {
+  position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 9px 11px; border-radius: 14px;
+  background: color-mix(in srgb, var(--c-marks) 7%, transparent); border: .5px solid color-mix(in srgb, var(--c-marks) 22%, transparent); text-align: start;
+}
+.rc-often button:active { transform: scale(.97); }
+.rc-often b { font-size: 20px; font-weight: 400; line-height: 1.6; color: var(--ink); }
+.rc-often small { font-size: 11.5px; color: var(--muted); }
+.rc-often i { position: absolute; top: 8px; inset-inline-end: 10px; font-style: normal; font-size: 12px; font-weight: 800; color: var(--c-marks); }
 .rc-quick button {
   display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 10px 11px; border-radius: 18px; text-align: start;
   background: var(--surface); border: .5px solid var(--line); box-shadow: 0 1px 2px rgba(60, 40, 10, .04); color: var(--ink);
@@ -1591,7 +1705,7 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
   position: sticky; top: -4px; z-index: 2; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; padding: 3px;
   margin: 0 0 6px; border-radius: 13px; background: color-mix(in srgb, var(--ink) 6%, var(--paper));
 }
-.rc-seg button { position: relative; padding: 7px 0; border-radius: 10px; font-size: 14px; font-weight: 600; color: var(--muted); transition: background-color .2s ease, color .2s ease; }
+.rc-seg button { position: relative; white-space: nowrap; padding: 7px 0; border-radius: 10px; font-size: 14px; font-weight: 600; color: var(--muted); transition: background-color .2s ease, color .2s ease; }
 .rc-seg button.on { background: var(--surface); color: var(--p-ink); font-weight: 700; box-shadow: 0 1px 3px rgba(0, 0, 0, .1), 0 0 0 .5px var(--line); }
 .rc-seg button i {
   display: inline-grid; place-items: center; min-width: 17px; height: 17px; padding: 0 4px; margin-inline-start: 5px; border-radius: 9px;
@@ -1623,55 +1737,6 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 .rc-map .rc-legend { margin: 0 4px 8px; }
 .rc-help .rc-points { border: none; padding: 4px 12px 14px; }
 .rc-help .rc-points svg { stroke: var(--p-gold); }
-
-/* the panels' tab for التسميع: the green layout — a small green plate, patterned like
-   the panel's own cards, cream words, its ends drawn out in thin gold ogee curves like
-   a surah's cartouche in the mushaf. Its column takes what the cartouche needs and the
-   other four share the rest. */
-.tabs { grid-template-columns: 1fr 1fr auto 1fr 1fr; column-gap: 2px; }
-.tabs button { white-space: nowrap; }
-.tabs button[data-tab="recite"] { padding: 8px 2px 7px; display: grid; place-items: center; }
-.tabs button[data-tab="recite"] span {
-  --cap: 10px;
-  position: relative; display: inline-block; margin-inline: var(--cap); padding: 4px 10px 5px; border-radius: 2px;
-  font-size: 14px; font-weight: 700; line-height: 1.25; color: var(--p-on); letter-spacing: 0;
-  background: var(--p-pattern) 0 0 / 22px 22px, linear-gradient(160deg, var(--p-green), var(--p-green-2));
-  border: 1px solid color-mix(in srgb, var(--p-gold) 85%, transparent);
-  box-shadow: inset 0 0 0 1.5px var(--p-green-2), inset 0 0 0 2.5px color-mix(in srgb, var(--p-gold) 40%, transparent), 0 1px 3px rgba(30, 20, 5, .16);
-  text-shadow: 0 1px 1px rgba(0, 0, 0, .25);
-  transition: box-shadow .2s ease, transform .15s ease, border-color .2s ease;
-}
-/* the gold ends: one drawing, mirrored for the other side */
-.tabs button[data-tab="recite"] span::before,
-.tabs button[data-tab="recite"] span::after {
-  content: ""; position: absolute; top: -1px; bottom: -1px; width: var(--cap); pointer-events: none;
-  background: var(--p-gold); opacity: .85; transition: opacity .2s ease;
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 36'%3E%3Cg fill='none' stroke='black' stroke-width='1.25' stroke-linecap='round'%3E%3Cpath d='M0 .8C6 .8 5 9 9 14C11 16.4 12.6 17 12.6 18C12.6 19 11 19.6 9 22C5 27 6 35.2 0 35.2'/%3E%3Cpath d='M0 5C3.6 5 3.4 11.5 6.6 18C3.4 24.5 3.6 31 0 31' stroke-width='.9'/%3E%3C/g%3E%3Ccircle cx='9.6' cy='18' r='1.2' fill='black'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 14 36'%3E%3Cg fill='none' stroke='black' stroke-width='1.25' stroke-linecap='round'%3E%3Cpath d='M0 .8C6 .8 5 9 9 14C11 16.4 12.6 17 12.6 18C12.6 19 11 19.6 9 22C5 27 6 35.2 0 35.2'/%3E%3Cpath d='M0 5C3.6 5 3.4 11.5 6.6 18C3.4 24.5 3.6 31 0 31' stroke-width='.9'/%3E%3C/g%3E%3Ccircle cx='9.6' cy='18' r='1.2' fill='black'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
-}
-.tabs button[data-tab="recite"] span::after { right: calc(-1 * var(--cap) - 1px); }
-.tabs button[data-tab="recite"] span::before { left: calc(-1 * var(--cap) - 1px); transform: scaleX(-1); }
-/* and a crest on the top edge, centred: a thin gold ogee arch with a dot above it */
-.tabs button[data-tab="recite"]::before {
-  content: ""; position: absolute; top: -2px; left: 50%; width: 40px; height: 11px; margin-left: -20px; pointer-events: none;
-  background: var(--p-gold); opacity: .85; transition: opacity .2s ease;
-  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 44 12'%3E%3Cg fill='none' stroke='black' stroke-linecap='round'%3E%3Cpath d='M1 11.5C10 11.5 14.5 10 18 7.4C19.6 6.2 21 5 22 4.3C23 5 24.4 6.2 26 7.4C29.5 10 34 11.5 43 11.5' stroke-width='1.25'/%3E%3Cpath d='M10 11.5C14.5 11 17.6 9.6 22 7.4C26.4 9.6 29.5 11 34 11.5' stroke-width='.9'/%3E%3C/g%3E%3Ccircle cx='22' cy='1.8' r='1.3' fill='black'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
-  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 44 12'%3E%3Cg fill='none' stroke='black' stroke-linecap='round'%3E%3Cpath d='M1 11.5C10 11.5 14.5 10 18 7.4C19.6 6.2 21 5 22 4.3C23 5 24.4 6.2 26 7.4C29.5 10 34 11.5 43 11.5' stroke-width='1.25'/%3E%3Cpath d='M10 11.5C14.5 11 17.6 9.6 22 7.4C26.4 9.6 29.5 11 34 11.5' stroke-width='.9'/%3E%3C/g%3E%3Ccircle cx='22' cy='1.8' r='1.3' fill='black'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
-}
-.tabs button[data-tab="recite"].on::before { opacity: 1; }
-.tabs button[data-tab="recite"]:active span { transform: scale(.96); }
-.tabs button[data-tab="recite"].on span {
-  border-color: var(--p-gold);
-  box-shadow: inset 0 0 0 1.5px var(--p-green-2), inset 0 0 0 2.5px var(--p-gold), 0 3px 10px rgba(30, 20, 5, .22);
-}
-.tabs button[data-tab="recite"].on span::before,
-.tabs button[data-tab="recite"].on span::after { opacity: 1; }
-/* narrow phones: smaller words and slimmer ends so all five fit */
-@media (max-width: 350px) {
-  .tabs { margin-inline: 12px; }
-  .tabs button { font-size: 13.5px; }
-  .tabs button[data-tab="recite"] span { --cap: 8px; font-size: 13.5px; padding: 4px 8px 5px; }
-}
 
 /* ---- install on the phone: the green layout, the steps for this browser ---- */
 .in-card { gap: 14px; }
@@ -1816,8 +1881,6 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 #sheet .search:focus-within { background: var(--surface); box-shadow: 0 0 0 1.5px var(--p-green); color: var(--p-ink); }
 #sheet .search input { padding: 9px 0; font-size: 16px; }
 /* tabs: the one you're on underlined in green (التسميع keeps its plate) */
-.tabs button.on::after { bottom: -1px; left: 22%; right: 22%; width: auto; height: 3px; margin: 0; border-radius: 3px 3px 0 0; transform: none; box-shadow: none; background: var(--p-green); }
-.tabs button[data-tab="recite"].on::after { display: none; }
 
 /* sections: cards */
 #sheet .group { background: var(--surface); border: .5px solid var(--line); border-radius: 18px; box-shadow: 0 1px 2px rgba(60, 40, 10, .04); overflow: hidden; margin-bottom: 12px; }

@@ -891,6 +891,7 @@ function openActions(i) {
   const card = typeof Recite !== 'undefined' ? Recite.card(i) : '';
   $('#ayaBarRc').innerHTML = card;
   $('#ayaBarRc').hidden = !card;
+  similarOf(i).then(l => { if (S.act !== i) return; const n = l?.n || 0, b = $('#abSim'); b.hidden = !n; b.textContent = ar(n); $('#ayaBar [data-act=similar]').classList.toggle('dim', !n); });
   if (P.ai == null) hide($('#player'));
   const bar = $('#ayaBar');
   if (String(i) !== bar.dataset.for) { delete bar.dataset.pin; bar.dataset.for = i; } // a new aya: placed clear of it again
@@ -940,7 +941,8 @@ $('#ayaBar').addEventListener('click', async e => {
     catch { toast('تعذر النسخ'); }
   }
   if (b.dataset.act === 'bookmark') { toggleSave(i); closeActions(); }
-  if (b.dataset.act === 'tafsir') openTafsir(i);
+  if (b.dataset.act === 'tafsir') openTafsir(i, 'tafsir');
+  if (b.dataset.act === 'similar') openTafsir(i, 'similar');
   if (b.dataset.act === 'close') closeActions();
   if (b.dataset.act === 'rc-set') openReciteSettings();
 });
@@ -1374,7 +1376,48 @@ function tafsirHTML(t) {
 }
 
 let tfAya = null;
-async function openTafsir(ai) {
+// ---- similar ayas (mutashabihat): per Hafs aya, those worded much like it (data/similar-hafs.json,
+// from tools: closeness %, the longest run of words they share), for a memorizer to tell apart
+let simData = null;
+function similarOf(ai) {
+  simData ||= fetch(`data/similar-hafs.json?v=${DATA_VERSION}`).then(r => r.json()).catch(() => { simData = null; return {}; });
+  return simData.then(d => {
+    const raw = d[R.ayas[ai]?.[5]] || [], more = raw.find(x => x[0] < 0);
+    const list = raw.filter(x => x[0] >= 0).map(([h, close, run]) => ({ ai: R.fromHafs[h], close, run })).filter(x => x.ai >= 0 && x.ai !== ai);
+    return { list, n: more ? more[1] : list.length };
+  });
+}
+// an aya's words, as compared (no harakat or marks; one form of alif, ya, ta marbuta, hamza)
+const simNorm = w => w.replace(/[\u064B-\u065F\u0670\u06D6-\u06ED\u0640]/g, '').replace(/[ٱأإآ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').replace(/ؤ/g, 'و').replace(/ئ/g, 'ي');
+const ayaWords = ai => R.text[ai].replace(/\s*[٠-٩]+$/, '').split(' ');
+// the words of b not in its longest common run with a (in order): what tells b from a
+function differ(a, b) {
+  const A = a.map(simNorm), B = b.map(simNorm), n = A.length, m = B.length;
+  const f = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--) f[i][j] = A[i] === B[j] ? f[i + 1][j + 1] + 1 : Math.max(f[i + 1][j], f[i][j + 1]);
+  const same = new Set();
+  for (let i = 0, j = 0; i < n && j < m;) { if (A[i] === B[j]) { same.add(j); i++; j++; } else if (f[i + 1][j] >= f[i][j + 1]) i++; else j++; }
+  return b.map((w, j) => same.has(j) ? esc(w) : `<mark>${esc(w)}</mark>`).join(' ');
+}
+async function similarHTML(ai) {
+  const { list, n } = await similarOf(ai);
+  if (!list.length) return '<div class="tf-wait">لا آيات تشبه هذه الآية في ألفاظها</div>';
+  const me = ayaWords(ai), kind = x => x.close >= 85 ? 'شبه متطابقة' : x.close >= 60 ? 'متقاربة جدًا' : x.close >= 50 ? 'متقاربة' : `تشتركان في ${ar(x.run)} كلمات متتالية`;
+  return `<p class="sm-note">آيات تتشابه ألفاظها بهذه الآية، يلتبس بعضها ببعض في الحفظ. المُبرَز ما تختلف فيه، فانتبه له.</p>
+    <div class="sm-me"><small>هذه الآية · ${ayaLabel(ai)}</small><p style="font-family:${R.font}">${differ(ayaWords(list[0].ai), me)}</p></div>
+    ${list.map(x => `<button class="sm-it" data-sim="${x.ai}"><span class="sm-h"><b>${ayaLabel(x.ai)}</b><small>ص ${ar(R.ayas[x.ai][2])}</small><span class="sm-tag${x.close >= 85 ? ' hi' : ''}">${kind(x)}</span></span>
+      <p style="font-family:${R.font}">${differ(me, ayaWords(x.ai))}</p></button>`).join('')}
+    ${n > list.length ? `<p class="sm-more">وآيات أخرى تشبهها (${ar(n)} في المجموع)، أقربها ما سبق</p>` : ''}`;
+}
+let tfMode = 'tafsir';
+$('#tfSeg').onclick = e => { const b = e.target.closest('[data-tf]'); if (b && tfAya != null) openTafsir(tfAya, b.dataset.tf); };
+$('#tfBody').addEventListener('click', e => { const b = e.target.closest('[data-sim]'); if (b) openTafsir(+b.dataset.sim, 'similar'); });
+
+async function openTafsir(ai, mode = tfMode) {
+  tfMode = mode;
+  document.querySelectorAll('#tfSeg [data-tf]').forEach(b => b.classList.toggle('on', b.dataset.tf === mode));
+  $('#tfSub').textContent = mode === 'similar' ? 'الآيات المتشابهة' : 'تفسير السعدي';
+  similarOf(ai).then(l => { if (tfAya !== ai) return; const k = $('#tfSimN'); k.hidden = !l.n; k.textContent = ar(l.n); });
   tfAya = ai;
   S.act = ai; S.focus = ai; paintMarks();
   const a = R.ayas[ai];
@@ -1386,6 +1429,11 @@ async function openTafsir(ai) {
   if (P.ai != null) hide($('#player'));
   show($('#tafsir'));
   if (R.ayas[ai][2] !== S.page) goTo(R.ayas[ai][2], { animate: Math.abs(R.ayas[ai][2] - S.page) === 1 });
+  if (mode === 'similar') {
+    const html = await similarHTML(ai);
+    if (tfAya === ai && tfMode === 'similar') { body.innerHTML = html; body.scrollTop = 0; }
+    return;
+  }
   try {
     const list = await loadTafsir(s);
     if (tfAya !== ai) return;
@@ -2176,12 +2224,14 @@ function openSheet(t = tab) {
 }
 function closeSheet() { hide($('#sheet')); $('#q').blur(); }
 $('#sheetClose').onclick = closeSheet;
-$('#setBtn').onclick = () => {
-  tab = tab === 'settings' ? 'suras' : 'settings';
-  $('#q').value = '';
-  renderSheet();
-  $('#sheetBody').scrollTop = 0;
-};
+// the side rail of the panels: shown or put away (remembered)
+const railOff = () => !!store.get('panels.railOff', false);
+function paintRail() {
+  $('#sheet').classList.toggle('rail-off', railOff());
+  $('#railBtn').classList.toggle('on', !railOff());
+}
+$('#railBtn').onclick = () => { store.set('panels.railOff', !railOff()); paintRail(); haptic(6); };
+paintRail();
 $('#tabs').addEventListener('click', e => {
   const b = e.target.closest('[data-tab]');
   if (!b) return;
@@ -2266,8 +2316,7 @@ function renderSheet() {
   document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   const body = $('#sheetBody');
   const q = $('#q').value;
-  $('#tabs').hidden = !!q.trim();
-  $('#setBtn').classList.toggle('on', tab === 'settings');
+  $('#sheet').classList.toggle('searching', !!q.trim());
   $('#q').placeholder = 'ابحث: سورة، آية، صفحة، جزء، ذكر، أو إعداد…';
   let html = '';
 
