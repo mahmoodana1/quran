@@ -28,8 +28,9 @@ const Install = (() => {
     : 'other';
 
   // ---- the Android app (android/, released from the repository as an APK): the site in it
-  // knows so by ?src=apk (its start address) for the visit; in Android's browsers it is
-  // offered in a big card on the fifth visit, then five visits after each «لاحقًا»
+  // knows so by ?src=apk (its start address) for the visit; on Android elsewhere (a browser,
+  // or the site added to the home screen) it is offered in a big card as the site opens, on
+  // each of the first five visits until it is downloaded, and always from settings
   const APK_URL = 'https://github.com/mahmoodana1/quran/releases/latest/download/quran.apk';
   const IN_APK = (() => {
     try {
@@ -40,10 +41,9 @@ const Install = (() => {
     } catch { return false; }
   })();
   const installed = () => IN_APK || matchMedia('(display-mode: standalone), (display-mode: fullscreen), (display-mode: minimal-ui)').matches || navigator.standalone === true;
-  const APK = ANDROID && !installed();  // (in a browser on Android)
-  if (APK) try {
-    if (!sessionStorage.getItem('apk.seen')) { sessionStorage.setItem('apk.seen', '1'); store.set('apk.visits', store.get('apk.visits', 0) + 1); }
-  } catch {}
+  const APK = ANDROID && !IN_APK;
+  let apkVisit = false;  // (this visit's first page: the card may open on it)
+  if (APK) try { if (!sessionStorage.getItem('apk.seen')) { sessionStorage.setItem('apk.seen', '1'); apkVisit = true; } } catch {}
   let deferred = null;   // the browser's own install dialog, once it offers one
   // browsers that have one (it comes as beforeinstallprompt once the app qualifies)
   const NATIVE = (ANDROID && ['chrome', 'edge', 'samsung'].includes(BROWSER)) || (OS === 'desktop' && ['chrome', 'edge'].includes(BROWSER));
@@ -178,8 +178,8 @@ const Install = (() => {
   }
 
   async function open(byItself = false) {
-    if (installed()) { toast('التطبيق مثبّت على جهازك'); return; }
     if (APK) { apkOpen(); return; }
+    if (installed()) { toast('التطبيق مثبّت على جهازك'); return; }
     if (deferred && !byItself && await nativeAsk(false)) return;
     auto = byItself;
     view = OS;
@@ -250,10 +250,7 @@ const Install = (() => {
 
   // ---- the Android app's card
   function apkOpen() { show($('#apk')); }
-  function apkLater() {
-    store.set('apk.next', store.get('apk.visits', 0) + 5);
-    hide($('#apk'));
-  }
+  function apkLater() { hide($('#apk')); }
   $('#apkGo').href = APK_URL;
   $('#apkGo').onclick = () => {
     store.set('apk.got', true);
@@ -262,15 +259,20 @@ const Install = (() => {
   };
   $('#apkLater').onclick = apkLater;
   $('#apk').addEventListener('click', e => { if (e.target === $('#apk')) apkLater(); });
-  if (APK && !store.get('apk.got', false) && store.get('apk.visits', 0) >= store.get('apk.next', 5)) {
+  if (apkVisit && !store.get('apk.got', false) && store.get('apk.shown', 0) < 5) {
     let tries = 0;
-    const t = () => { if (busy() && ++tries < 40) setTimeout(t, 4000); else if (!busy()) apkOpen(); };
-    setTimeout(t, 2500);
+    const t = () => {
+      if (busy() && ++tries < 40) { setTimeout(t, 4000); return; }
+      if (busy()) return;
+      store.set('apk.shown', store.get('apk.shown', 0) + 1);
+      apkOpen();
+    };
+    setTimeout(t, 1500);
   }
 
   // ---- settings: a row to open it, while it isn't installed
   function settingsHTML() {
-    if (installed()) return '';
+    if (installed() && !APK) return '';
     return `<button class="in-row" data-install>
       <span class="in-row-ico"><img src="icons/icon-192.png" alt=""></span>
       <span class="in-row-txt"><b>${APK ? 'حمّل تطبيق أندرويد' : 'ثبّت التطبيق على جهازك'}</b><small>${APK ? 'القرآن بملء الشاشة، يتحدّث مع الموقع وحده' : 'يفتح من شاشتك الرئيسية ويعمل دون إنترنت'}</small></span>
