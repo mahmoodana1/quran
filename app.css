@@ -2317,3 +2317,88 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 @keyframes ppIn { from { opacity: 0; transform: translateY(14px) scale(.97); } }
 @keyframes ppSlide { from { opacity: 0; transform: translateX(-24px); } }
 @media (prefers-reduced-motion: reduce) { .pp *, .pp { animation: none !important; } }
+
+/* ---- التسميع's page, in the mushaf's own colours: green plates patterned and ringed in gold, cream
+   and gold for what is pressed, paper for the rest; the mistakes in their own red; quiet motion */
+.pp {
+  --g1: var(--p-green); --g2: var(--p-green-2); --a1: var(--p-gold); --a2: var(--p-gold); --c1: var(--c-marks); --c2: var(--c-marks);
+  --s1: var(--p-green); --s2: var(--p-green-2); --v1: var(--p-gold); --v2: var(--p-gold); --k1: var(--muted); --k2: var(--muted);
+}
+.pp-hi small { color: var(--p-ink); }
+.pp-flame { color: var(--p-green-2); background: linear-gradient(180deg, #f0dba2, #d6b770); box-shadow: 0 2px 8px rgba(0, 0, 0, .18); animation: fadeIn .3s ease both; }
+.pp-flame svg { fill: #c0571e; animation: none; }
+.pp-flame.cold { color: var(--muted); background: color-mix(in srgb, var(--muted) 14%, transparent); }
+.pp-flame.cold svg { fill: var(--faint); }
+.pp-week li { animation: fadeIn .3s ease both; animation-delay: calc(var(--i) * 25ms); }
+.pp-week li.on span { background: var(--p-pattern) 0 0 / 18px 18px, linear-gradient(160deg, var(--p-green), var(--p-green-2)); color: var(--p-on); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p-gold) 60%, transparent); }
+.pp-week li.now span { outline-color: var(--p-gold); }
+.pp-h button { color: var(--p-ink); }
+
+/* the cards: the wird's on green plates, the rest on paper */
+.pp-c {
+  color: var(--p-on); background: var(--p-pattern) 0 0 / 26px 26px, linear-gradient(160deg, var(--p-green), var(--p-green-2));
+  box-shadow: inset 0 0 0 1px var(--p-gold), inset 0 0 0 3px var(--p-green-2), inset 0 0 0 3.6px color-mix(in srgb, var(--p-gold) 45%, transparent), 0 6px 16px rgba(20, 30, 20, .18);
+  animation: fadeIn .35s ease both; animation-delay: calc(var(--i) * 40ms);
+}
+.pp-c::after { display: none; }
+.pp-c-i { background: rgba(255, 255, 255, .1); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p-gold) 40%, transparent); }
+.pp-c-i svg { stroke: var(--p-on); }
+.pp-c-k { color: #e8cf8e; opacity: 1; }
+.pp-c-go { background: linear-gradient(180deg, #f0dba2, #d6b770); box-shadow: 0 2px 6px rgba(0, 0, 0, .22); }
+.pp-c-go svg { fill: var(--p-green-2); stroke: var(--p-green-2); }
+.pp-c-bar { background: rgba(255, 255, 255, .18); }
+.pp-c-bar i { background: #e8cf8e; }
+.pp-c.coral, .pp-c.sky, .pp-c.violet, .pp-c.ink {
+  color: var(--ink); background: var(--surface);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p-gold) 55%, transparent), 0 2px 8px rgba(0, 0, 0, .06);
+}
+.pp-c.coral .pp-c-i, .pp-c.sky .pp-c-i, .pp-c.violet .pp-c-i, .pp-c.ink .pp-c-i { background: color-mix(in srgb, var(--p-green) 11%, transparent); box-shadow: none; }
+.pp-c.coral .pp-c-i svg, .pp-c.sky .pp-c-i svg, .pp-c.violet .pp-c-i svg, .pp-c.ink .pp-c-i svg { stroke: var(--p-ink); }
+.pp-c.coral .pp-c-k, .pp-c.sky .pp-c-k, .pp-c.violet .pp-c-k, .pp-c.ink .pp-c-k { color: var(--gold-ink, var(--p-gold)); }
+.pp-c.coral .pp-c-s, .pp-c.sky .pp-c-s, .pp-c.violet .pp-c-s, .pp-c.ink .pp-c-s { color: var(--muted); opacity: 1; }
+.pp-c.coral .pp-c-go, .pp-c.sky .pp-c-go, .pp-c.violet .pp-c-go, .pp-c.ink .pp-c-go { background: linear-gradient(160deg, var(--p-green), var(--p-green-2)); }
+.pp-c.coral .pp-c-go svg, .pp-c.sky .pp-c-go svg, .pp-c.violet .pp-c-go svg, .pp-c.ink .pp-c-go svg { fill: var(--p-on); stroke: var(--p-on); }
+.pp-c.coral .pp-c-k { color: var(--c-marks); }
+.pp-c.coral .pp-c-i { background: color-mix(in srgb, var(--c-marks) 12%, transparent); }
+.pp-c.coral .pp-c-i svg { stroke: var(--c-marks); }
+.pp-c.done { filter: none; opacity: .8; }
+
+/* the journey */
+.pp-plan { animation: fadeIn .35s ease both; box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--p-gold) 40%, transparent); }
+.pp-plan-r { background: radial-gradient(closest-side, var(--surface) 79%, transparent 81%), conic-gradient(var(--p-green) calc(var(--f) * 360deg), color-mix(in srgb, var(--muted) 15%, transparent) 0); }
+.pp-plan-r small { color: var(--p-ink); }
+.pp-path i.on { background: var(--p-green); }
+.pp-path i.now { background: var(--p-gold); box-shadow: 0 0 0 3px color-mix(in srgb, var(--p-gold) 30%, transparent); animation: none; }
+.pp-per button.on { color: var(--p-on); background: linear-gradient(160deg, var(--p-green), var(--p-green-2)); }
+
+/* revisions */
+.pp-rev { --x: var(--p-green); background: var(--surface); border: 1px solid color-mix(in srgb, var(--p-gold) 40%, transparent); animation: fadeIn .3s ease both; }
+.pp-rev.now { --x: var(--p-gold); border-color: var(--p-gold); }
+.pp-rev.late { --x: var(--c-marks); border-color: color-mix(in srgb, var(--c-marks) 55%, transparent); }
+.pp-rev small { color: color-mix(in srgb, var(--x) 85%, var(--ink)); }
+
+/* the numbers: paper tiles, the first a green plate */
+.pp-t { --x: var(--p-ink); background: var(--surface); border: .5px solid var(--line); animation: fadeIn .35s ease both; }
+.pp-t b { color: var(--p-ink); }
+.pp-t.amber, .pp-t.sky, .pp-t.violet, .pp-t.coral, .pp-t.ink { --x: var(--p-ink); }
+.pp-t.coral b { color: var(--p-ink); }
+.pp-t.big {
+  color: var(--p-on); border: 0; background: var(--p-pattern) 0 0 / 26px 26px, linear-gradient(160deg, var(--p-green), var(--p-green-2));
+  box-shadow: inset 0 0 0 1px var(--p-gold), inset 0 0 0 3px var(--p-green-2), inset 0 0 0 3.6px color-mix(in srgb, var(--p-gold) 45%, transparent);
+}
+.pp-t.big b { color: var(--p-on); }
+.pp-t.big small { color: #e8cf8e; }
+.pp-ring { background: conic-gradient(#e8cf8e calc(var(--f) * 360deg), rgba(255, 255, 255, .18) 0); }
+.pp-heat i.h1 { background: color-mix(in srgb, var(--p-green) 30%, transparent); }
+.pp-heat i.h2 { background: color-mix(in srgb, var(--p-green) 55%, transparent); }
+.pp-heat i.h3 { background: color-mix(in srgb, var(--p-green) 80%, transparent); }
+.pp-heat i.h4 { background: var(--p-green-2); }
+
+/* the mistakes, in their own red */
+.pp-k, .pp-k.k1, .pp-k.k2, .pp-k.k3, .pp-k.k4 { --x: var(--c-marks); background: var(--surface); border: .5px solid var(--line); animation: fadeIn .3s ease both; }
+.pp-words button { border: 1px solid color-mix(in srgb, var(--c-marks) 35%, transparent); }
+.pp-words i { background: var(--c-marks); }
+.pp-wide-b span b { background: var(--c-marks); }
+.pp-wide-b.solid { color: var(--p-on); background: var(--p-pattern) 0 0 / 26px 26px, linear-gradient(160deg, var(--p-green), var(--p-green-2)); box-shadow: inset 0 0 0 1px var(--p-gold); }
+.pp-pick-t { background: var(--surface); border: 1px solid color-mix(in srgb, var(--p-gold) 45%, transparent); animation: fadeIn .3s ease both; }
+.pp-subb { animation: fadeIn .25s ease both; }
