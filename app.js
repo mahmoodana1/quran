@@ -100,7 +100,22 @@ $('#dockPanels').onclick = () => {
 };
 // the mic in the middle: read an aya and it is found, and the recitation goes on from it (the first
 // time, what it does is said first)
+// (held: put away, a small arrow left in its place, which brings it back; remembered. Away too while
+// the panels are open)
+const micAway = on => { document.body.classList.toggle('mic-away', on); store.set('mic.away', on); };
+micAway(!!store.get('mic.away', false));
+let micHold = 0, micHeld = false;
+$('#dockMic').addEventListener('pointerdown', () => {
+  micHeld = false; $('#dockMic').classList.add('holding');
+  micHold = setTimeout(() => { micHeld = true; $('#dockMic').classList.remove('holding'); haptic(15); micAway(true); toast('أُخفي زر البحث بالصوت — المس السهم لإظهاره'); }, 550);
+});
+for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) $('#dockMic').addEventListener(ev, () => { clearTimeout(micHold); $('#dockMic').classList.remove('holding'); });
+$('#dockMic').addEventListener('contextmenu', e => e.preventDefault());
+$('#dockArrow').onclick = () => { haptic(8); micAway(false); };
+new MutationObserver(() => document.body.classList.toggle('sheet-up', !$('#sheet').hidden && !$('#sheet').classList.contains('leaving')))
+  .observe($('#sheet'), { attributes: true, attributeFilter: ['hidden', 'class'] });
 $('#dockMic').onclick = () => {
+  if (micHeld) { micHeld = false; return; }
   if (typeof Recite === 'undefined') return;
   haptic(8);
   if (store.get('mic.told', false) || Recite.active()) return Recite.mic();
