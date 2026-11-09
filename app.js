@@ -482,6 +482,9 @@ function clearNow() {
     }
   }
   BARS.forEach(sel => { const b = $(sel); if (b.hidden) delete b.dataset.pin; });
+  // (the reciting bar sent up stays up, session after session)
+  const rb = $('#recBar');
+  if (!rb.hidden && !rb.dataset.pin && store.get('recite.barUp', false)) rb.dataset.pin = 'up';
   for (const b of bars) {
     const lifted = parseFloat(b.style.getPropertyValue('--lift')) || 0;
     const top = b.offsetTop, h = b.offsetHeight, up = head + 8; // where it rests (not mid-slide)
@@ -499,9 +502,10 @@ function flipBar(e) {
   const b = e.currentTarget;
   if (e.target.closest('button, a, input, select, label, summary, [data-act], [data-wb], [data-rc-word], [role=button]')) return;
   b.dataset.pin = (parseFloat(b.style.getPropertyValue('--lift')) || 0) < 0 ? 'down' : 'up';
+  if (b.id === 'recBar') store.set('recite.barUp', b.dataset.pin === 'up');
   keepClear();
 }
-BARS.filter(sel => sel !== '#player' && sel !== '#recBar').forEach(sel => $(sel).addEventListener('click', flipBar));
+BARS.filter(sel => sel !== '#player').forEach(sel => $(sel).addEventListener('click', flipBar));
 
 // one rounded band per line behind the words of the highlighted aya
 function drawBands(root) {
