@@ -24,6 +24,7 @@
 // stopAudio, speakWord, suraName, ayaLabel, openRecite, openReciteSettings, renderSheet,
 // closeSheet and flashAya from app.js at call time.
 const Recite = (() => {
+  const AYA_TYPES = { skip: 'تجاوزت الآية كلها', order: 'قرأتها في غير موضعها: بعد التي تليها' };
   const TYPES = { wrong: 'قرأتها بكلمة أخرى', haraka: 'أخطأت في حركتها', skip: 'تجاوزتها', hint: 'احتجت تلميحًا', madd: 'لم تعطِ المدّ حقّه', ghunna: 'أخطأت في الغنّة أو الإدغام', order: 'قدّمتها أو أخّرتها عن جارتها',
     heavy: 'خلطت بين حرف مفخّم ونظيره المرقّق', near: 'أبدلت حرفًا بحرف قريب منه', maddlong: 'زدت في المدّ الطبيعي', maddnone: 'مددت حرفًا لا مدّ فيه' };
   const MASTER_DAYS = 3;
@@ -528,12 +529,14 @@ const Recite = (() => {
     if (grew) g.grewAt = Date.now();
     atEnd(g);
   }
-  // how fast the reader reads: sounds a second over the last FAST_WIN s heard (each sound's time to
+  // how fast the reader reads: sounds a second over the last FAST_WIN frames (40 ms) heard (each sound's time to
   // the next, a pause counted as at most 0.4 s). Fast reading turns the fast mode on by itself, past
   // FAST_AT for FAST_ON_MS; reading at a usual pace off, under FAST_OFF for FAST_OFF_MS (readings at a
-  // usual pace measured 6.5 to 10.5, fast ones 13 to 14.6: the usual pace never in fast mode). For this
-  // session only; the reader's own choice («سريع») is left alone FAST_OWN_MS
-  const FAST_WIN = 150, FAST_AT = 12, FAST_OFF = 10.5, FAST_ON_MS = 4000, FAST_OFF_MS = 4000, FAST_OWN_MS = 30000;
+  // usual pace measured 6.5 to 10.5, fast ones 13 to 14.6: the usual pace never in fast mode). Over a
+  // short stretch and at once (the reader asked: a few words hurried are judged as fast reading, not as
+  // mistakes), quietly (the bar's «سريع» lit). For this session only; the reader's own choice
+  // («سريع») is left alone FAST_OWN_MS
+  const FAST_WIN = 60, FAST_N = 20, FAST_AT = 12, FAST_OFF = 10.5, FAST_ON_MS = 800, FAST_OFF_MS = 1500, FAST_OWN_MS = 30000;
   function speed(g) {
     // (of the final sounds only: the tentative ones, of a glance's short read, run fast and loose)
     const m = g.mu, all = m.final + m.tent, at = m.at, h = m.final;
@@ -544,18 +547,18 @@ const Recite = (() => {
       if (next != null) { t += Math.min(10, next - at[c]); n++; }
       next = at[c];
     }
-    if (n < 30 || !t) return;
+    if (n < FAST_N || !t) return;
     g.speed = n / (t * 0.04);
     const now = Date.now();
     g.fastAt = g.speed > FAST_AT ? g.fastAt || now : 0;
     g.slowAt = g.speed < FAST_OFF ? g.slowAt || now : 0;
     if (now - (g.ownAt || 0) < FAST_OWN_MS) return;
-    if (!fast() && g.fastAt && now - g.fastAt >= FAST_ON_MS) setFast(true, 'تقرأ بسرعة: الوضع السريع، بلا فحص للمدّ والغنّة');
-    else if (fast() && g.slowAt && now - g.slowAt >= FAST_OFF_MS) setFast(false, 'عاد الفحص الكامل');
+    if (!fast() && g.fastAt && now - g.fastAt >= FAST_ON_MS) setFast(true);
+    else if (fast() && g.slowAt && now - g.slowAt >= FAST_OFF_MS) setFast(false);
   }
   function setFast(on, say) {
     G.fast = on;
-    toast(say);
+    if (say) toast(say);
     paintBar();
   }
 
@@ -656,7 +659,7 @@ const Recite = (() => {
   // in a correct reading, about a third within WRONG_BY.) Frames [from, to), as in `at`
   // Not where the aya fits what was heard poorly as a whole (FIT, per frame; a reading's ayas fit
   // at -0.3 to -0.9): its bounds misplaced, any other reading fits better
-  const RECHECK = ['skip', 'wrong'], SKIP_BY = 4, WRONG_BY = 1.5, SWAP_BY = 6, FIT = -2, EXT = 75;
+  const RECHECK = ['skip', 'wrong'], SKIP_BY = 4, WRONG_BY = 1.5, SWAP_BY = 6, FIT = -2, EXT = 75, AFTER_BY = 15;
   function recheck(g, ai, k0, from, to) {
     if (from == null || to == null || !g.words[k0]) return Promise.resolve();
     // (the words reached only: a session ended in the middle of an aya)
@@ -677,11 +680,32 @@ const Recite = (() => {
     // (EXT frames more either side: the aya's bounds as the matcher put them may be a second or two
     // off, its first words left in the aya before; each reading finds where it lies, ctc.js)
     const f0 = Math.max(0, from - EXT), f1 = to + EXT;
-    return Mu.score(f0, f1, texts).then(sc => {
-      if (G !== g || !sc || sc[0] == null || sc[0] / Math.max(1, f1 - f0) < FIT) return;
+    // (the aya before, every word of it marked left out: said after this one instead? this aya and it
+    // after, against this aya alone, its frames then the matcher's for neither; and with this aya's
+    // last word as any sounds, which the matcher may have run the other aya's first sounds into)
+    let prev = null;
+    if (w0 === 0 && k0 > 0) {
+      const pw = g.words[k0 - 1], p0 = k0 - 1 - pw.wi;
+      if (pw.wi === pw.of - 1 && pw.of > 1 && [...Array(pw.of).keys()].every(i => g.errs[p0 + i] === 'skip')) {
+        const e = Mu.expect(pw.ai);
+        prev = { p0, of: pw.of, ai: pw.ai, words: e.spans.map(sp => e.ph.slice(...sp)) };
+        asks.push(['after', 0]); texts.push([...w, ...prev.words]);
+        asks.push(['afterAny', 0]); texts.push([...w.slice(0, -1), null, ...prev.words]);
+      }
+    }
+    const f1x = prev ? f1 + Match.units(prev.words.join('')).length * 4 : f1; // (its sounds, at about 4 frames each, may run past)
+    return Mu.score(f0, f1x, texts).then(sc => {
+      if (G !== g || !sc || sc[0] == null || sc[0] / Math.max(1, f1x - f0) < FIT) return;
       let changed = 0, added = false;
-      const swaps = [], left = i => sc[1 + i], any = {};
-      asks.forEach(([kind, i], j) => { if (kind === 'any') any[i] = sc[1 + n + j]; });
+      const swaps = [], left = i => sc[1 + i], any = {}, at = {};
+      asks.forEach(([kind, i], j) => { if (kind === 'any') any[i] = sc[1 + n + j]; else at[kind] = sc[1 + n + j]; });
+      if (prev && at.after - sc[0] >= AFTER_BY && [...Array(prev.of).keys()].every(i => g.errs[prev.p0 + i] === 'skip')) { // (not already so, muRelocate)
+        for (let i = 0; i < prev.of; i++) { g.errs[prev.p0 + i] = 'order'; delete g.heard[prev.p0 + i]; }
+        const last = k0 + n - 1;
+        if (RECHECK.includes(g.errs[last]) && at.after >= at.afterAny) { delete g.errs[last]; delete g.heard[last]; }
+        changed++; added = true;
+        if (!g.done) toast(`قرأت الآية ${ar(R.ayas[prev.ai][1])} بعد الآية ${ar(R.ayas[ai][1])}`);
+      }
       const fits = i => sc[0] >= any[i];
       for (let i = 0; i < n; i++) if (g.errs[k0 + i] === 'skip' && sc[0] - left(i) >= SKIP_BY && fits(i)) { delete g.errs[k0 + i]; delete g.heard[k0 + i]; changed++; }
       asks.forEach(([kind, i], j) => {
@@ -815,7 +839,7 @@ const Recite = (() => {
     for (const j of order) {
       const st = Match.words(Mu.expect(G.ayas[j]), sub, fin, false, { freeLead: true, conf, alts });
       const ok = st.filter(x => x.state === 'ok').length, bad = st.filter(x => x.state === 'err').length;
-      if (ok >= Math.max(3, ok0 + 2) && ok / (ok + bad) >= 0.7 && (!best || ok > best.ok)) best = { j, ok };
+      if (ok >= Math.max(3, ok0 + 2) && ok / (ok + bad) >= 0.7 && (!best || ok > best.ok)) best = { j, ok, st };
     }
     if (!best) return false;
     const from = m.starts[m.c] + m.w0;
@@ -827,6 +851,17 @@ const Recite = (() => {
       for (let k = from; k < m.starts[best.j]; k++) { if (away) delete G.errs[k]; else if (G.errs[k] !== 'hint') { G.errs[k] = 'skip'; marks.push([k, 'skip']); } delete G.heard[k]; }
       warnSkipped(marks);
     } else {
+      // an aya before, every word of it marked left out, and those after it said: not gone back to,
+      // said late (4 after 5): marked so, and the reading goes on where it was, after it
+      const j0 = m.starts[best.j], jn = G.words[j0].of, said = k => G.errs[k] !== 'skip';
+      if (best.j < m.c && [...Array(jn).keys()].every(i => G.errs[j0 + i] === 'skip') && m.starts[best.j + 1] < from
+        && [...Array(from - m.starts[best.j + 1]).keys()].some(i => said(m.starts[best.j + 1] + i))) {
+        for (let i = 0; i < jn; i++) { G.errs[j0 + i] = 'order'; delete G.heard[j0 + i]; }
+        const end = best.st.findLast(x => (x.state === 'ok' || x.state === 'err') && x.at)?.at[1] || 0;
+        m.cut += end; m.lead = true;
+        toast(`قرأت الآية ${ar(R.ayas[G.ayas[best.j]][1])} بعد التي تليها`);
+        return true;
+      }
       for (let k = from; k < G.words.length && k < from + G.words[from].of; k++) { if (G.errs[k] !== 'hint') delete G.errs[k]; delete G.heard[k]; }
       toast(`رجعت إلى الآية ${ar(R.ayas[G.ayas[best.j]][1])}`);
     }
@@ -1074,7 +1109,7 @@ const Recite = (() => {
   }
   // Muaalem: the reading so far, looked up in the whole Quran (begun at any
   // word); the session then goes on with it, from that word
-  const FIND_EVERY = 250, QUIET = 1500, FIND_MIN = 16, FOUND_GO = 1300;
+  const FIND_EVERY = 250, QUIET = 1500, QUIET_VOICE = 700, FIND_MIN = 16, FOUND_GO = 1300;
   const FIND_WORDS = 3; // words heard right at the place, at least (its lead over every other place says the rest)
   const FIND_MARGIN = 12; // heard sounds the best place must explain beyond any other
   // checked: the steps already seen to (after an update, or the model brought back mid-search)
@@ -1104,7 +1139,9 @@ const Recite = (() => {
     if (!d) return;
     const h = d.final + d.tent, n = Match.units(h).length;
     if (n !== f.n) { f.n = n; f.grew = Date.now(); }
-    const quiet = Date.now() - f.grew > QUIET;
+    // (stopped: nothing new heard, and the voice quiet too: a madd held long at an aya's end, تُبۡصِرُونَ,
+    // adds nothing for a second or more while the reader is still saying it)
+    const quiet = Date.now() - f.grew > QUIET && Mu.quiet() > QUIET_VOICE;
     if (n < FIND_MIN) return;
     if (quiet && f.quietAt === n) return; // nothing new since the last quiet check
     // a look takes longer as the reading grows (most of a second on a slow
@@ -1116,9 +1153,10 @@ const Recite = (() => {
     f.same = r && f.last != null && Math.abs(r.g - f.last) <= 1 ? f.same + 1 : 0;
     f.last = r ? r.g : null;
     if (r && !f.found) { f.found = true; syncBubble(); }
-    // (far ahead of any other, the next look agreeing is enough)
+    // (far ahead of any other on five words or more, the next look agreeing is enough; on fewer, two
+    // looks: «فلا أقسم ب…» opens several ayas)
     const lead = r ? r.fit - r.next : 0;
-    const sure = r && f.same >= 1 && (lead >= 2 * FIND_MARGIN || f.same >= 2 && (lead >= FIND_MARGIN || (n > 150 && f.same >= 4) || (quiet && (lead >= 3 || f.same >= 3))));
+    const sure = r && f.same >= 1 && (lead >= 2 * FIND_MARGIN && (r.ok >= 5 || f.same >= 2) || f.same >= 2 && (lead >= FIND_MARGIN || (n > 150 && f.same >= 4) || (quiet && (lead >= 3 || f.same >= 3))));
     if (!sure) { if (n > 320 || (quiet && Date.now() - f.grew > 6000)) { stopFind(); toast('لم أجد الآية — اقرأ أكثر من آية'); } return; }
     clearInterval(f.timer);
     Mu.boost(false);
@@ -1259,9 +1297,10 @@ const Recite = (() => {
     for (const k of ks) {
       if (seen.has(k)) continue;
       const w = G.words[k];
-      if (G.errs[k] === 'skip' && w.wi === 0 && [...Array(w.of).keys()].every(i => set.has(k + i) && G.errs[k + i] === 'skip')) {
+      const e = G.errs[k];
+      if ((e === 'skip' || e === 'order') && w.wi === 0 && w.of > 1 && [...Array(w.of).keys()].every(i => set.has(k + i) && G.errs[k + i] === e)) {
         for (let i = 0; i < w.of; i++) seen.add(k + i);
-        out.push({ k, aya: w.ai });
+        out.push({ k, aya: w.ai, e });
       } else out.push({ k, e: G.errs[k] });
     }
     return out;
@@ -1370,7 +1409,7 @@ const Recite = (() => {
     $('#rdTime').textContent = `${ar(Math.floor(secs / 60))}:${ar(String(secs % 60).padStart(2, '0'))}`;
     const rows = mistakes(true).map(({ k, e, aya }) => {
       const w = G.words[k], gone = G.gone.has(k);
-      const t = aya != null ? `<span class="t">${ayaLabel(aya)}</span><span class="s">تجاوزت الآية كلها</span>`
+      const t = aya != null ? `<span class="t">${ayaLabel(aya)}</span><span class="s">${AYA_TYPES[e]}</span>`
         : `<span class="t" style="font-family:${R.font}">${esc(wordText(w))}</span><span class="s">${ayaLabel(w.ai)} · ${TYPES[e]}</span>`;
       return `<div class="row rc-row${gone ? ' gone' : ''}"><span class="rc-mk rc-${e || 'skip'}"></span><span class="main">${t}</span>
         <button class="rc-not" data-rd-gone="${k}"${aya != null ? ` data-rd-n="${w.of}"` : ''}>${gone ? 'تراجع' : 'لم أخطئ'}</button></div>`;
@@ -1432,7 +1471,7 @@ const Recite = (() => {
     // (a session that got through no aya and marked nothing isn't one)
     if (whole.length || mistakes().length) l.sessions.unshift({ t: Date.now(), from: said[0].ai, to: said[said.length - 1].ai, ayas: whole.length,
       words: said.length, errs: mistakes().length, secs: Math.round(G.secs), review: G.review, test: G.test,
-      list: mistakes().slice(0, 30).map(({ k, e, aya }) => aya != null ? [aya, -1, 'skip'] : [G.words[k].ai, G.words[k].wi, e]) });
+      list: mistakes().slice(0, 30).map(({ k, e, aya }) => aya != null ? [aya, -1, e] : [G.words[k].ai, G.words[k].wi, e]) });
     l.sessions.length = Math.min(l.sessions.length, 60);
     store.set(key(), l);
     weakMap = null;
@@ -1488,7 +1527,7 @@ const Recite = (() => {
     G.tap = { k, el, aya };
     $('#rwWord').textContent = aya != null ? ayaLabel(aya) : wordText(G.words[k]);
     $('#rwWord').style.fontFamily = aya != null ? '' : R.font;
-    $('#rwType').textContent = aya != null ? 'تجاوزت الآية كلها' : TYPES[G.errs[k]];
+    $('#rwType').textContent = aya != null ? AYA_TYPES[G.errs[k]] || AYA_TYPES.skip : TYPES[G.errs[k]];
     // what the model heard there, beside how the word should sound
     const h = G.heard?.[k];
     $('#rwHeard').hidden = !h;
