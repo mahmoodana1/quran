@@ -794,20 +794,33 @@ const Recite = (() => {
   // header mic found the place (its first aya), that guess was wrong: it is dropped, unsaved, and all
   // that was heard is looked for again; later on, ayas were skipped or the reader went elsewhere:
   // what was heard from the aya being said on is looked for, and that aya's marks are dropped
-  const FAR_EVERY = 1500, FAR_MARGIN = 8;
+  // Limited, so a reading isn't sent all over the place: the header mic's guess put right at most
+  // twice (early: still in the first aya found, or found again); once the place is settled (an aya
+  // read there, or moved once already), a move needs a long stretch heard elsewhere, far clearer,
+  // found twice in a row; and no more than FAR_MOVES in one reading. An aya or a few skipped are the
+  // session's own (muRelocate: marked skipped, not a move)
+  const FAR_EVERY = 1500, FAR_MARGIN = 8, FAR_MOVES = 3, FAR_SETTLED = 160;
   function muFar(states, all, c0) {
-    const m = G.mu, early = G.found && m.c === 0;
+    const m = G.mu, moves = G.moves || 0, early = G.found && m.c === 0 && moves < 2;
+    if (moves >= FAR_MOVES) return false;
     const ok = states.filter(x => x.state === 'ok').length, bad = states.filter(x => x.state === 'err').length;
     // (or nothing of it heard, in all that was: everything taken for sounds before it)
     const from = early ? 0 : c0, text = all.slice(from), n = Match.units(text).length;
     // a session begun by the reader at an aya is taken to be there: only a long stretch heard that
     // doesn't fit it moves it (a basmala or a pause before a short aya such as الم isn't one)
-    const least = G.found ? 40 : 90;
+    const settled = !early && (moves > 0 || m.c > 0);
+    const least = settled ? FAR_SETTLED : G.found ? 40 : 90;
     const lost = (bad >= (early ? 2 : 3) && ok <= bad && n >= least) || (!ok && !bad && n >= least);
     if (!lost || Date.now() - (m.farAt || 0) < FAR_EVERY) return false;
     m.farAt = Date.now();
     const r = locateMu(text, m.conf.slice(from), m.alts.slice(from));
-    if (!r || r.fit - r.next < FAR_MARGIN) return false;
+    if (!r || r.fit - r.next < (settled ? 2 * FAR_MARGIN : FAR_MARGIN)) { m.farCand = null; return false; }
+    // (settled: the same place found by the look before too)
+    if (settled) {
+      const was = m.farCand;
+      m.farCand = { ai: r.ai, at: Date.now() };
+      if (!was || Math.abs(was.ai - r.ai) > 1 || Date.now() - was.at > 5000) return false;
+    }
     // a basmala heard (al-Fatiha's, or an-Naml 30's from its بسم): never where a reading went
     if (r.ai === 0 || [0, 1, 2].some(w => Mu.expect(0, w).ph === Mu.expect(r.ai, r.w).ph)) return false;
     // where the session's own relocation looks (and the aya being said) is not elsewhere
@@ -818,7 +831,7 @@ const Recite = (() => {
     else for (let k = m.starts[m.c] + m.w0; k < G.words.length && G.words[k].ai === G.ayas[m.c]; k++) { delete G.errs[k]; delete G.heard[k]; }
     g.keepMic = true;
     start(r.ai, null, { stream: true, w0: r.w, cut });
-    if (G !== g && G?.mu) G.found = g.found; // still the header mic's, if it was
+    if (G !== g && G?.mu) { G.found = g.found; G.moves = moves + 1; } // still the header mic's, if it was; and how often moved
     toast(`${early ? 'وجدناها' : 'انتقلنا'}: ${r.w ? `${ayaLabel(r.ai)} · من كلمة ${ayaTokens(r.ai)[r.w] || ''}` : ayaLabel(r.ai)}`);
     return true;
   }
