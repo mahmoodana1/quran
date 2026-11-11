@@ -63,8 +63,23 @@ let tid = [], tp = [], ta = []; // the tentative frames after the final ones (by
 const KEEP_L = 15000; // frames (10 min) whose log-probabilities are kept
 let live = false, looping = null, stepMs = 0, gpu = false; // stepMs: how long a read takes here, lately
 
+// a small file of the model's (the manifest, the sounds): fresh from the network, and kept, so
+// that with no network the one kept is used (the model's parts are on the device: it must load)
+async function kept1(path) {
+  const cache = await caches.open('muaalem-lab'), url = BASE + path;
+  try {
+    const res = await fetch(url, { cache: 'no-cache' });
+    if (!res.ok) throw new Error(`${path}: HTTP ${res.status}`);
+    await cache.put(url, res.clone());
+    return await res.json();
+  } catch (e) {
+    const hit = await cache.match(url);
+    if (!hit) throw e;
+    return hit.json();
+  }
+}
 async function fetchParts(variant) {
-  const man = await (await fetch(BASE + 'muaalem/manifest.json', { cache: 'no-cache' })).json();
+  const man = await kept1('muaalem/manifest.json');
   const v = man.variants[variant];
   const cache = await caches.open('muaalem-lab');
   const out = new Uint8Array(v.bytes);
@@ -116,13 +131,18 @@ async function load({ variant, ep, threads, shared, stream }) {
   ort = await import(ORT + 'ort.webgpu.min.mjs');
   ort.env.wasm.wasmPaths = ORT;
   ort.env.wasm.numThreads = self.crossOriginIsolated ? threads : 1;
-  vocab = (await (await fetch(BASE + 'muaalem/phoneme_vocab.json')).json()).id_to_char;
+  vocab = (await kept1('muaalem/phoneme_vocab.json')).id_to_char;
   const bytes = await fetchParts(variant);
   const t1 = performance.now();
-  if (stream) {
-    const st = (await (await fetch(BASE + 'muaalem/manifest.json', { cache: 'no-cache' })).json()).stream?.[stream];
-    if (!st || st.weights !== variant) throw new Error('no stream graph for ' + variant);
-    session = await ort.InferenceSession.create(await fetchGraph(st.graph), { executionProviders: [ep], graphOptimizationLevel: 'all', externalData: [{ path: st.location, data: bytes }] });
+  // (no stream graph there, or it can't be had: the same model in windows, as before)
+  let st = null;
+  if (stream) try {
+    st = (await kept1('muaalem/manifest.json')).stream?.[stream];
+    if (st && st.weights !== variant) st = null;
+    if (st) st.bytes = await fetchGraph(st.graph);
+  } catch { st = null; }
+  if (st) {
+    session = await ort.InferenceSession.create(st.bytes, { executionProviders: [ep], graphOptimizationLevel: 'all', externalData: [{ path: st.location, data: bytes }] });
     S = newStream(st.cache);
     P = newStream(st.cache);
     await streamRun(S, new Float32Array(76 * 160), 76); // (once, so the first read is not the slow one)

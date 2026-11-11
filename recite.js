@@ -392,7 +392,10 @@ const Recite = (() => {
     // mistakes as mistakes, and the reading goes on from the next word
     if (opts.said?.n && G.mu) {
       const k0 = G.mu.w0;
-      for (const [i, e, got, want] of opts.said.errs) if (k0 + i < words.length) { G.errs[k0 + i] = e; G.heard[k0 + i] = { got, want }; }
+      for (const [i, e, got, want, v] of opts.said.errs) if (k0 + i < words.length) {
+        G.errs[k0 + i] = e; G.heard[k0 + i] = { got, want };
+        if (v && opts.stream) (G.saidVer ||= []).push({ k: k0 + i, e, ...v });
+      }
       G.mu.goneAt = (opts.said.gone || []).filter(x => k0 + x.k < words.length).map(x => ({ ...x, k: k0 + x.k })); // (a madd not heard there: counted on)
       G.pos = G.tent = Math.min(words.length, k0 + opts.said.n);
       const m = G.mu;
@@ -524,6 +527,7 @@ const Recite = (() => {
     if (g.done) { g.mu.final = d.final; g.mu.tent = d.tent; g.mu.conf = d.conf; g.mu.alts = d.alts; g.mu.at = d.at; return; } // the last of it, read after «finish»: pause() applies it
     const m = g.mu, grew = d.final.length + d.tent.length !== m.final.length + m.tent.length;
     m.final = d.final; m.tent = d.tent; m.conf = d.conf; m.alts = d.alts; m.at = d.at;
+    if (g.saidVer?.length && m.at?.length) saidVerify(g);
     if (grew && g.run) {
       g.lastAct = Date.now();
       if (!g.voice) { g.voice = true; paintBar(); }
@@ -839,6 +843,21 @@ const Recite = (() => {
       if (g.done && !$('#recDone').hidden) paintDone();
     });
     return null;
+  }
+  // the words said while the header mic found the place, marked left out or another there (reached()):
+  // each asked of what the model heard, as unheard() asks, and taken back where the written word fits
+  function saidVerify(g) {
+    const m = g.mu, all = m.final + m.tent, list = g.saidVer;
+    g.saidVer = null;
+    const fr = u => m.at[Math.min(m.at.length - 1, Match.charAt(all, Math.max(0, u)))];
+    for (const v of list) {
+      const f0 = Math.max(0, fr(v.u0) - VER_PAD), f1 = fr(Math.max(v.u0, v.u1 - 1)) + 8 + VER_PAD, len = Match.units(v.w[v.q]).length;
+      if (isNaN(f0) || isNaN(f1)) continue;
+      Mu.score(f0, f1, [v.w, [...v.w.slice(0, v.q), null, ...v.w.slice(v.q + 1)]]).then(sc => {
+        if (G !== g || g.errs[v.k] !== v.e || !sc || sc[0] == null || sc[1] == null) return;
+        if ((sc[0] - sc[1]) / Math.max(1, len) >= -ANY_BY) { delete g.errs[v.k]; delete g.heard[v.k]; paint(); paintBar(); }
+      });
+    }
   }
   // mistakes piling up in the aya being said (or nothing of it heard), and no aya of the session near it fits better (muRelocate):
   // the reading is elsewhere. Looked for in the whole Quran, as the header mic does; found clearly, the
@@ -1257,7 +1276,21 @@ const Recite = (() => {
         const upto = begun ? n0 : st.slice(0, n0).findLastIndex(x => x.state === 'ok' || x.state === 'err') + 1;
         goneMark(gs, gone, (k, got, want) => { if (!errs.some(x => x[0] === k)) errs.push([k, 'madd', got, want]); });
         goneAdd(gs, gone, ex, st, cur, upto, wi => n + wi);
-        for (let i = 0; i < upto; i++) if (st[i].state === 'err') errs.push([n + i, MU_TYPE[st[i].type] || (st[i].heard?.length > 1 ? 'wrong' : 'skip'), st[i].heard || '', cur.ph.slice(...cur.spans[i])]);
+        for (let i = 0; i < upto; i++) if (st[i].state === 'err') {
+          const e = MU_TYPE[st[i].type] || (st[i].heard?.length > 1 ? 'wrong' : 'skip'), row = [n + i, e, st[i].heard || '', cur.ph.slice(...cur.spans[i])];
+          // (left out or another: asked of what the model heard there once the session has the reading
+          // (saidVerify, as unheard() asks): the word, its neighbours said, and where they were heard)
+          if (RECHECK.includes(e) && st[i].at) {
+            const said = y => (y.state === 'ok' || y.state === 'err') && y.at && y.at[1] > y.at[0];
+            let L = i, Rr = i, u0 = st[i].at[0], u1 = st[i].at[1];
+            while (L > 0 && i - L < VER_CTX && said(st[L - 1])) L--;
+            while (Rr + 1 < upto && Rr - i < VER_CTX && said(st[Rr + 1])) Rr++;
+            const w = [];
+            for (let j = L; j <= Rr; j++) { w.push(cur.ph.slice(...cur.spans[j])); if (st[j].at) { u0 = Math.min(u0, st[j].at[0]); u1 = Math.max(u1, st[j].at[1]); } }
+            row.push({ w, q: i - L, u0: cut + u0, u1: cut + u1 });
+          }
+          errs.push(row);
+        }
         n += upto;
         at = upto && st[upto - 1].at ? cut + st[upto - 1].at[1] : cut;
         if (!begun) break;

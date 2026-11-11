@@ -143,7 +143,20 @@ const Mu = (() => {
 
   // ---- the model on this device
   let man = null;
-  const manifest = async () => man ||= await (await fetch(BASE + 'muaalem/manifest.json', { cache: 'no-cache' })).json();
+  // (kept, as the worker keeps it: with no network, the one kept says what is on the device)
+  const manifest = async () => man ||= await (async () => {
+    const url = BASE + 'muaalem/manifest.json', cache = await caches.open('muaalem-lab');
+    try {
+      const res = await fetch(url, { cache: 'no-cache' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      await cache.put(url, res.clone());
+      return await res.json();
+    } catch (e) {
+      const hit = await cache.match(url);
+      if (!hit) throw e;
+      return hit.json();
+    }
+  })();
   const partUrl = p => BASE + p.path + '?h=' + p.sha256.slice(0, 12); // the worker caches under these
   async function saved() {
     const c = cand();
