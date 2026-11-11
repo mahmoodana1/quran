@@ -35,7 +35,7 @@ const Recite = (() => {
   const blind = () => !!G?.hide && !G.done && store.get('recite.blind', false);
   // Muaalem listens in Hafs (its phonetic script is Hafs's)
   const MU = () => R.id === 'hafs' && typeof Mu !== 'undefined';
-  const MU_NAMES = { 'q8-cpu': '٨ بت · المعالج', 'q8-gpu': '٨ بت · المعالج الرسومي', 'fp16-gpu': '١٦ بت · المعالج الرسومي', 'q4-cpu': '٤ بت · المعالج', 'q4-gpu': '٤ بت · المعالج الرسومي' };
+  const MU_NAMES = { 's8-cpu': 'المتدفّق · ٨ بت · المعالج', 'q8-cpu': '٨ بت · المعالج', 'q8-gpu': '٨ بت · المعالج الرسومي', 'fp16-gpu': '١٦ بت · المعالج الرسومي', 'q4-cpu': '٤ بت · المعالج', 'q4-gpu': '٤ بت · المعالج الرسومي' };
   const ready = () => MU() ? Mu.ready() : Listen.ready();
   // all a recitation needs, done (prep): no update waiting, the microphone allowed, the
   // model loaded and prepared for every window it will read
@@ -232,7 +232,12 @@ const Recite = (() => {
     }
     if (!live()) return;
     prepStep('mic', 'done', 'يعمل');
-    // 3. the model, from the device
+    // 3. the model, from the device (chosen before the stream was there: timed again first, once)
+    if (!Mu.ready()) {
+      const up = await Mu.upgrade((n, all) => live() && prepStep('model', 'doing', `نختبر أسرع طريقة لجهازك… ${ar(n)} من ${ar(all)}`)).catch(() => null);
+      if (!live()) return;
+      if (up === 'offer') toast('طريقة أسرع متاحة لجهازك: «المتدفّق» في إعدادات التسميع ← النماذج');
+    }
     if (!Mu.ready()) {
       prepStep('model', 'doing', 'يُحمَّل من جهازك…');
       try { await Promise.all([Mu.load(p => live() && prepStep('model', 'doing', `يُحمَّل من جهازك… ${ar(Math.round(p * 100))}٪`)), Mu.sounds()]); }
@@ -2468,7 +2473,7 @@ const Recite = (() => {
     const have = await Mu.savedVariants(), bench = Mu.bench(), c = Mu.choice();
     if (!$('#rcModels')) return;
     s.textContent = testing ? `نختبر النماذج على جهازك… ${testing}`
-      : bench ? `الأسرع على جهازك يُختار له (اختبرناه ${ago(bench.at)}): ٤ بت على المعالج الرسومي، و٨ بت على المعالج`
+      : bench ? `الأسرع على جهازك يُختار له (اختبرناه ${ago(bench.at)}): «المتدفّق» على المعالج، أو ٤ بت على المعالج الرسومي حيث هو أسرع بوضوح`
       : 'لم نختبرها على جهازك بعد';
     // (on how many of the processor's cores it runs: one only where the browser doesn't allow more)
     const inf = Mu.info();
@@ -2490,11 +2495,11 @@ const Recite = (() => {
     const base = Mu.CANDS.filter(x => Mu.BASE_IDS.includes(x.id)), big = Mu.CANDS.filter(x => !Mu.BASE_IDS.includes(x.id));
     const onBig = big.some(x => x.id === c?.id), bigTested = big.some(x => times[x.id] !== undefined);
     box.innerHTML = base.map(row).join('')
-      + `<details class="rc-big"${onBig || box.querySelector('.rc-big[open]') ? ' open' : ''}><summary><span class="main"><span class="t">النموذج الكبير · اختياري</span>
-          <span class="s">أدق قليلًا في الحركات والمدود، وتنزيله أكبر وأبطأ على أكثر الأجهزة. يُنزَّل حين تختاره.</span></span><svg viewBox="0 0 24 24" class="go"><path d="M14.5 6l-6 6 6 6"/></svg></summary>
+      + `<details class="rc-big"${onBig || box.querySelector('.rc-big[open]') ? ' open' : ''}><summary><span class="main"><span class="t">نماذج أخرى · اختياري</span>
+          <span class="s">القراءة بالنوافذ كما كانت (٨ بت و٤ بت)، والنموذج الكبير: أبطأ على أكثر الأجهزة. يُنزَّل ما تختاره.</span></span><svg viewBox="0 0 24 24" class="go"><path d="M14.5 6l-6 6 6 6"/></svg></summary>
         ${big.map(row).join('')}
         ${bigTested ? '' : `<button class="rc-not rc-bigtest" data-rc-model="probe"${testing ? ' disabled' : ''}>اختبرها على جهازك</button>`}
-        ${onBig ? `<button class="rc-not rc-bigtest" data-rc-pick="${bench?.best || 'q4-cpu'}">العودة إلى الأسرع على جهازك</button>` : ''}
+        ${onBig ? `<button class="rc-not rc-bigtest" data-rc-pick="${bench?.best || 's8-cpu'}">العودة إلى الأسرع على جهازك</button>` : ''}
       </details>`
       + (Object.values(have).some(Boolean) ? `<div class="rc-mfoot">${Object.entries(have).filter(([, v]) => v).map(([k]) =>
       `<button class="rc-not" data-rc-delv="${k}">حذف ${k === 'q8' ? '٨ بت' : k === 'q4' ? '٤ بت' : '١٦ بت'} من جهازك</button>`).join('')}</div>` : '');

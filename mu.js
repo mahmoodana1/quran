@@ -16,19 +16,29 @@ const RAW_MIC = { channelCount: 1, echoCancellation: false, noiseSuppression: fa
 // KB, and the fastest is the one offered.
 const Mu = (() => {
   const BASE = 'https://mahmoodana1.github.io/quran-models/';
+  // s8: the 8-bit model read as a stream (mu-worker.js: each read computes only the newest frames, a
+  // third to a half of a window's work, the same text). Its weights are the 8-bit model's own file
   const CANDS = [
+    { id: 's8-cpu', variant: 'q8', stream: 's8', ep: 'wasm', mb: 126 },
     { id: 'q8-cpu', variant: 'q8', ep: 'wasm', mb: 126 },
     { id: 'q8-gpu', variant: 'q8', ep: 'webgpu', mb: 126 },
     { id: 'fp16-gpu', variant: 'fp16', ep: 'webgpu', mb: 234, f16: true },
     { id: 'q4-cpu', variant: 'q4', ep: 'wasm', mb: 86 },
     { id: 'q4-gpu', variant: 'q4', ep: 'webgpu', mb: 86 },
   ];
-  // every device starts on whichever of these runs fastest there: 4-bit on a GPU, and on a
-  // CPU 8-bit (in the browser it runs twice as fast as 4-bit there, as exact: the study);
-  // the bigger ones are there to choose in the settings
-  const BASE_IDS = ['q4-cpu', 'q4-gpu', 'q8-cpu'];
+  // every device starts on whichever of these runs fastest there: the stream on the CPU, or 4-bit
+  // on a GPU where that is clearly faster still (GPU_BY: a phone's GPU is the likelier to fail, to be
+  // taken back, or to fill its memory); the others are there to choose in the settings
+  const BASE_IDS = ['s8-cpu', 'q4-gpu'];
+  const GPU_BY = 1.4;
   const PROBE_X = 19; // a full update (a WIN s window) takes about this many times the stand-in (2.5 s)
-  const threads = () => Math.min(4, navigator.hardwareConcurrency || 4);
+  const PROBE_SX = 13; // and a stream's read (1.5 s of new frames), its stand-in's
+  // threads: a phone's cores are not alike (2 fast and 6 slow, say), and four threads, two of them on
+  // slow cores, can be slower than two: the stream is timed with each of THREADS, the faster kept
+  // (in the choice); the others run on 4 as before
+  const THREADS = [2, 4];
+  const threads = () => { const c = store.get('mu.choice', null); return Math.min(c?.threads || 4, navigator.hardwareConcurrency || 4); };
+  const GEN = 2; // the candidates changed (the stream): a device chosen for before is timed again, once (upgrade)
   // how often the recitation is read: 'auto' (as often as the phone can at ease), 'fast', 'save' (mu-worker.js)
   const RATES = ['auto', 'fast', 'save'];
   const rate = () => RATES.includes(store.get('mu.rate')) ? store.get('mu.rate') : 'auto';
@@ -45,10 +55,6 @@ const Mu = (() => {
   const choice = () => {
     let c = store.get('mu.choice', null);
     // a bigger model chosen for the device before 4-bit was the start (not by hand): its 4-bit
-    if (c && !BASE_IDS.includes(c.id) && !store.get('mu.big', false)) {
-      const id = c.id.endsWith('gpu') ? 'q4-gpu' : 'q4-cpu';
-      store.set('mu.choice', c = { id, ms: store.get('mu.bench', null)?.times?.[id] ?? null, at: Date.now() });
-    }
     return c && CANDS.find(x => x.id === c.id) ? c : null;
   };
   const cand = () => CANDS.find(x => x.id === choice()?.id);
@@ -69,36 +75,70 @@ const Mu = (() => {
     // (a GPU that failed here before is only tried again when everything is tested, by hand)
     const noGpu = !gpu || (!all && store.get('mu.gpuFailed', false));
     const list = CANDS.filter(c => (all || BASE_IDS.includes(c.id)) && !(c.ep === 'webgpu' && (noGpu || (c.f16 && !gpu.f16))));
-    const res = {};
-    await new Promise(resolve => {
-      const w = new Worker('mu-worker.js', { type: 'module' });
-      // a candidate that hangs (a GPU that never answers) is given up after a while: the
-      // ones timed by then are what there is
-      let stall;
-      const end = () => { clearTimeout(stall); w.terminate(); resolve(); };
-      const wait = () => { clearTimeout(stall); stall = setTimeout(end, 60e3); };
-      wait();
-      w.onmessage = ({ data: d }) => {
+    const res = {}, cores = navigator.hardwareConcurrency || 4;
+    // a worker's threads are set once: one worker for each number of them the stream is timed
+    // with (where the page can have threads at all), the rest in the last (4)
+    const ths = self.crossOriginIsolated ? THREADS.filter((t, i) => t <= cores || i === 0) : [4];
+    let done = 0;
+    const total = list.length + (list.some(c => c.stream) ? ths.length - 1 : 0);
+    for (const th of ths) {
+      const part = list.filter(c => c.stream || th === ths[ths.length - 1]);
+      if (!part.length) continue;
+      await new Promise(resolve => {
+        const w = new Worker('mu-worker.js', { type: 'module' });
+        // a candidate that hangs (a GPU that never answers) is given up after a while: the
+        // ones timed by then are what there is
+        let stall;
+        const end = () => { clearTimeout(stall); w.terminate(); resolve(); };
+        const wait = () => { clearTimeout(stall); stall = setTimeout(end, 60e3); };
         wait();
-        if (d.type === 'probed') { res[d.id] = d; onStep?.(Object.keys(res).length, list.length); }
-        if (d.type === 'probedAll') end();
-      };
-      w.onerror = end;
-      w.postMessage({ type: 'probe', list: list.map(({ id, variant, ep }) => ({ id, variant, ep })), threads: threads() });
-    });
-    const runs = list.filter(c => res[c.id] && !res[c.id].error), base = runs.filter(c => BASE_IDS.includes(c.id));
-    const ok = base.length ? base : runs;
-    if (!ok.length) throw new Error('no model runs on this device');
-    // the fastest 4-bit (the CPU when the GPU is no faster)
-    const best = ok.sort((a, b) => res[a.id].ms - res[b.id].ms)[0];
+        w.onmessage = ({ data: d }) => {
+          wait();
+          if (d.type === 'probed') {
+            d.threads = Math.min(th, cores);
+            if (!res[d.id] || res[d.id].error || (!d.error && d.ms < res[d.id].ms)) res[d.id] = d; // (the stream: its faster number of threads)
+            onStep?.(++done, total);
+          }
+          if (d.type === 'probedAll') end();
+        };
+        w.onerror = end;
+        w.postMessage({ type: 'probe', list: part.map(({ id, variant, ep, stream }) => ({ id, variant, ep, stream })), threads: Math.min(th, cores) });
+      });
+    }
     // each candidate's time, for choosing by hand in the settings: ms per update, null (doesn't
     // run here), or none yet (not tested); times from an earlier test are kept
-    const times = { ...store.get('mu.bench', null)?.times };
-    for (const c of CANDS) if (list.includes(c) || !gpu && c.ep === 'webgpu') times[c.id] = res[c.id] && !res[c.id].error ? Math.round(res[c.id].ms * PROBE_X) : null;
-    store.set('mu.bench', { at: Date.now(), times, best: best.id });
-    if (!choice() || !keep) store.set('mu.choice', { id: best.id, ms: times[best.id], at: Date.now() });
-    else if (times[choice().id] != null) store.set('mu.choice', { ...choice(), ms: times[choice().id] }); // its time, fresh
+    const times = { ...store.get('mu.bench', null)?.times }, thr = { ...store.get('mu.bench', null)?.threads };
+    for (const c of CANDS) if (list.includes(c) || !gpu && c.ep === 'webgpu') {
+      times[c.id] = res[c.id] && !res[c.id].error ? Math.round(res[c.id].ms * (c.stream ? PROBE_SX : PROBE_X)) : null;
+      if (c.stream && times[c.id] != null) thr[c.id] = res[c.id].threads;
+    }
+    const runs = list.filter(c => times[c.id] != null), base = runs.filter(c => BASE_IDS.includes(c.id));
+    const ok = base.length ? base : runs;
+    if (!ok.length) throw new Error('no model runs on this device');
+    // the fastest (a GPU only when faster by GPU_BY than the CPU's best)
+    const eff = c => times[c.id] * (c.ep === 'webgpu' && ok.some(x => x.ep !== 'webgpu') ? GPU_BY : 1);
+    const best = ok.sort((a, b) => eff(a) - eff(b))[0];
+    store.set('mu.bench', { at: Date.now(), times, threads: thr, best: best.id });
+    store.set('mu.gen', GEN);
+    const pick = id => ({ id, ms: times[id], threads: thr[id], at: Date.now() });
+    if (!choice() || !keep) store.set('mu.choice', pick(best.id));
+    else if (times[choice().id] != null) store.set('mu.choice', pick(choice().id)); // its time, fresh
     return best;
+  }
+  // a device whose model was chosen before the stream was there: timed again once, before a session
+  // (a few seconds), and moved to the stream where that is the fastest and its file (the 8-bit model's)
+  // is already on the device; a model chosen by hand stays. Resolves 'moved', 'offer' (the stream is
+  // faster here, its file not yet downloaded: the reader's to choose, in the settings), or null
+  async function upgrade(onStep) {
+    if (store.get('mu.gen', 1) >= GEN || !choice()) return null;
+    if (store.get('mu.big', false) || mic) { store.set('mu.gen', GEN); return null; }
+    const was = choice();
+    let best;
+    try { best = await probe(onStep, true); } catch { store.set('mu.gen', GEN); return null; }
+    if (best.id === was.id || !best.stream) return null;
+    if (!(await savedVariants())[best.variant]) return 'offer';
+    use(best.id);
+    return 'moved';
   }
 
   // ---- the model on this device
@@ -131,7 +171,7 @@ const Mu = (() => {
   function use(id) {
     if (!CANDS.some(c => c.id === id) || choice()?.id === id) return;
     store.set('mu.big', !BASE_IDS.includes(id));
-    store.set('mu.choice', { id, ms: store.get('mu.bench', null)?.times?.[id] ?? null, at: Date.now() });
+    store.set('mu.choice', { id, ms: store.get('mu.bench', null)?.times?.[id] ?? null, threads: store.get('mu.bench', null)?.threads?.[id], at: Date.now() });
     reset();
   }
   // delete a downloaded variant (the one in use by default)
@@ -230,7 +270,7 @@ const Mu = (() => {
         }
       };
       worker.onerror = e => { if (!ready) { clearTimeout(stall); reset(); reject(new Error(e.message || 'worker failed')); } };
-      worker.postMessage({ type: 'load', variant: c.variant, ep: c.ep, threads: threads(), shared });
+      worker.postMessage({ type: 'load', variant: c.variant, ep: c.ep, stream: c.stream, threads: threads(), shared });
       worker.postMessage({ type: 'rate', rate: rateNow() });
     });
   }
@@ -722,7 +762,7 @@ const Mu = (() => {
   }
 
   return {
-    CANDS, BASE_IDS, choice, mb, probe, saved, savedVariants, use, bench: () => store.get('mu.bench', null), remove, load, prime, start, listen, stop, sounds, expect, expect2, locate, opening,
+    CANDS, BASE_IDS, choice, mb, probe, upgrade, saved, savedVariants, use, bench: () => store.get('mu.bench', null), remove, load, prime, start, listen, stop, sounds, expect, expect2, locate, opening,
     ready: () => ready, listening: () => !!mic, quiet, pace: () => ({ pace, near: refs ? refs.r.filter((_, i) => paceMask & 1 << i).map(([r]) => r) : [] }), lost: f => { onLost = f; }, sound: () => actx, info: () => info, recording,
     reprobe: () => { store.set('mu.choice', null); reset(); },
     rate, setRate, boost, score, warm, warmed: () => warmed, micCheck, micWhy: () => micErr, toCpu, lighter, dead: f => { onDead = f; },

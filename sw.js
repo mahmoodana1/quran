@@ -23,7 +23,7 @@ const MUSHAF = 'mushaf-data';
 // mu-worker.js keeps Muaalem in 'muaalem-lab' (shared with the lab in
 // quran-models, on the same site); they must outlive app updates too
 const MODELS = ['transformers-cache', 'muaalem-lab'];
-const SHELL = ['./', 'index.html', 'app.css', 'app.js', 'prayer.js', 'adhkar.js', 'listen.js', 'recite.js', 'word.js', 'asr-worker.js', 'match.js', 'mu.js', 'mu-worker.js', 'ctc.js', 'capture.js', 'install.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png'];
+const SHELL = ['./', 'index.html', 'app.css', 'app.js', 'prayer.js', 'adhkar.js', 'listen.js', 'recite.js', 'word.js', 'asr-worker.js', 'match.js', 'mu.js', 'mu-worker.js', 'ctc.js', 'fbank.js', 'capture.js', 'install.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION)
