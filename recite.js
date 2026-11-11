@@ -665,7 +665,7 @@ const Recite = (() => {
   // in a correct reading, about a third within WRONG_BY.) Frames [from, to), as in `at`
   // Not where the aya fits what was heard poorly as a whole (FIT, per frame; a reading's ayas fit
   // at -0.3 to -0.9): its bounds misplaced, any other reading fits better
-  const RECHECK = ['skip', 'wrong'], SKIP_BY = 4, WRONG_BY = 1.5, SWAP_BY = 6, FIT = -2, EXT = 75, AFTER_BY = 15;
+  const RECHECK = ['skip', 'wrong'], ANY_BY = 2.5, SWAP_BY = 6, FIT = -2, EXT = 75, AFTER_BY = 15;
   function recheck(g, ai, k0, from, to) {
     if (from == null || to == null || !g.words[k0]) return Promise.resolve();
     // (the words reached only: a session ended in the middle of an aya)
@@ -712,11 +712,14 @@ const Recite = (() => {
         changed++; added = true;
         if (!g.done) toast(`قرأت الآية ${ar(R.ayas[prev.ai][1])} بعد الآية ${ar(R.ayas[ai][1])}`);
       }
-      const fits = i => sc[0] >= any[i];
-      for (let i = 0; i < n; i++) if (g.errs[k0 + i] === 'skip' && sc[0] - left(i) >= SKIP_BY && fits(i)) { delete g.errs[k0 + i]; delete g.heard[k0 + i]; changed++; }
+      // (the written word fits what was heard nearly as well as any sounds there would, ANY_BY a
+      // sound: said, however the model wrote it out. On 400 readings by learners judged correct, the
+      // words wrongly marked sit at -0.5 to -2.5 a sound, a word really another at -3 to -8, one left
+      // out at -5 to -12: three in four of the wrong marks taken back, one in twelve of the right ones)
+      const fits = i => any[i] != null && (sc[0] - any[i]) / Math.max(1, Match.units(w[i]).length) >= -ANY_BY;
+      for (let i = 0; i < n; i++) if (RECHECK.includes(g.errs[k0 + i]) && fits(i)) { delete g.errs[k0 + i]; delete g.heard[k0 + i]; changed++; }
       asks.forEach(([kind, i], j) => {
         const x = sc[1 + n + j], d = x - sc[0], k = k0 + i;
-        if (kind === 'wrong' && g.errs[k] === 'wrong' && d <= WRONG_BY && fits(i)) { delete g.errs[k]; delete g.heard[k]; changed++; }
         if (kind === 'order' && d >= SWAP_BY && x >= Math.max(left(i), left(i + 1))) swaps.push([d, i]);
       });
       // (two words the other way round, and the aya as written then fits poorly about them: their
@@ -779,6 +782,8 @@ const Recite = (() => {
       if (x.state === 'err') e = MU_TYPE[x.type] || (x.heard && x.heard.length > 1 ? 'wrong' : 'skip');
       else if (closing && !decided) { decided = true; e = 'skip'; }
       if (e === 'skip' && graced()) e = null; // read while the page was away: taken as said
+      // (left out or another, by the letters the model wrote: asked of what it heard there first)
+      if (e && x.state === 'err' && RECHECK.includes(e) && cur?.spans[i]) e = unheard(k, i, x, states, cur, e);
       if (decided) {
         pos = tent = k + 1;
         if (e) {
@@ -792,6 +797,48 @@ const Recite = (() => {
     G.pos = pos; G.tent = tent;
     if (fresh) chime();
     warnSkipped(skips);
+  }
+  // A word the matcher marks left out or another, from the letters the model wrote out, is asked of
+  // what the model heard there before it is marked: the word with its neighbours as written, against
+  // the same with any sounds at all in its place, on those words' frames (ctc.js, as recheck() does
+  // for the whole aya once it is done). The written word fitting nearly as well (ANY_BY a sound) was
+  // said, however it was written out (a soft voice, a phone held far, an accent); else it is marked,
+  // a moment after the word is read, so no word is marked and then taken back. Returns e to mark
+  // now, or null (said; or being asked: marked when the answer comes, if it says so)
+  const VER_CTX = 2, VER_PAD = 12;
+  function unheard(k, i, x, states, cur, e) {
+    const g = G, m = g.mu, V = (g.ver ||= {});
+    if (!m.at?.length || !x.at) return e;
+    const sig = m.cut + ':' + x.at[0] + ':' + x.at[1];
+    let v = V[k];
+    if (v && v.sig === sig) return v.r === false ? e : null;
+    const said = y => (y.state === 'ok' || y.state === 'err') && y.at && y.at[1] > y.at[0];
+    let L = i, R = i;
+    while (L > 0 && i - L < VER_CTX && said(states[L - 1])) L--;
+    while (R + 1 < states.length && R - i < VER_CTX && said(states[R + 1]) && cur.spans[R + 1]) R++;
+    const all = m.final + m.tent, c0 = Match.charAt(all, m.cut), sub = all.slice(c0);
+    const fr = u => m.at[Math.min(m.at.length - 1, c0 + Match.charAt(sub, Math.max(0, u)))];
+    let u0 = x.at[0], u1 = x.at[1];
+    for (let j = L; j <= R; j++) if (states[j].at) { u0 = Math.min(u0, states[j].at[0]); u1 = Math.max(u1, states[j].at[1]); }
+    const f0 = Math.max(0, fr(u0) - VER_PAD), f1 = fr(Math.max(u0, u1 - 1)) + 8 + VER_PAD;
+    const w = [];
+    for (let j = L; j <= R; j++) w.push(cur.ph.slice(...cur.spans[j]));
+    const q = i - L, len = Match.units(w[q]).length, heard = { got: x.heard || '', want: w[q] };
+    if (f0 == null || f1 == null || isNaN(f0) || isNaN(f1)) return e;
+    v = V[k] = { sig };
+    Mu.score(f0, f1, [w, [...w.slice(0, q), null, ...w.slice(q + 1)]]).then(sc => {
+      if (V[k] !== v) return;
+      v.r = !!sc && sc[0] != null && sc[1] != null && (sc[0] - sc[1]) / Math.max(1, len) >= -ANY_BY;
+      if (G !== g || !g.ver || g.ver[k] !== v) return;
+      if (!v.r && k < g.pos && g.errs[k] !== e && g.errs[k] !== 'hint') {
+        g.errs[k] = e; g.heard[k] = heard;
+        if (!g.done) chime();
+        if (e === 'skip') warnSkipped([[k, 'skip']]);
+      }
+      paint(); paintBar();
+      if (g.done && !$('#recDone').hidden) paintDone();
+    });
+    return null;
   }
   // mistakes piling up in the aya being said (or nothing of it heard), and no aya of the session near it fits better (muRelocate):
   // the reading is elsewhere. Looked for in the whole Quran, as the header mic does; found clearly, the
@@ -886,6 +933,7 @@ const Recite = (() => {
     }
     m.c = best.j; m.w0 = 0; m.lead = true;
     G.pos = G.tent = m.starts[best.j];
+    G.ver = {}; // (what was asked of the words left: no longer theirs)
     return true;
   }
 

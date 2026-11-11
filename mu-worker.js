@@ -47,9 +47,9 @@ let rate = 'auto';
 const SLOW_MS = 300, DUTY_FULL = DUTY, DUTY_SHOW = 0.8, GLANCE_CTX = 0.4, GLANCE_MIN = 0.3;
 let GLANCE = 2; // s (on a CPU 1.6: a GPU prepares each length, warm() whole seconds only)
 let shortMs = 0, shownUpTo = 0; // how long a glance takes here, lately; up to when (s) the newest read went
-const slow = () => !S && rate === 'auto' && stepMs > SLOW_MS; // (a stream's reads are its glances)
+const slow = () => rate === 'auto' && stepMs > SLOW_MS;
 const gap = () => rate === 'save' ? SAVE_GAP : rate === 'fast' ? MIN_NEW
-  : Math.max(MIN_NEW, Math.min(MAX_GAP, stepMs / 1000 / (S ? DUTY_S : slow() ? DUTY_FULL : DUTY)));
+  : Math.max(MIN_NEW, Math.min(MAX_GAP, stepMs / 1000 / (slow() ? DUTY_FULL : DUTY)));
 const glanceGap = () => Math.max(GLANCE_MIN, (shortMs || stepMs * 0.4) / 1000 / (DUTY_SHOW - DUTY_FULL));
 const ALT = 0.1;     // a sound the model gives this much chance, besides its first choice, is kept as a runner-up
 const now = () => performance.timeOrigin + performance.now(); // same clock as the page
@@ -124,7 +124,8 @@ async function load({ variant, ep, threads, shared, stream }) {
     if (!st || st.weights !== variant) throw new Error('no stream graph for ' + variant);
     session = await ort.InferenceSession.create(await fetchGraph(st.graph), { executionProviders: [ep], graphOptimizationLevel: 'all', externalData: [{ path: st.location, data: bytes }] });
     S = newStream(st.cache);
-    await streamRun(new Float32Array(76 * 160), 76); // (once, so the first read is not the slow one)
+    P = newStream(st.cache);
+    await streamRun(S, new Float32Array(76 * 160), 76); // (once, so the first read is not the slow one)
   } else {
     session = await ort.InferenceSession.create(bytes, { executionProviders: [ep], graphOptimizationLevel: 'all' });
     S = null;
@@ -205,48 +206,53 @@ const SF = 320;      // samples per input frame
 const S_MAX = 150;   // frames read at once at most (3 s: when catching up; the model hears a frame far into its
                      // input worse, past 5 s or so: the cache (2 s, in the manifest) and these stay well within)
 const S_NORM = 4;    // s: each band is normalized over this much, up to the newest frame (as a window's was)
-const DUTY_S = 0.6;  // a stream's reads are short: the model may run this much of the time (auto)
-let S = null;
+let S = null, P = null; // the cache of settled frames; and that with the frames read after them (see light())
 function newStream(C) {
   return { C, att: new Float32Array(LAYERS * C * H), val: new Float32Array(LAYERS * C * H), conv: new Float32Array(LAYERS * H * CONV),
-    last: new Float32Array(H), has: 0, ad: new Float32Array(C / 2 * H), n: 0, mel: null };
+    last: new Float32Array(H), has: 0, ad: new Float32Array(C / 2 * H), n: 0, end: 0 };
 }
 // a new recitation: nothing kept
+let mel = null;
 function streamReset() {
   if (!S) return;
-  S.att.fill(0); S.val.fill(0); S.conv.fill(0); S.last.fill(0); S.ad.fill(0); S.has = 0; S.n = 0;
+  for (const c of [S, P ||= newStream(S.C)]) { c.att.fill(0); c.val.fill(0); c.conv.fill(0); c.last.fill(0); c.ad.fill(0); c.has = 0; c.n = 0; c.end = 0; }
   // (sample i of the recitation; past what was heard: silence)
-  S.mel = new Mel(i => i < written() - base ? ring[(base + i) % ring.length] : 0, 2048);
+  mel = new Mel(i => i < written() - base ? ring[(base + i) % ring.length] : 0, 2048);
 }
-// N new frames (x: their features) read after the cache
-function streamRun(x, N) {
-  const C = S.C, mask = new Float32Array(C).fill(-1e4, 0, C - S.n), T = (d, dims) => new ort.Tensor('float32', d, dims);
-  return session.run({ feats: T(x, [N, 160]), att: T(S.att, [LAYERS, C, H]), val: T(S.val, [LAYERS, C, H]), conv: T(S.conv, [LAYERS, H, CONV]),
-    last: T(S.last, [1, H]), has: T(Float32Array.of(S.has), [1]), ad: T(S.ad, [C / 2, H]), mask: T(mask, [C]), off: T(Float32Array.of(C - S.n), [1]) });
+// N new frames (x: their features) read after cache c
+function streamRun(c, x, N) {
+  const C = c.C, mask = new Float32Array(C).fill(-1e4, 0, C - c.n), T = (d, dims) => new ort.Tensor('float32', d, dims);
+  return session.run({ feats: T(x, [N, 160]), att: T(c.att, [LAYERS, C, H]), val: T(c.val, [LAYERS, C, H]), conv: T(c.conv, [LAYERS, H, CONV]),
+    last: T(c.last, [1, H]), has: T(Float32Array.of(c.has), [1]), ad: T(c.ad, [C / 2, H]), mask: T(mask, [C]), off: T(Float32Array.of(C - c.n), [1]) });
 }
-// the first k (even) of the N frames just read are settled: their states into the cache
-async function settle(k, o, N) {
-  const C = S.C, row = C * H, m = Math.min(k, C);
-  for (const [dst, t] of [[S.att, o.n_att], [S.val, o.n_val]]) {
+// frames [a, b) (even) of the N just read (o: the model's outputs) go into cache c, after the ones it has
+async function push(c, a, b, o, N) {
+  const k = b - a;
+  if (k <= 0) return;
+  const C = c.C, row = C * H, m = Math.min(k, C);
+  for (const [dst, t] of [[c.att, o.n_att], [c.val, o.n_val]]) {
     const src = await t.getData();
     for (let l = 0; l < LAYERS; l++) {
-      const a = dst.subarray(l * row, (l + 1) * row);
-      if (m < C) a.copyWithin(0, m * H);
-      a.set(src.subarray((l * N + k - m) * H, (l * N + k) * H), (C - m) * H);
+      const d = dst.subarray(l * row, (l + 1) * row);
+      if (m < C) d.copyWithin(0, m * H);
+      d.set(src.subarray((l * N + b - m) * H, (l * N + b) * H), (C - m) * H);
     }
   }
-  const nc = await o.n_conv.getData(), c = Math.min(k, CONV);
+  const nc = await o.n_conv.getData(), cv = Math.min(k, CONV);
   for (let r = 0; r < LAYERS * H; r++) {
-    const a = S.conv.subarray(r * CONV, (r + 1) * CONV);
-    if (c < CONV) a.copyWithin(0, c);
-    a.set(nc.subarray(r * N + k - c, r * N + k), CONV - c);
+    const d = c.conv.subarray(r * CONV, (r + 1) * CONV);
+    if (cv < CONV) d.copyWithin(0, cv);
+    d.set(nc.subarray(r * N + b - cv, r * N + b), CONV - cv);
   }
-  S.last.set((await o.enc.getData()).subarray((k - 1) * H, k * H)); S.has = 1;
+  c.last.set((await o.enc.getData()).subarray((b - 1) * H, b * H)); c.has = 1;
   const ad = await o.n_ad.getData(), h = k / 2, mh = Math.min(h, C / 2);
-  if (mh < C / 2) S.ad.copyWithin(0, mh * H);
-  S.ad.set(ad.subarray((h - mh) * H, h * H), (C / 2 - mh) * H);
-  S.n = Math.min(C, S.n + k);
+  if (mh < C / 2) c.ad.copyWithin(0, mh * H);
+  c.ad.set(ad.subarray((b / 2 - mh) * H, b / 2 * H), (C / 2 - mh) * H);
+  c.n = Math.min(C, c.n + k);
 }
+const copy = (from, to) => { to.att.set(from.att); to.val.set(from.val); to.conv.set(from.conv); to.last.set(from.last); to.ad.set(from.ad); to.has = from.has; to.n = from.n; };
+// the features of frames [s, ef): each band normalized over the last S_NORM s up to ef
+const streamFeats = (s, ef) => mel.features(2 * s, 2 * ef, Math.min(2 * s, Math.max(0, 2 * ef - S_NORM * 100)), 2 * ef);
 async function streamStep(final) {
   const n = written() - base, heardAt = time[0], s = kept.length * 2;
   // up to the last whole QUANT heard (the last read: past the end, made up with silence)
@@ -256,17 +262,42 @@ async function streamStep(final) {
   if (N < 2) { if (!final) return false; post(null, 0, true, 0, heardAt, e); return true; }
   if (!final && !more && e / RATE <= readUpTo) return false; // nothing new on the grid yet
   const t0 = performance.now();
-  const x = S.mel.features(2 * s, 2 * ef, Math.min(2 * s, Math.max(0, 2 * ef - S_NORM * 100)), 2 * ef);
-  const out = await streamRun(x, N), lg = out.logits, o = frames(await lg.getData(), lg.dims[0], lg.dims[1]);
+  const x = streamFeats(s, ef);
+  const t1 = performance.now();
+  const out = await streamRun(S, x, N), lg = out.logits, t2 = performance.now(), o = frames(await lg.getData(), lg.dims[0], lg.dims[1]);
   // settled: all of it (the reader stopped), or what has RIGHT s after it (nothing in the first MIN_WIN s)
   const k = final ? N : e < MIN_WIN * RATE ? 0 : Math.max(0, (N - Math.round(RIGHT * RATE / SF)) & ~1), f0 = s / 2;
   for (let j = 0; j < k / 2; j++) { kept[f0 + j] = o[j]; keptP[f0 + j] = o.p[j]; keptA[f0 + j] = o.alt[j]; keptL[f0 + j] = o.lp[j]; }
-  if (k) await settle(k, out, N);
+  await push(S, 0, k, out, N);
+  // (and, for the light reads until the next one: the cache with the frames after the settled ones too)
+  if (!final) { copy(S, P); await push(P, k, N, out, N); P.end = ef; }
   for (let j = keptL.length - KEEP_L - 200; j >= 0 && keptL[j]; j--) keptL[j] = null;
   const ms = performance.now() - t0;
   stepMs = stepMs ? 0.7 * stepMs + 0.3 * ms : ms;
+  if (self.MU_TIMES) self.MU_TIMES.push([N, t1 - t0, t2 - t1, performance.now() - t2]); // (frames; ms: features, model, the rest)
   post(o, f0, final, ms, heardAt, e);
   if (more) return streamStep(true);
+  return true;
+}
+// a light read, between two reads (slow(): a device whose reads are far apart): only the frames that
+// came in since the last read, light or not, after the cache with the frames not yet settled as that
+// read left them (P). Nothing is settled by it: the words being said are shown sooner, that is all
+// (their sounds tentative, read again by the next read with what follows them)
+const LIGHT_MAX = 100; // frames (2 s) a light read takes at most
+async function light() {
+  const n = written() - base, heardAt = time[0], e = Math.floor(n / QUANT) * QUANT, ef = e / SF - 2;
+  if (P.end < kept.length * 2 || e / RATE <= shownUpTo) return false; // (the settled frames went past it: silence)
+  const N = ef - P.end;
+  if (N < 2 || N > LIGHT_MAX) return false;
+  const t0 = performance.now();
+  const out = await streamRun(P, streamFeats(P.end, ef), N), lg = out.logits, o = frames(await lg.getData(), lg.dims[0], lg.dims[1]);
+  const f0 = P.end / 2;
+  tid.length = tp.length = ta.length = Math.min(tid.length, f0);
+  for (let j = 0; j < o.length; j++) { tid[f0 + j] = o[j]; tp[f0 + j] = o.p[j]; ta[f0 + j] = o.alt[j]; }
+  await push(P, 0, N, out, N); P.end = ef;
+  const ms = performance.now() - t0;
+  shortMs = shortMs ? 0.7 * shortMs + 0.3 * ms : ms;
+  post(null, 0, false, ms, heardAt, e, true);
   return true;
 }
 
@@ -301,6 +332,7 @@ async function step(final) {
 }
 // a glance (slow()): the newest GLANCE s read, its frames from GLANCE_CTX s in taken for the tentative ones
 async function glance() {
+  if (S) return light();
   const n = written() - base, heardAt = time[0], e = Math.floor(n / QUANT) * QUANT, st = e - GLANCE * RATE;
   if (st < 0 || e / RATE <= shownUpTo) return false;
   const t0 = performance.now();
@@ -449,6 +481,7 @@ async function probe({ list, threads }) {
 
 onmessage = async ({ data }) => {
   try {
+    if (data.type === 'times') { postMessage({ type: 'times', times: self.MU_TIMES || [] }); self.MU_TIMES = []; }
     if (data.type === 'probe') await probe(data);
     if (data.type === 'rate') rate = data.rate;
     if (data.type === 'warm') await warm();
