@@ -711,6 +711,9 @@ const Recite = (() => {
       // the aya being said among them, or on to the next: as it goes
       if (run.some(x => where[x.w][0] === c) || (j === c + 1 && wi === 0)) return;
       if (said.length < TRK_WORDS || said.reduce((p, x) => p + Match.units(words[x.w]).length, 0) < TRK_SOUNDS) return;
+      // (an aya behind that one of the next ayas repeats word for word — فَبِأَيِّ آلَاءِ رَبِّكُمَا تُكَذِّبَانِ — and nothing
+      // heard past it: the one ahead is being said, not that one gone back to)
+      if (j < c && where[run[run.length - 1].w][0] === j) { const ph = Mu.expect(g.ayas[j]).ph; if ([c, c + 1, c + 2].some(q => g.ayas[q] != null && Mu.expect(g.ayas[q]).ph === ph)) return; }
       // (and what was heard from there on is those words, not other sounds with a word of them here and
       // there — a reading gone to another sura is not this one's ayas: muFar's to find)
       { const i0 = segs.indexOf(run[0]), before = segs[i0 - 1]?.g || 0, other = segs.slice(i0).reduce((p, x) => p + (x.g || 0), 0);
@@ -726,6 +729,8 @@ const Recite = (() => {
         // (gone back to read the stretch again: an aya of it marked said after its next is read anew)
         for (let k = m.starts[Math.max(0, j - 1)]; k < was; k++) if (G.errs[k] === 'order' && !G.heard[k]) delete G.errs[k];
         if (j !== c) toast(`رجعت إلى الآية ${ar(R.ayas[G.ayas[j]][1])}`);
+        // (read anew from there: an aya of the stretch left out this time is left out, said before or not)
+        if (G.once) for (const k in G.once) if (+k >= to) delete G.once[k];
       }
       (m.shaky ||= {})[G.ayas[c]] = true; m.shaky[G.ayas[j]] = true;
       m.passed = {};
