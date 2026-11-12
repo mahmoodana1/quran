@@ -255,3 +255,16 @@ body.sync-on #dbSync { color: var(--p-ink); }
 body[data-sync-state="run"] #dbSync svg { animation: dkSync 1.2s ease-in-out infinite; }
 body[data-sync-state="fail"] #dbSync { color: var(--danger); }
 @keyframes dkSync { 50% { opacity: .35; } }
+
+/* التسميع: a wider panel, and what a phone swipes sideways laid out as rows of cards */
+body.desk.side-wide { --dk-panel: clamp(460px, 44vw, 720px); }
+body.desk #sheet .pp-hi b { white-space: normal; overflow: visible; }
+body.desk #sheet .pp-cards, body.desk #sheet .pp-revs {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px;
+  overflow: visible; margin-inline: 0; padding-inline: 0; scroll-snap-type: none;
+}
+body.desk #sheet .pp-revs { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+body.desk #sheet .pp-cards > *, body.desk #sheet .pp-revs > * { width: auto; min-width: 0; max-width: none; flex: none; }
+body.desk #sheet .pp-c, body.desk #sheet .pp-rev, body.desk #sheet .pp-words button, body.desk #sheet .pp-wide-b { transition: transform .15s ease, box-shadow .15s ease; }
+body.desk #sheet .pp-c:hover, body.desk #sheet .pp-rev:hover, body.desk #sheet .pp-words button:hover { transform: translateY(-2px); }
+body.desk #sheet .pp-icons button:hover, body.desk #sheet .pp-back:hover { background: var(--tint-2); }

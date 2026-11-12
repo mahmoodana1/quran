@@ -117,6 +117,8 @@ const Desk = (() => {
     const open = panelOpen($('#adhkar')) ? 'adhkar' : panelOpen($('#library')) ? 'marks' : panelOpen($('#sheet')) ? (tab === 'suras' || $('#q').value.trim() ? 'suras' : tab) : 'read';
     document.querySelectorAll('#deskRail [data-dr]').forEach(b => b.classList.toggle('on', b.dataset.dr === open));
     $('#dbWhere').classList.toggle('on', open === 'suras');
+    // (التسميع is a page of numbers and cards: given more room than a list needs)
+    document.body.classList.toggle('side-wide', open === 'recite');
     // the line under the pages
     const n = R.pages.length, f = n > 1 ? (S.page - 1) / (n - 1) : 0;
     $('#dsFill').style.width = (f * 100).toFixed(2) + '%';
