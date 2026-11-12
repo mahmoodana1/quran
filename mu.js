@@ -559,7 +559,7 @@ const Mu = (() => {
   // ---- the reader's pace: sounds per second over the last PACE_WIN s read (a
   // pause counts little), followed as it changes; the references heard from the
   // PACE_N reciters nearest it are the ones that count (all, until it is known)
-  const PACE_WIN = 12, PACE_N = 3;
+  const PACE_WIN = 12, PACE_N = 6;
   let paceLog = [], pace = 0, paceMask = 0;
   function trackPace(d) {
     if (!refs || d.end == null) return;
@@ -590,7 +590,7 @@ const Mu = (() => {
     return phonLoading ||= Promise.all([
       fetch(`data/phon-hafs.json?v=${DATA_VERSION}`).then(r => r.json()).then(d => { phon = d; }),
       fetch(`data/tj-hafs.json?v=${DATA_VERSION}t`).then(r => r.ok ? r.json() : null).then(d => { tjSkip = d; }, () => {}),
-      fetch(`data/refs-hafs.json?v=${DATA_VERSION}p`).then(r => r.ok ? r.json() : null).then(d => { refs = d?.a ? d : null; }, () => {}),
+      fetch(`data/refs-hafs.json?v=${DATA_VERSION}q`).then(r => r.ok ? r.json() : null).then(d => { refs = d?.a ? d : null; }, () => {}),
     ]);
   }
   const cache = new Map();

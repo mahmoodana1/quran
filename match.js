@@ -391,7 +391,9 @@ const Match = (() => {
       // references); or, for a word mostly not heard, no further from it than one
       if (sum >= 1 && refs?.[wi] && span) {
         const hu = H.slice(span[0], span[1]), ex = t === 3 ? E.slice(a, b) : null, dh = ex && dist(ex, hu);
-        if (refs[wi].some(r => { const ru = units(r); return near(ru, hu) || (ex && dh <= dist(ex, ru) + 0.3); })) sum = 0;
+        // (or the sounds matched to it, where the stretch from its first to its last takes in a neighbour's)
+        const gu = units(heardTxt);
+        if (refs[wi].some(r => { const ru = units(r); return near(ru, hu) || near(ru, gu) || (ex && dh <= dist(ex, ru) + 0.3); })) sum = 0;
       }
       // tajweed (opt.tajweed): the word said right, but a madd or a ghunna in it not given its length
       if (sum < 1 && opt.tajweed && tj) for (let k = a; k < Math.min(b, end); k++) if (tj[k]) { sum = 1; t = TJ_TYPE[tj[k]]; break; }
