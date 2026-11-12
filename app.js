@@ -93,6 +93,10 @@ function syncDock() {
   const panels = panelOpen($('#sheet')) || panelOpen($('#library')) || panelOpen($('#adhkar'));
   $('#dockPanels').classList.toggle('on', panels);
   $('#dockQuran').classList.toggle('on', !panels);
+  // (a computer's screen: the panels stand beside the pages, which make room for them)
+  document.body.classList.toggle('side-up', panels);
+  document.body.classList.toggle('tf-up', panelOpen($('#tafsir')));
+  if (typeof Desk !== 'undefined') Desk.sync();
 }
 $('#dockPanels').onclick = () => {
   if (panelOpen($('#adhkar'))) Adhkar.close();
@@ -183,10 +187,10 @@ function startReading() {
   if (!K || !R || document.hidden) return;
   const k = K, p = S.page;
   if (k.total !== R.pages.length) { k.total = R.pages.length; saveKh(); }
-  readT = setTimeout(() => markRead(k, p), READ_MS);
+  readT = setTimeout(() => shownPages().forEach(q => markRead(k, q)), READ_MS);
 }
 function markRead(k, p) {
-  if (k !== K || p !== S.page || document.hidden) return;
+  if (k !== K || base(p) !== base(S.page) || document.hidden) return;
   const total = R.pages.length;
   let m = (k.pages || '').padEnd(total, '0').slice(0, total);
   if (m[p - 1] === '1') return;
@@ -299,14 +303,12 @@ function ensurePageFont(p) {
     }
     pf.ready = true;
     // swap the placeholder for the real page if it's on screen
-    slots.forEach(sl => {
-      if (sl.firstElementChild?.dataset.page == p && sl.firstElementChild.classList.contains('pending')) {
-        const pg = renderPage(p);
-        pg.classList.add('arrive');
-        sl.replaceChildren(pg);
-        drawBands(sl);
-      }
-    });
+    slots.forEach(sl => sl.querySelectorAll(`.page.pending[data-page="${p}"]`).forEach(old => {
+      const pg = renderPage(p);
+      pg.classList.add('arrive');
+      old.replaceWith(pg);
+      drawBands(sl);
+    }));
   }).catch(() => { delete pageFonts[p]; });
   return pf.promise;
 }
@@ -314,12 +316,17 @@ function ensurePageFont(p) {
 // ---------------------------------------------------------------- layout
 
 function measure() {
+  // (first: on a computer the pages have the room the bars and panels leave)
+  S.desk = deskMQ.matches;
+  document.body.classList.toggle('desk', S.desk);
   const probe = $('#probe');
   const cs = getComputedStyle(probe);
   const W = probe.clientWidth, H = probe.clientHeight;
   S.W = W; S.H = H;
   const padL = parseFloat(cs.paddingLeft), padR = parseFloat(cs.paddingRight);
   const insetT = parseFloat(cs.paddingTop), insetB = parseFloat(cs.paddingBottom);
+  if (S.desk) return measureDesk(W, H);
+  S.two = false;
   S.landscape = W > H;
   document.body.classList.toggle('landscape', S.landscape);
   const em = R?.em || 17;
@@ -335,6 +342,66 @@ function measure() {
   }
   document.documentElement.style.setProperty('--fs', S.fs.toFixed(2) + 'px');
   document.documentElement.style.setProperty('--lh', S.lh.toFixed(2) + 'px');
+}
+
+// A computer's screen (a mouse, and room to spare): the mushaf lies open as the printed one does,
+// two facing pages (the odd one on the right) as tall as the window, or one page; made larger
+// or smaller by the reader (desk.zoom: 1 fits the height; past it the pages scroll). The panels
+// stand beside the pages, which are measured again in the room left (desk.js: the rest of it)
+// (?desk in the address asks for it whatever the pointer: a tablet with a keyboard, a test)
+const deskMQ = (() => {
+  const mouse = matchMedia('(hover: hover) and (pointer: fine)'), room = matchMedia('(min-width: 900px) and (min-height: 480px)');
+  const asked = /[?&]desk\b/.test(location.search);
+  return { get matches() { return (asked || mouse.matches) && room.matches; }, addEventListener(t, f) { mouse.addEventListener?.(t, f); room.addEventListener?.(t, f); } };
+})();
+const DESK = { ratio: 1.72, head: 40, foot: 12, gap: 14, side: 16, zmin: .7, zmax: 2.6, minFs: 15.5 };
+function measureDesk(W, H) {
+  S.landscape = false;
+  document.body.classList.remove('landscape');
+  const em = R?.glyph ? 16.1 : (R?.em || 17);
+  const z = Math.max(DESK.zmin, Math.min(DESK.zmax, +store.get('desk.zoom', 1) || 1));
+  const widthOf = lh => em * lh / DESK.ratio + 2 * Math.round(lh / DESK.ratio * 1.15);
+  const room = W - 2 * DESK.side;
+  let lh = (H - 2 * DESK.gap - DESK.head - DESK.foot - 4) / 15 * z;
+  let two = !!store.get('desk.two', true) && (R?.pages.length || 2) > 1;
+  // two pages wider than the room: made smaller to fit while they can still be read (not when
+  // the reader asked for larger type: one page then)
+  if (two && 2 * widthOf(lh) > room) {
+    const s = room / (2 * widthOf(lh));
+    if (z <= 1 && lh * s / DESK.ratio >= DESK.minFs) lh *= s; else two = false;
+  }
+  if (!two && widthOf(lh) > room) lh *= room / widthOf(lh);
+  const fs = lh / DESK.ratio, pad = Math.round(fs * 1.15);
+  S.two = two; S.fs = fs; S.lh = lh; S.availW = em * fs; S.linesH = lh * 15;
+  const st = document.documentElement.style;
+  st.setProperty('--fs', fs.toFixed(2) + 'px');
+  st.setProperty('--lh', lh.toFixed(2) + 'px');
+  st.setProperty('--pw', (S.availW + 2 * pad).toFixed(1) + 'px');
+  st.setProperty('--ppx', pad + 'px');
+}
+// the page a turn starts from (two pages: the odd one, on the right), the pages shown, and
+// what a slot holds: a page, or on a computer the page or two facing ones in their frame
+const base = p => S.two ? p - (p + 1) % 2 : p;
+const shownPages = () => S.two ? [base(S.page), base(S.page) + 1].filter(p => p <= R.pages.length) : [S.page];
+function slotContent(p) {
+  if (!S.desk) return renderPage(p);
+  const el = document.createElement('div');
+  el.className = S.two ? 'spread' : 'spread one';
+  if (p >= 1 && p <= R.pages.length) {
+    el.append(renderPage(p));
+    if (S.two && p + 1 <= R.pages.length) el.append(renderPage(p + 1));
+  }
+  return el;
+}
+// the page of S.page as drawn, and what scrolls it
+const curPage = () => slots[1]?.querySelector(`.page[data-page="${S.page}"]`) || slots[1]?.querySelector('.page') || null;
+const scroller = () => S.desk ? slots[1] : slots[1]?.firstElementChild;
+// the next page (1) or the one before (-1): on a computer, the two facing ones
+function turn(d, from = 0) {
+  const p = base(S.page) + d * (S.two ? 2 : 1);
+  if (p < 1 || p > R.pages.length) { placeSlots(0, true); return false; }
+  goTo(p, { animate: true, from });
+  return true;
 }
 
 function pageInfo(p) {
@@ -375,7 +442,7 @@ function renderPage(p) {
     em = Math.max(full[Math.floor(full.length * 0.8)] || max, max * 0.97);
     fs = S.landscape ? S.availW / em : Math.min(S.availW / em, S.linesH / 15 * 0.82);
   }
-  const lh = S.landscape ? fs * 1.75 : Math.min(S.linesH / 15, fs * LINE_RATIO);
+  const lh = S.desk ? S.linesH / 15 : S.landscape ? fs * 1.75 : Math.min(S.linesH / 15, fs * LINE_RATIO);
   const { first, last } = pageInfo(p);
   const fa = R.ayas[first];
   el.className = `page ${p % 2 ? 'odd' : 'even'}${opening ? ' opening' : ''}${pending ? ' pending' : ''}${R.glyph ? ' glyph' : ''}`;
@@ -461,6 +528,8 @@ function keepClear() {
 }
 function clearNow() {
   const bars = BARS.map(sel => $(sel)).filter(b => !b.hidden && !b.classList.contains('leaving'));
+  // (a computer's screen: an aya's or a word's card opens beside it, the others keep their place)
+  if (S.desk && typeof Desk !== 'undefined') return Desk.place(bars);
   const pg = slots[1]?.firstElementChild, ai = S.act ?? S.focus ?? S.play;
   let box = null;
   const wel = typeof WordCard !== 'undefined' && WordCard.el();
@@ -500,6 +569,7 @@ function clearNow() {
 // a tap on a bar, away from its buttons, sends it to the other end of the screen and back
 function flipBar(e) {
   const b = e.currentTarget;
+  if (S.desk) return;
   if (e.target.closest('button, a, input, select, label, summary, [data-act], [data-wb], [data-rc-word], [role=button]')) return;
   b.dataset.pin = (parseFloat(b.style.getPropertyValue('--lift')) || 0) < 0 ? 'down' : 'up';
   if (b.id === 'recBar') store.set('recite.barUp', b.dataset.pin === 'up');
@@ -513,6 +583,7 @@ function drawBands(root) {
   const want = new Map();
   if (S.focus != null) want.set(S.focus, 'hl');
   if (S.play != null && S.play !== S.focus) want.set(S.play, 'hl play');
+  if (S.hover != null && !want.has(S.hover)) want.set(S.hover, 'hl hov'); // (under the mouse: desk.js)
   root.querySelectorAll('.hl').forEach(h => {
     if (!want.has(+h.dataset.a) || want.get(+h.dataset.a) !== h.className.replace(' in', '')) h.remove();
   });
@@ -550,26 +621,31 @@ function placeSlots(dx = 0, animate = false) {
 }
 
 function prefetchFonts() {
-  for (const d of [0, 1, -1, 2, -2]) ensurePageFont(S.page + d);
+  const b = base(S.page);
+  for (const d of S.two ? [0, 1, 2, 3, -1, -2, 4, 5] : [0, 1, -1, 2, -2]) ensurePageFont(b + d);
 }
 
 function renderAll() {
   measure();
   prefetchFonts();
-  [S.page - 1, S.page, S.page + 1].forEach((p, i) => slots[i].replaceChildren(renderPage(p)));
+  const b = base(S.page), st = S.two ? 2 : 1;
+  [b - st, b, b + st].forEach((p, i) => { slots[i].replaceChildren(slotContent(p)); slots[i].scrollTop = 0; });
   placeSlots();
   paintMarks();
   startReading();
+  if (typeof Desk !== 'undefined') Desk.sync();
 }
 
 function goTo(p, { animate = false, from = 0 } = {}) {
   p = Math.max(1, Math.min(R.pages.length, p));
   if (p === S.page) return;
-  const step = p - S.page;
+  // (two facing pages: a step is the two of them, and none at all to the page beside)
+  const st = S.two ? 2 : 1, step = (base(p) - base(S.page)) / st;
   S.page = p;
   K.page = p; K.read = Date.now(); saveKh();
   startReading();
-  if (animate && Math.abs(step) === 1) {
+  if (!step) { /* the facing page: already there */ }
+  else if (animate && Math.abs(step) === 1) {
     // rotate slots so the page we're moving to stays in place, then slide
     if (step === 1) slots.push(slots.shift()); else slots.unshift(slots.pop());
     // start the slide where the finger left it
@@ -578,13 +654,15 @@ function goTo(p, { animate = false, from = 0 } = {}) {
     void slots[1].offsetWidth;
     placeSlots(0, true);
     const fresh = step === 1 ? 2 : 0;
-    slots[fresh].replaceChildren(renderPage(p + (step === 1 ? 1 : -1)));
+    slots[fresh].replaceChildren(slotContent(base(p) + (step === 1 ? st : -st)));
+    slots[fresh].scrollTop = 0;
     drawBands(slots[fresh]);
   } else {
     renderAll();
   }
-  const cur = slots[1].firstElementChild;
-  if (cur) cur.scrollTop = 0;
+  const cur = scroller();
+  if (cur && step) cur.scrollTop = 0;
+  if (typeof Desk !== 'undefined') Desk.sync();
   prefetchFonts();
   keepClear();
   setTimeout(keepClear, 420); // once the slide has settled
@@ -637,6 +715,8 @@ wordAudio.addEventListener('error', () => { sayEl?.classList.remove('say'); if (
 (() => {
   const CLOSE = { khEdit: '#khCancel', done: '#doneLater', recIntro: '#riLater', micIntro: '#miLater', recPrep: '#rpCancel', recDone: '#rdOk', install: '#inLater' };
   const closer = m => { const b = $(CLOSE[m.id]); return b && !b.hidden && !b.disabled && b.offsetParent !== null ? b : null; };
+  // (Escape on a computer: the card on top closed as by its own button; true if there was one)
+  window.closeTopCard = () => { const m = [...document.querySelectorAll('.modal:not([hidden]):not(.leaving)')].filter(x => CLOSE[x.id]).pop(); const b = m && closer(m); if (b) b.click(); return !!m; };
   for (const id of Object.keys(CLOSE)) {
     const m = $('#' + id), card = m?.querySelector('.card');
     if (!card) continue;
@@ -696,7 +776,8 @@ wordAudio.addEventListener('error', () => { sayEl?.classList.remove('say'); if (
     if (!axis && Math.hypot(mx, my) > 8) axis = Math.abs(mx) > Math.abs(my) ? 'x' : 'y';
     if (axis !== 'x') return;
     dx = mx;
-    if ((dx > 0 && S.page >= R.pages.length) || (dx < 0 && S.page <= 1)) dx /= 3;
+    const b = base(S.page), st = S.two ? 2 : 1;
+    if ((dx > 0 && b + st > R.pages.length) || (dx < 0 && b <= 1)) dx /= 3;
     placeSlots(dx);
   });
   const end = e => {
@@ -707,8 +788,9 @@ wordAudio.addEventListener('error', () => { sayEl?.classList.remove('say'); if (
     if (axis !== 'x') return;
     const v = dx / (performance.now() - t0);
     const W = S.W || window.innerWidth;
-    if ((dx > W * 0.18 || v > 0.45) && S.page < R.pages.length) goTo(S.page + 1, { animate: true, from: dx });
-    else if ((dx < -W * 0.18 || v < -0.45) && S.page > 1) goTo(S.page - 1, { animate: true, from: dx });
+    const far = Math.min(W * 0.18, 220);
+    if (dx > far || v > 0.45) turn(1, dx);
+    else if (dx < -far || v < -0.45) turn(-1, dx);
     else placeSlots(0, true);
     vp.dataset.swiped = '1';
     setTimeout(() => delete vp.dataset.swiped, 60);
@@ -723,7 +805,7 @@ wordAudio.addEventListener('error', () => { sayEl?.classList.remove('say'); if (
       const a = act.dataset.act;
       if (a === 'index') openSheet('suras');
       else if (a === 'suras') openSheet('suras');
-      else if (a === 'bm') toggleBookmark(S.page);
+      else if (a === 'bm') toggleBookmark(+act.closest('.page')?.dataset.page || S.page);
       else if (a === 'mic') Recite.mic();
       return;
     }
@@ -747,6 +829,7 @@ wordAudio.addEventListener('error', () => { sayEl?.classList.remove('say'); if (
 })();
 
 document.addEventListener('keydown', e => {
+  if (S.desk) return; // (a computer's keys: desk.js)
   if (!$('#sheet').hidden) return;
   if (e.key === 'ArrowLeft') goTo(S.page + 1, { animate: true });
   if (e.key === 'ArrowRight') goTo(S.page - 1, { animate: true });
@@ -1033,14 +1116,14 @@ function normalizeBookmarks() {
 }
 
 function refreshHeader() {
-  slots.forEach(s => {
-    const pg = s.firstElementChild;
-    const btn = pg && $('.bm-btn', pg);
+  document.querySelectorAll('.slot .page').forEach(pg => {
+    const btn = $('.bm-btn', pg);
     if (!btn) return;
     const on = isBookmarked(+pg.dataset.page);
     btn.classList.toggle('on', on);
     btn.innerHTML = icon(on ? 'bmOn' : 'bm');
   });
+  if (typeof Desk !== 'undefined') Desk.sync();
 }
 
 // ---------------------------------------------------------------- audio
@@ -1509,7 +1592,7 @@ function closeTafsir() {
   new MutationObserver(() => { if (!el.hidden && !d) set(at === 'low' ? 'mid' : at, false); }).observe(el, { attributes: true, attributeFilter: ['hidden'] });
   addEventListener('resize', () => { if (!el.hidden && at !== 'mid') set(at, false); });
   el.addEventListener('pointerdown', e => {
-    if (!e.target.closest('.tf-grip, .tf-head, .tf-seg') || e.target.closest('button')) return;
+    if (S.desk || !e.target.closest('.tf-grip, .tf-head, .tf-seg') || e.target.closest('button')) return;
     d = { y: e.clientY, h: el.offsetHeight, t: e.timeStamp, moved: false, grip: !!e.target.closest('.tf-grip'), id: e.pointerId };
     try { el.setPointerCapture(e.pointerId); } catch {}
   });
@@ -2282,18 +2365,20 @@ let tab = 'suras';
 function openRecite() { openSheet('recite'); }
 // the same panel, on its settings page
 function openReciteSettings() { openSheet('recite', 'set'); }
-function openSheet(t = tab, view = '') {
+// (on a computer the panel stands beside the pages: going somewhere from it leaves it open)
+const dismissSheet = () => { if (!S.desk) closeSheet(); };
+function openSheet(t = tab, view = '', keepQuery = false) {
   tab = t;
   store.set('recite.view', view); // (التسميع's own pages: its main one, unless asked)
   railOpen(false);
   $('#sheetSub').textContent = `${K.name} · ${META.riwayat.find(r => r.id === R.id)?.name || ''} · صفحة ${ar(S.page)}`;
-  closeActions();
+  if (!(S.desk && !$('#tafsir').hidden)) closeActions(); // (a computer: the tafsir stays at its own side)
   show($('#sheet'));
   Adhkar.load().then(() => { if ($('#q').value.trim() && !$('#sheet').hidden) renderSheet(); }).catch(() => {}); // so the search finds adhkar too
-  $('#q').value = '';
+  if (!keepQuery) $('#q').value = '';
   renderSheet();
 }
-function closeSheet() { hide($('#sheet')); $('#q').blur(); }
+function closeSheet() { hide($('#sheet')); $('#q').blur(); if (S.desk && $('#q').value) { $('#q').value = ''; renderSheet(); } }
 $('#sheetClose').onclick = closeSheet;
 // the side rail of the panels: on a phone it comes over the panel from the button beside it, and
 // goes once a panel is chosen (or the panel is touched); on a wide screen it stays
@@ -2318,7 +2403,7 @@ $('#tabs').addEventListener('click', e => {
 let searchT;
 $('#q').addEventListener('input', () => { clearTimeout(searchT); searchT = setTimeout(renderSheet, 120); });
 $('#q').addEventListener('keydown', e => {
-  if (e.key === 'Enter') { e.preventDefault(); $('#sheetBody .row')?.click(); }
+  if (e.key === 'Enter') { e.preventDefault(); ($('#sheetBody .row.kb') || $('#sheetBody .row'))?.click(); }
 });
 
 const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -2469,6 +2554,7 @@ function renderSheet() {
   if (tab === 'prayer' && !q.trim()) Prayer.mount();
   if (tab === 'recite' && !q.trim()) Recite.mounted();
   if (tab === 'adhkar' && !q.trim()) Adhkar.mount($('#adhkarList'));
+  if (typeof Desk !== 'undefined') Desk.sync();
 }
 
 $('#sheetBody').addEventListener('change', e => {
@@ -2498,7 +2584,7 @@ $('#sheetBody').addEventListener('click', async e => {
   if (dk) { $('#q').blur(); Adhkar.open(dk.dataset.dk, dk.dataset.dkI != null ? +dk.dataset.dkI : undefined); return; }
   if (typeof Recite !== 'undefined' && Recite.onSheetClick(e)) return;
   const jz = e.target.closest('[data-go-juz]');
-  if (jz) { closeSheet(); goTo(+jz.dataset.goJuz); return; }
+  if (jz) { dismissSheet(); goTo(+jz.dataset.goJuz); if (S.desk) renderSheet(); return; }
   const gt = e.target.closest('[data-go-tab]');
   if (gt) { tab = gt.dataset.goTab; $('#q').value = ''; $('#q').blur(); renderSheet(); $('#sheetBody').scrollTop = 0; return; }
   const del = e.target.closest('[data-del-mark]');
@@ -2525,16 +2611,16 @@ $('#sheetBody').addEventListener('click', async e => {
   const row = e.target.closest('.row');
   if (!row) return;
   const d = row.dataset;
-  if (d.goSura) { closeSheet(); goTo(pageOfSura(+d.goSura)); }
-  else if (d.goPage) { closeSheet(); goTo(+d.goPage); }
+  if (d.goSura) { dismissSheet(); goTo(pageOfSura(+d.goSura)); }
+  else if (d.goPage) { dismissSheet(); goTo(+d.goPage); }
   else if (d.goAya) {
-    closeSheet();
+    dismissSheet();
     const ai = +d.goAya;
     goTo(R.ayas[ai][2]);
     setTimeout(() => flashAya(ai), 250);
   } else if (d.goMark) {
     const b = bookmarks()[+d.goMark];
-    closeSheet();
+    dismissSheet();
     if (b.r !== R.id) await switchRiwaya(b.r, false);
     goTo(b.aya != null && R.ayas[b.aya] ? R.ayas[b.aya][2] : b.page);
     if (b.aya != null) setTimeout(() => flashAya(b.aya), 250);

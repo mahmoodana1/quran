@@ -1499,9 +1499,10 @@ const Recite = (() => {
   function showFound(ai, w, said) {
     // (the reading still listened to: the session takes it over; else, a reading of its own, prepared)
     const go = () => start(ai, null, Mu.listening() ? { w0: w, said, stream: true } : { w0: w, said });
-    const pg = slots[1]?.firstElementChild, lines = pg?.querySelector('.lines');
+    const pg = slots[1]?.firstElementChild;
     const own = pg ? [...pg.querySelectorAll(`.w[data-a="${ai}"]`)] : [];
     if (!own.length) return go(); // (not on the page shown: no place to fall into)
+    const lines = own[0].closest('.lines'); // (its own page's: two may be shown)
     const box = $('#recFound'), aya = $('#rfAya'), fs = parseFloat(getComputedStyle(own[0]).fontSize) || 24;
     aya.textContent = '';
     aya.style.fontFamily = getComputedStyle(lines).fontFamily;

@@ -9,6 +9,13 @@ Static PWA: open it in Safari → Share → **Add to Home Screen**. It must be s
   (Hafs, Shu'bah, Warsh, Qalun, al-Duri, al-Susi, al-Bazzi, Qunbul), each with its own
   orthography, pause and rub' marks.
 - **Landscape**: type fills the width and the page scrolls vertically.
+- **On a computer** (a mouse, a window at least 900 px wide; `?desk` in the address asks for it
+  anyway): the mushaf lies open, two facing pages as tall as the window (or one: `1` / `2`), the
+  type made larger or smaller (`+` `−` `0`, Ctrl + wheel); a bar along the top with the search
+  (`/`), a rail of the panels, the panel chosen and the tafsir standing beside the pages, a line
+  under them to run through the mushaf by. The wheel and the arrow keys turn the pages, `↓` `↑`
+  choose an aya, a click or the right button opens its card beside it, two clicks a word's;
+  `?` lists every key. All of it is `desk.js` and `desk.css`, under `body.desk`.
 - **Search**: surah names (Arabic/English, fuzzy), aya text (fuzzy, diacritics-insensitive),
   `2:255`, `البقرة ٢٥٥`, `baqara 255`, page numbers. Best match first; Enter jumps to it.
 - **Tafsir As-Sa'di** per aya (data/tafsir/<surah>.json, from spa5k/tafsir_api), downloadable for offline.

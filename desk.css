@@ -1,0 +1,253 @@
+/* A computer's screen (body.desk: app.js measureDesk, desk.js). The mushaf lies open in the middle,
+   two facing pages on a desk; a bar along the top, a rail of the panels at the side, the panel
+   chosen beside the pages, the tafsir at the other side, a line under the pages to run through
+   the mushaf by. Nothing here touches a phone: every rule is under body.desk, and the parts
+   desk.js adds are not shown without it. */
+#deskBar, #deskRail, #deskScrub, .dk-turn, #tfSize { display: none; }
+
+body.desk {
+  --dk-top: 54px; --dk-rail: 74px; --dk-b: 30px;
+  --dk-panel: clamp(350px, 27vw, 430px); --dk-tf: clamp(340px, 29vw, 470px);
+  --dk-r: var(--dk-rail); --dk-l: 0px;
+  --dk-bg: color-mix(in srgb, var(--paper-lo) 84%, #6b5a3c);
+  background: var(--dk-bg);
+}
+:root[data-theme="dark"] body.desk { --dk-bg: #0b0a08; }
+body.desk.side-up { --dk-r: calc(var(--dk-rail) + var(--dk-panel)); }
+body.desk.tf-up { --dk-l: var(--dk-tf); }
+body.desk #dock { display: none; }
+body.desk :focus-visible { outline: 2px solid var(--p-ink); outline-offset: 2px; }
+body.desk * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--muted) 38%, transparent) transparent; }
+
+/* ---------- the pages ---------- */
+body.desk #viewport, body.desk #probe { top: var(--dk-top); right: var(--dk-r); bottom: var(--dk-b); left: var(--dk-l); }
+body.desk #probe { padding: 0; }
+body.desk .slot { overflow: hidden auto; }
+.spread {
+  display: flex; justify-content: center; align-items: stretch; direction: rtl;
+  min-height: 100%; padding: 14px 0; box-sizing: border-box;
+}
+body.desk .page {
+  position: relative; inset: auto; flex: none; width: var(--pw); padding: 0 var(--ppx); overflow: visible;
+  border-radius: 10px;
+  box-shadow: 0 0 0 .5px var(--line), 0 18px 44px -14px rgba(60, 40, 10, .3), 0 2px 6px rgba(60, 40, 10, .07);
+}
+:root[data-theme="dark"] body.desk .page { box-shadow: 0 0 0 .5px var(--line), 0 18px 44px -14px rgba(0, 0, 0, .8); }
+body.desk .page::before { left: 7px; }
+body.desk .page.odd::before { left: auto; right: 7px; }
+/* two facing pages: square at the spine, and the fold's shade on each */
+.spread:not(.one) .page:first-child { border-radius: 2px 10px 10px 2px; }
+.spread:not(.one) .page:last-child { border-radius: 10px 2px 2px 10px; }
+.spread:not(.one) .page::after { content: ""; position: absolute; top: 0; bottom: 0; width: 46px; pointer-events: none; }
+.spread:not(.one) .page:first-child::after { left: 0; background: linear-gradient(to right, rgba(70, 50, 20, .14), rgba(70, 50, 20, .04) 38%, transparent); }
+.spread:not(.one) .page:last-child::after { right: 0; background: linear-gradient(to left, rgba(70, 50, 20, .14), rgba(70, 50, 20, .04) 38%, transparent); }
+:root[data-theme="dark"] .spread:not(.one) .page:first-child::after { background: linear-gradient(to right, rgba(0, 0, 0, .5), rgba(0, 0, 0, .12) 38%, transparent); }
+:root[data-theme="dark"] .spread:not(.one) .page:last-child::after { background: linear-gradient(to left, rgba(0, 0, 0, .5), rgba(0, 0, 0, .12) 38%, transparent); }
+body.desk .phead { height: 40px; padding: 0 2px; font-size: 13.5px; color: var(--muted); }
+body.desk .phead .pnum { font-size: 13.5px; color: var(--muted); }
+body.desk .phead .juz { font-size: 12.5px; }
+body.desk .phead .side { gap: 10px; }
+body.desk .phead .bm-btn svg { width: 16px; height: 19px; }
+body.desk .phead .bm-btn { opacity: .55; transition: opacity .15s ease; }
+body.desk .phead .bm-btn:hover, body.desk .phead .bm-btn.on { opacity: 1; }
+body.desk .phead .sura-btn { padding: 4px 8px; margin: 0 -8px; border-radius: 8px; }
+body.desk .phead .sura-btn:hover { background: var(--tint); color: var(--ink); }
+body.desk .phead .chev { display: none; }
+body.desk .pfoot { height: 12px; }
+body.desk .lines ~ .page-orn svg { visibility: visible; }
+body.desk .w, body.desk .band { cursor: pointer; }
+body.desk.rc-on .w { cursor: default; }
+.hl.hov { background: color-mix(in srgb, var(--accent) 7%, transparent); animation: none; }
+
+/* the page before and the one after: at the edges of the pages' room, shown as the mouse comes */
+body.desk .dk-turn {
+  display: grid; place-items: center; position: fixed; z-index: 19; top: calc((100vh + var(--dk-top) - var(--dk-b)) / 2 - 20px);
+  width: 40px; height: 40px; border-radius: 50%; color: var(--ink);
+  background: color-mix(in srgb, var(--surface) 88%, transparent); border: .5px solid var(--line); box-shadow: 0 4px 14px rgba(60, 40, 10, .16);
+  opacity: 0; transition: opacity .2s ease, transform .15s ease;
+}
+body.desk .dk-turn svg { width: 20px; height: 20px; }
+#dkNextPg { left: calc(var(--dk-l) + 8px); }
+#dkPrevPg { right: calc(var(--dk-r) + 8px); }
+body.desk #viewport:hover ~ .dk-turn { opacity: .5; }
+body.desk .dk-turn:hover { opacity: 1 !important; transform: scale(1.07); }
+body.desk .dk-turn:disabled { opacity: 0 !important; pointer-events: none; }
+body.desk.rc-on .dk-turn { display: none; }
+
+/* ---------- the bar along the top ---------- */
+body.desk #deskBar {
+  position: fixed; z-index: 34; top: 0; left: 0; right: var(--dk-rail); height: var(--dk-top);
+  display: grid; grid-template-columns: 1fr minmax(240px, 520px) 1fr; align-items: center; gap: 16px; padding: 0 16px;
+  background: var(--paper); border-bottom: 1px solid var(--p-rule);
+}
+.db-where { justify-self: start; display: flex; align-items: center; gap: 8px; padding: 5px 12px; margin: 0 -6px; border-radius: 10px; text-align: start; position: relative; }
+.db-where:hover, .db-where.on { background: var(--tint); }
+.db-where span { display: flex; flex-direction: column; gap: 1px; white-space: nowrap; }
+.db-where b { font-size: 15px; font-weight: 800; }
+.db-where small { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.db-where svg { width: 16px; height: 16px; color: var(--muted); }
+.db-search { position: relative; }
+body.desk .db-search .search {
+  margin: 0; height: 36px; padding: 0 12px; border: 0; border-radius: 11px;
+  background: color-mix(in srgb, var(--ink) 6%, var(--paper)); cursor: text;
+}
+body.desk .db-search .search:focus-within { background: var(--surface); box-shadow: 0 0 0 1.5px var(--p-green), 0 6px 18px rgba(30, 60, 40, .12); color: var(--p-ink); }
+body.desk .db-search .search input { font-size: 14.5px; padding: 0; height: 100%; }
+.db-search kbd { position: absolute; inset-inline-end: 9px; top: 50%; transform: translateY(-50%); pointer-events: none; }
+.db-search:focus-within kbd { display: none; }
+body.desk kbd {
+  display: inline-grid; place-items: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 6px;
+  font: 600 11.5px/1 ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: var(--muted); direction: ltr;
+  background: var(--surface); box-shadow: inset 0 0 0 1px var(--line), 0 1px 0 var(--tint-2);
+}
+.db-tools { justify-self: end; display: flex; align-items: center; gap: 2px; }
+.db-btn, #dbZoom { position: relative; height: 36px; border-radius: 10px; color: var(--muted); display: grid; place-items: center; transition: background-color .15s ease, color .15s ease; }
+.db-btn { width: 36px; }
+.db-btn svg { width: 20px; height: 20px; }
+.db-btn:hover, #dbZoom:hover { background: var(--tint); color: var(--ink); }
+.db-btn:active { background: var(--tint-2); }
+.db-btn.on { color: var(--p-ink); background: color-mix(in srgb, var(--p-green) 12%, transparent); }
+#dbBm.on svg path { fill: currentColor; }
+.db-btn.dim { opacity: .45; }
+.db-sep { width: 1px; height: 20px; background: var(--p-rule); margin: 0 7px; }
+.db-zoom { display: flex; align-items: center; }
+#dbZoom { min-width: 48px; padding: 0 4px; font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+/* what a tool is, and its key, under it once the mouse rests there */
+#deskBar [data-tip]::after {
+  content: attr(data-tip); position: absolute; z-index: 5; top: calc(100% + 9px); left: 50%; transform: translateX(-50%);
+  white-space: pre; padding: 6px 10px; border-radius: 8px; font: 500 12px var(--ui); color: #fff; background: rgba(36, 33, 29, .93);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .2); opacity: 0; pointer-events: none; transition: opacity .12s ease;
+}
+#deskBar [data-tip]:hover::after { opacity: 1; transition-delay: .5s; }
+#deskBar .db-tools > :nth-last-child(-n+3)[data-tip]::after { left: 0; transform: none; }
+#deskBar .db-where[data-tip]::after { left: auto; right: 0; transform: none; }
+
+/* ---------- the rail of the panels ---------- */
+body.desk #deskRail {
+  position: fixed; z-index: 36; top: 0; right: 0; bottom: 0; width: var(--dk-rail);
+  display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 0 12px; overflow: hidden auto;
+  color: var(--p-on); background: var(--p-pattern, none) 0 0 / 22px 22px, linear-gradient(175deg, var(--p-green), var(--p-green-2));
+  box-shadow: inset 1px 0 0 color-mix(in srgb, var(--p-gold) 55%, transparent);
+}
+.dr-logo { width: 38px; height: 38px; border-radius: 10px; margin-bottom: 10px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--p-gold) 60%, transparent), 0 4px 10px rgba(0, 0, 0, .25); }
+#deskRail button {
+  flex: none; width: 62px; padding: 8px 0 6px; border-radius: 13px; display: flex; flex-direction: column; align-items: center; gap: 4px;
+  color: inherit; opacity: .68; font-size: 10.5px; font-weight: 600; transition: opacity .15s ease, background-color .15s ease;
+}
+#deskRail button svg { width: 22px; height: 22px; }
+#deskRail button:hover { opacity: 1; background: rgba(255, 255, 255, .08); }
+#deskRail button.on { opacity: 1; background: rgba(255, 255, 255, .13); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p-gold) 70%, transparent); }
+#deskRail .dr-end { margin-top: auto; }
+
+/* ---------- the panels: beside the pages ---------- */
+body.desk #sheet, body.desk #library, body.desk #adhkar {
+  inset: var(--dk-top) var(--dk-rail) 0 auto; width: var(--dk-panel); padding: 0;
+  border-left: 1px solid var(--p-rule); box-shadow: -14px 0 34px -22px rgba(60, 40, 10, .35);
+  animation: dkSide .26s cubic-bezier(.2, .9, .3, 1);
+}
+@keyframes dkSide { from { transform: translateX(34px); opacity: 0; } }
+body.desk #sheet.leaving, body.desk #library.leaving, body.desk #adhkar.leaving { animation: dkSideOut .2s ease forwards; }
+@keyframes dkSideOut { to { transform: translateX(34px); opacity: 0; } }
+body.desk #sheet .rail, body.desk #sheet .rail-veil, body.desk #railBtn { display: none; }
+body.desk #sheetBody { padding-bottom: 28px; }
+body.desk #adhkar .sheet-title { max-width: 60%; }
+body.desk #adhkar { padding-bottom: 8px; }
+body.desk #sheet .row { transition: background-color .12s ease; }
+body.desk #sheet button.row:hover { background: color-mix(in srgb, var(--p-green) 6%, transparent); }
+body.desk #sheet .row.kb { background: color-mix(in srgb, var(--p-green) 13%, transparent); box-shadow: inset -3px 0 0 var(--p-green); }
+body.desk .jz:hover { background: color-mix(in srgb, var(--p-green) 14%, transparent); }
+body.desk .x-btn:hover, body.desk .tf-icon:hover, body.desk .pl-btn:hover { background: var(--tint-2); }
+body.desk .txt-btn:hover { opacity: .7; }
+body.desk .acts-row button:hover i { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+body.desk .book-open { transition: transform .2s ease; }
+body.desk .book-open:hover { transform: translateY(-4px); }
+
+/* ---------- the tafsir: at the other side, the page read beside it ---------- */
+body.desk #tafsir {
+  top: var(--dk-top); bottom: 0; left: 0; right: auto; width: var(--dk-tf); height: auto !important; max-width: none; margin: 0;
+  border-radius: 0; padding-bottom: 0; background: var(--paper); -webkit-backdrop-filter: none; backdrop-filter: none;
+  border-right: 1px solid var(--p-rule); box-shadow: 14px 0 34px -22px rgba(60, 40, 10, .35);
+  animation: dkTf .26s cubic-bezier(.2, .9, .3, 1);
+}
+@keyframes dkTf { from { transform: translateX(-34px); opacity: 0; } }
+body.desk #tafsir.leaving { animation: dkTfOut .2s ease forwards; }
+@keyframes dkTfOut { to { transform: translateX(-34px); opacity: 0; } }
+body.desk #tafsir .tf-grip { display: none; }
+body.desk #tafsir .tf-head { padding-top: 10px; cursor: default; }
+body.desk #tafsir[data-at="low"] .tf-body { visibility: visible; }
+body.desk #tafsir .tf-body { padding: 16px 26px 40px; font-size: 17.5px; }
+body.desk #tfSize { display: block; position: absolute; top: 0; bottom: 0; right: -4px; width: 9px; cursor: col-resize; z-index: 2; }
+body.desk #tfSize:hover, body.dk-sizing #tfSize { background: linear-gradient(to right, transparent 3px, var(--p-gold) 3px 5px, transparent 5px); }
+body.dk-sizing { cursor: col-resize; }
+body.dk-sizing * { user-select: none !important; }
+
+/* ---------- the bars: over the pages' room; an aya's card, a word's, beside what was pressed ---------- */
+body.desk .bar { left: calc(var(--dk-l) + 12px); right: calc(var(--dk-r) + 12px); bottom: calc(var(--dk-b) + 14px); }
+body.desk .bar.pop {
+  left: var(--px, 0); top: var(--py, 0); right: auto; bottom: auto; width: 400px; max-width: none; margin: 0;
+  transform: none; transform-origin: 50% 0; animation: dkPop .16s ease;
+  transition: left .22s cubic-bezier(.2, .9, .3, 1), top .22s cubic-bezier(.2, .9, .3, 1);
+}
+@keyframes dkPop { from { opacity: 0; transform: scale(.96) translateY(-4px); } }
+body.desk .bar.pop.leaving { animation: dkPopOut .12s ease forwards; }
+@keyframes dkPopOut { to { opacity: 0; transform: scale(.97); } }
+body.desk .wbar.pop { max-height: min(70vh, 640px) !important; }
+body.desk .mic-pill { top: calc(var(--dk-top) + 10px); }
+body.desk #toast { top: calc(var(--dk-top) + 12px); }
+body.desk .card::before { display: none; }
+body.desk .card { padding-top: 22px; }
+
+/* ---------- the line under the pages ---------- */
+body.desk #deskScrub {
+  position: fixed; z-index: 18; left: var(--dk-l); right: var(--dk-r); bottom: 0; height: var(--dk-b);
+  display: flex; align-items: center; gap: 14px; padding: 0 18px; direction: rtl;
+}
+.ds-n { flex: none; font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ds-trk { position: relative; flex: 1; height: 22px; cursor: pointer; touch-action: none; }
+.ds-trk::before, #dsFill { content: ""; position: absolute; right: 0; top: 50%; height: 4px; margin-top: -2px; border-radius: 2px; transition: height .15s ease, margin .15s ease; }
+.ds-trk::before { left: 0; background: color-mix(in srgb, var(--ink) 13%, transparent); }
+#dsFill { background: var(--p-gold); }
+.ds-trk:hover::before, .ds-trk:hover #dsFill, .ds-trk.drag::before, .ds-trk.drag #dsFill { height: 6px; margin-top: -3px; }
+#dsTicks u { position: absolute; top: 50%; width: 1.5px; height: 4px; margin-top: -2px; background: var(--dk-bg); z-index: 1; }
+#dsKnob {
+  position: absolute; top: 50%; width: 13px; height: 13px; margin: -6.5px -6.5px 0 0; border-radius: 50%; z-index: 2;
+  background: var(--p-green); box-shadow: 0 0 0 1.5px var(--p-gold), 0 2px 5px rgba(0, 0, 0, .25); transition: transform .15s ease;
+}
+.ds-trk:hover #dsKnob, .ds-trk.drag #dsKnob { transform: scale(1.2); }
+.ds-tip {
+  position: absolute; bottom: calc(100% + 2px); transform: translateX(-50%); white-space: nowrap; pointer-events: none;
+  padding: 6px 11px; border-radius: 8px; font-size: 12.5px; font-weight: 500; color: #fff; background: rgba(36, 33, 29, .93); box-shadow: 0 6px 18px rgba(0, 0, 0, .2);
+}
+
+/* ---------- the keys, listed ---------- */
+.dk-help { width: min(780px, 94vw) !important; }
+.dk-keys { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 34px; }
+.dk-kg { display: flex; flex-direction: column; }
+.dk-kg h3 { margin: 0 0 6px; font-size: 12.5px; font-weight: 700; color: var(--gold-ink); }
+.dk-kg > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 14px; border-top: .5px solid var(--line); }
+.dk-k { display: flex; gap: 5px; direction: ltr; flex: none; }
+
+/* a whole screen of it: the bar and the line under the pages stay, quieter */
+body.dk-full #deskBar { background: var(--dk-bg); border-bottom-color: transparent; }
+
+/* the panel's head: its name at the start, as a side panel's */
+body.desk #sheet .sheet-head { grid-template-columns: 1fr auto; min-height: 52px; padding: 6px 18px 0; }
+body.desk #sheet .sheet-title { align-items: flex-start; justify-self: start; padding: 2px 0; }
+body.desk .dk-help { gap: 12px; }
+body.desk .dk-kg > div { padding: 4px 0; font-size: 13.5px; }
+
+/* the player and the reciting bar: slim, over the pages' running heads (what they say is in the
+   bar along the top), so no line of the pages is ever under them */
+body.desk .bar.mini { top: calc(var(--dk-top) + 7px); bottom: auto; padding: 5px 8px 7px 8px; gap: 10px; border-radius: 18px; animation-name: dkDrop; }
+@keyframes dkDrop { from { transform: translateY(-14px); opacity: 0; } }
+body.desk .bar.mini.leaving { animation: dkDropOut .2s ease forwards; }
+@keyframes dkDropOut { to { transform: translateY(-14px); opacity: 0; } }
+body.desk .bar.mini .pl-main { width: 36px; height: 36px; box-shadow: none; }
+body.desk .bar.mini .pl-main svg { width: 18px; height: 18px; }
+body.desk .bar.mini .pl-btn { width: 32px; height: 32px; }
+body.desk .bar.mini .pl-info { flex-direction: row; align-items: baseline; gap: 10px; }
+body.desk .bar.mini .pl-info b { font-size: 14.5px; }
+body.desk .bar.mini .pl-track { bottom: 3px; }
+body.desk #adhkar .sheet-head { grid-template-columns: auto minmax(0, 1fr) auto; }
+body.desk #adhkar .sheet-title { max-width: none; }
+.db-where span { line-height: 1.25; }

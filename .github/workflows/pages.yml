@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Minify
-        run: npx --yes esbuild@0.25.10 *.js app.css --minify --charset=utf8 --target=es2022 --outdir=. --allow-overwrite --log-level=warning
+        run: npx --yes esbuild@0.25.10 *.js app.css desk.css --minify --charset=utf8 --target=es2022 --outdir=. --allow-overwrite --log-level=warning
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
