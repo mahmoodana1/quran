@@ -251,3 +251,7 @@ body.desk .bar.mini .pl-track { bottom: 3px; }
 body.desk #adhkar .sheet-head { grid-template-columns: auto minmax(0, 1fr) auto; }
 body.desk #adhkar .sheet-title { max-width: none; }
 .db-where span { line-height: 1.25; }
+body.sync-on #dbSync { color: var(--p-ink); }
+body[data-sync-state="run"] #dbSync svg { animation: dkSync 1.2s ease-in-out infinite; }
+body[data-sync-state="fail"] #dbSync { color: var(--danger); }
+@keyframes dkSync { 50% { opacity: .35; } }

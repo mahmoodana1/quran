@@ -23,6 +23,7 @@ const Desk = (() => {
     one: '<rect x="7" y="4.5" width="10" height="15" rx="1.5"/>',
     minus: '<path d="M6 12h12"/>',
     plus: '<path d="M6 12h12M12 6v12"/>',
+    cloud: '<path d="M7 18.5a4.5 4.5 0 01-.6-8.96 6 6 0 0111.5 1.5A3.75 3.75 0 0117.25 18.5z"/>',
     theme: '<circle cx="12" cy="12" r="8.2"/><path d="M12 3.8a8.2 8.2 0 010 16.4z" fill="currentColor" stroke="none"/>',
     full: '<path d="M4.5 9.5v-5h5M19.5 9.5v-5h-5M4.5 14.5v5h5M19.5 14.5v5h-5"/>',
     help: '<circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.4a2.5 2.5 0 114 2c-.9.6-1.6 1.1-1.6 2.3"/><path d="M12 16.8h.01" stroke-width="2.2"/>',
@@ -66,6 +67,7 @@ const Desk = (() => {
         ${tool('dbTwo', 'two', 'صفحة أو صفحتان  ·  1 / 2')}
         <span class="db-zoom">${tool('dbOut', 'minus', 'تصغير  ·  −')}<button id="dbZoom" data-tip="الحجم الأصلي  ·  0"></button>${tool('dbIn', 'plus', 'تكبير  ·  +')}</span>
         <i class="db-sep"></i>
+        ${tool('dbSync', 'cloud', 'المزامنة بين أجهزتك')}
         ${tool('dbTheme', 'theme', 'المظهر  ·  D')}
         ${tool('dbFull', 'full', 'ملء الشاشة  ·  F')}
         ${tool('dbHelp', 'help', 'اختصارات لوحة المفاتيح  ·  ?')}
@@ -276,6 +278,7 @@ const Desk = (() => {
     $('#dbOut').onclick = () => setZoom(zoom() / 1.1);
     $('#dbIn').onclick = () => setZoom(zoom() * 1.1);
     $('#dbZoom').onclick = () => setZoom(1);
+    $('#dbSync').onclick = () => { if (!(panelOpen($('#sheet')) && tab === 'settings')) panel('settings'); setTimeout(() => $('#syncCard')?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 350); };
     $('#dbTheme').onclick = theme;
     $('#dbFull').onclick = full;
     $('#dbHelp').onclick = () => show($('#deskHelp'));

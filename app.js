@@ -1829,6 +1829,7 @@ function settingsHTML() {
   }).join('');
   return `
     ${typeof Install !== 'undefined' ? Install.settingsHTML() : ''}
+    ${typeof Sync !== 'undefined' ? Sync.settingsHTML() : ''}
     <div class="group-label">المظهر</div>
     <div class="themes">${themes}</div>
     <div class="group">${switchRow('lite', 'مظهر خفيف', 'بلا ضبابية خلف الأشرطة ولا حركات مستمرة: أسلس على الهواتف المتوسطة والقديمة')}</div>
@@ -1908,7 +1909,7 @@ async function saveBackup() {
   const data = {};
   for (let k = 0; k < localStorage.length; k++) {
     const key = localStorage.key(k);
-    if (key.startsWith('q.') && !key.startsWith('q.upd.') && !key.startsWith('q.ui.')) data[key] = localStorage.getItem(key);
+    if (key.startsWith('q.') && !key.startsWith('q.upd.') && !key.startsWith('q.ui.') && !key.startsWith('q.sync.')) data[key] = localStorage.getItem(key);
   }
   const d = new Date(), name = `quran-backup-${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}.json`;
   const file = new File([JSON.stringify({ app: 'quran', v: 1, t: Date.now(), data })], name, { type: 'application/json' });
@@ -1925,7 +1926,8 @@ function loadBackup() {
     try {
       const j = JSON.parse(await inp.files[0].text());
       if (j?.app !== 'quran' || !j.data) throw 0;
-      for (const [k, v] of Object.entries(j.data)) if (k.startsWith('q.') && typeof v === 'string') localStorage.setItem(k, v);
+      for (const [k, v] of Object.entries(j.data)) if (k.startsWith('q.') && !k.startsWith('q.sync.') && typeof v === 'string') localStorage.setItem(k, v);
+      localStorage.setItem('q.sync.push', '1'); // (signed in: what was restored is what the other devices get, sync.js)
       store.set('rec.alive', null);
       $('#loading').textContent = 'استُعيدت بياناتك…';
       $('#loading').hidden = false;
@@ -2562,6 +2564,7 @@ $('#sheetBody').addEventListener('change', e => {
   if (sel) Prayer.onChange(sel);
 });
 $('#sheetBody').addEventListener('click', async e => {
+  if (typeof Sync !== 'undefined' && e.target.closest('#syncCard') && Sync.onClick(e)) return;
   const th = e.target.closest('[data-theme-set]');
   if (th) { store.set('theme', th.dataset.themeSet); applyTheme(); renderSheet(); return; }
   if (e.target.closest('[data-open-lib]')) { openLibrary(); return; }
@@ -2816,6 +2819,7 @@ $('#khDelete').onclick = async () => {
     return;
   }
   KH = KH.filter(k => k !== editing);
+  store.set('kh.gone', [...store.get('kh.gone', []), editing.id]); // (gone from the reader's other devices too: sync.js)
   hide($('#khEdit'));
   if (editing === K) await openKhatma(KH[0].id);
   saveKh();
@@ -2851,6 +2855,7 @@ $('#doneLater').onclick = () => hide($('#done'));
     Recite.restore(); // a session cut off by a reload
     restoreUI();      // and what was open
     Recite.prepResume(); // a recitation being prepared when an update was applied
+    if (typeof Sync !== 'undefined') Sync.start(); // signed in: what the other devices have
   } catch (err) {
     $('#loading').textContent = 'تعذر التحميل — تحقق من الاتصال';
     console.error(err);

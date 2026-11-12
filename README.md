@@ -24,6 +24,11 @@ Static PWA: open it in Safari → Share → **Add to Home Screen**. It must be s
   adhkar are split one per card with their counts. Tap to count, swipe to move on, hold to finish one.
   Quranic passages use the KFGQPC Uthmani text; the rest is set in Amiri (SIL OFL).
   `data/adhkar.json` is built by `tools/adhkar.py` (see its docstring).
+- **Sync** (optional, Settings → «المزامنة»): signed in with a Google account or an email and a
+  password, the khatmas and their bookmarks, the recitation's record, the adhkar counted, the prayer
+  settings and the theme follow the reader from device to device. `sync.js`, no SDK: Firebase's
+  REST endpoints (project `quran-app-sync`: Auth, and Firestore at `users/<uid>/…`, readable and
+  writable by that user alone). Nothing is sent before signing in.
 - **Offline**: Settings → «تحميل الكل» saves the mushaf, tafsir, adhkar and (optionally) the recitation.
 - **Audio**: every riwaya is recited by a reciter of that riwaya, played continuously with
   page follow and the aya highlighted:
