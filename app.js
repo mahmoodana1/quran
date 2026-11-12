@@ -1478,11 +1478,68 @@ async function openTafsir(ai, mode = tfMode) {
 }
 
 function closeTafsir() {
+  // (the similar ayas: the one gone to stays lit on its page once the sheet is away, to be found
+  // at a glance; the next tap on the page clears it, as any lit aya)
+  const keep = tfMode === 'similar' ? tfAya : null;
   tfAya = null;
   hide($('#tafsir'));
-  S.act = null; S.focus = null; paintMarks();
+  S.act = null; S.focus = keep; paintMarks();
   if (P.ai != null) show($('#player'));
 }
+
+// the sheet slid by its top (the grip, the title, the two tabs): down to its head alone, so the
+// page shows above it, up to nearly the whole screen, or back to where it opens; let go, it
+// settles at the nearest of the three (a quick flick: the next one that way), and flicked down
+// from its lowest it closes. A tap on the grip steps through them. Kept for the next opening
+(() => {
+  const el = $('#tafsir'), STOPS = ['low', 'mid', 'high'];
+  let at = STOPS.includes(store.get('tf.at')) ? store.get('tf.at') : 'mid', d = null;
+  const heights = () => {
+    const pad = parseFloat(getComputedStyle(el).paddingBottom) || 0;
+    return { low: $('#tfBody').offsetTop + pad, mid: Math.min(innerHeight * .58, 560), high: innerHeight - 56 };
+  };
+  const set = (stop, anim = true) => {
+    at = stop; store.set('tf.at', stop);
+    el.style.transition = anim ? 'height .3s cubic-bezier(.2,.9,.3,1)' : 'none';
+    el.style.height = stop === 'mid' ? '' : heights()[stop] + 'px';
+    el.dataset.at = stop;
+    setTimeout(keepClear, 320);
+  };
+  // (as it opens: where it was left, but never only its head — it was opened to be read)
+  new MutationObserver(() => { if (!el.hidden && !d) set(at === 'low' ? 'mid' : at, false); }).observe(el, { attributes: true, attributeFilter: ['hidden'] });
+  addEventListener('resize', () => { if (!el.hidden && at !== 'mid') set(at, false); });
+  el.addEventListener('pointerdown', e => {
+    if (!e.target.closest('.tf-grip, .tf-head, .tf-seg') || e.target.closest('button')) return;
+    d = { y: e.clientY, h: el.offsetHeight, t: e.timeStamp, moved: false, grip: !!e.target.closest('.tf-grip'), id: e.pointerId };
+    try { el.setPointerCapture(e.pointerId); } catch {}
+  });
+  el.addEventListener('pointermove', e => {
+    if (!d || e.pointerId !== d.id) return;
+    const dy = e.clientY - d.y;
+    if (!d.moved && Math.abs(dy) < 6) return;
+    d.moved = true;
+    d.ly = d.cy ?? e.clientY; d.lt = d.ct ?? e.timeStamp; d.cy = e.clientY; d.ct = e.timeStamp;
+    const H = heights();
+    el.style.transition = 'none';
+    el.style.height = Math.max(H.low - 30, Math.min(H.high, d.h - dy)) + 'px';
+  });
+  const end = e => {
+    if (!d || e.pointerId !== d.id) return;
+    const g = d; d = null;
+    if (!g.moved) { if (g.grip && e.type === 'pointerup') set(STOPS[(STOPS.indexOf(at) + 1) % 3]); return; }
+    const H = heights(), h = el.offsetHeight, v = g.ct > g.lt ? (g.cy - g.ly) / (g.ct - g.lt) : 0; // px/ms, down positive
+    let k = STOPS.reduce((b, s) => Math.abs(H[s] - h) < Math.abs(H[b] - h) ? s : b, 'mid');
+    if (Math.abs(v) > .5) {
+      const i = STOPS.indexOf(at) + (v > 0 ? -1 : 1);
+      if (i < 0) return closeTafsir();
+      k = STOPS[Math.min(2, i)];
+    }
+    set(k);
+  };
+  el.addEventListener('pointerup', end);
+  el.addEventListener('click', e => { if (at === 'low' && e.target.closest('.tf-seg button, .tf-nav button')) set('mid'); }); // (asked for something to read)
+  el.addEventListener('pointercancel', end);
+})();
 
 $('#tfClose').onclick = closeTafsir;
 $('#tfNext').onclick = () => tfAya != null && tfAya + 1 < R.ayas.length && openTafsir(tfAya + 1);
