@@ -78,6 +78,7 @@ const Match = (() => {
   const PAIR = new Map(); // 'ab' -> 7 heavy | 8 near
   for (const [g, t] of [[HEAVY, 7], [CLOSE, 8]]) for (const q of g) { PAIR.set(q, t); PAIR.set(q[1] + q[0], t); }
   const LETTER_SURE = 0.99, TA_SURE = 0.99, LETTER_OFTEN = 0.8;
+  const EMPH = new Set([...'صضطظقخغ'].map(id));
   // letters near in sound (ء/ع, ه/ح, …) said quickly blur into each other, for the model as for the ear:
   // never marked on one hearing, only from the NEAR_OFTEN-th time in the session, and not at all
   // where the reading around it goes faster than NEAR_FAST frames (40 ms) a sound
@@ -310,7 +311,11 @@ const Match = (() => {
           // (ذ after a hidden ن, لِيُنذِرَ: the ghunna before it makes the model hear ظ from correct
           // reciters, 2 times in 81: not marked)
           const hidden = pk === 'ذظ' && j > 1 && E[j - 2] === GH;
-          if (pt && (pt === 7 ? opt.letters.heavy : opt.letters.near) && !nasal && !hidden) {
+          // (a light letter heard heavy beside a heavy one, يُصَدَّعُونَ, مَخضُود: the heavy letter colours
+          // it, to the model as to the ear: not marked)
+          let spread = false;
+          if (pt === 7 && EMPH.has(H[i - 1])) for (let q = Math.max(0, j - 5); q < Math.min(m, j + 4); q++) if (q !== j - 1 && EMPH.has(E[q])) spread = true;
+          if (pt && (pt === 7 ? opt.letters.heavy : opt.letters.near) && !nasal && !hidden && !spread) {
             if (pt === 7) {
               opt.letters.heard?.(pk, j - 1);
               if (c >= (TA.has(pk) ? TA_SURE : LETTER_SURE) || opt.letters.often?.(pk)) { bad[j - 1] += 1; type[j - 1] ||= pt; }

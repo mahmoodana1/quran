@@ -652,7 +652,8 @@ const Recite = (() => {
         break;
       }
       paceAdd(m.tjSeen); m.tjAt = null;
-      if (m.at) recheck(G, G.ayas[m.c], m.starts[m.c] + m.w0, m.at[c0], m.at[c0 + Match.charAt(sub, st[n0].at[0])]);
+      // (not an aya passed over this time, its words said right before: these frames are not its own)
+      if (m.at && !cur.spans.some((_, i) => m.passed?.[m.starts[m.c] + m.w0 + i])) recheck(G, G.ayas[m.c], m.starts[m.c] + m.w0, m.at[c0], m.at[c0 + Match.charAt(sub, st[n0].at[0])]);
       goneAdd(gones, m.goneAt, ex, st, cur, n0, wi => m.starts[m.c] + m.w0 + wi);
       // (each one, at its word in the session)
       for (const [k, pk] of Object.entries(m.letSeen || {})) {
@@ -691,6 +692,11 @@ const Recite = (() => {
     // (each word left out, asked of every aya: a swap must fit better than either of its two words
     // left out, too; else it is one word barely said, not two the other way round)
     const texts = [w, ...w.map((_, i) => [...w.slice(0, i), ...w.slice(i + 1)])], asks = [];
+    // (two words the other way round are asked with the word before the aya and the one after it in
+    // their places: else, in ayas that rhyme — مَخضُود · وَطَلحٍ مَنضُود · وَظِلٍّ مَمدُود — the aya turned round
+    // fits the end of the one before and its own beginning, and words read in order are marked)
+    const phOf = k => { const x = g.words[k]; if (!x) return null; const e = Mu.expect(x.ai); return e.spans[x.wi] ? e.ph.slice(...e.spans[x.wi]) : null; };
+    const pL = k0 > 0 ? phOf(k0 - 1) : null, pR = k0 + n < g.pos ? phOf(k0 + n) : null, ctxL = pL ? [pL] : [], ctxR = pR ? [pR] : [];
     for (let i = 0; i < n; i++) {
       const k = k0 + i, e = g.errs[k];
       // (a word marked: it as any sounds at all, which the written word must fit about as well as; a
@@ -699,9 +705,10 @@ const Recite = (() => {
       if (RECHECK.includes(e) || (!e && i > 0 && i < n - 1 && Match.units(w[i]).length >= STRONG_MIN)) { asks.push(['any', i]); texts.push([...w.slice(0, i), null, ...w.slice(i + 1)]); }
       if (e === 'wrong' && g.heard[k]?.got) { asks.push(['wrong', i]); texts.push([...w.slice(0, i), g.heard[k].got, ...w.slice(i + 1)]); }
       if (i + 1 < n && Match.units(w[i]).length >= 2 && Match.units(w[i + 1]).length >= 2 && w[i] !== w[i + 1]) {
-        asks.push(['order', i]); texts.push([...w.slice(0, i), w[i + 1], w[i], ...w.slice(i + 2)]);
+        asks.push(['order', i]); texts.push([...ctxL, ...w.slice(0, i), w[i + 1], w[i], ...w.slice(i + 2), ...ctxR]);
       }
     }
+    if (asks.some(a => a[0] === 'order')) { asks.push(['ctx', 0]); texts.push([...ctxL, ...w, ...ctxR]); }
     // (EXT frames more either side: the aya's bounds as the matcher put them may be a second or two
     // off, its first words left in the aya before; each reading finds where it lies, ctc.js)
     const f0 = Math.max(0, from - EXT), f1 = to + EXT;
@@ -744,7 +751,7 @@ const Recite = (() => {
       // (nor in an aya the reading jumped to or from: where it lies in what was heard is less sure still)
       // The clearest first, and never beside a word already marked: a word said wrong pulls the fit
       // of its neighbours down with it
-      if (!g.mu?.shaky?.[ai]) {
+      if (!g.mu?.shaky?.[ai] && g.errs[k0 - 1] !== 'skip') { // (nor after words left out)
         const strong = [];
         for (let i = 1; i < n - 1; i++) if (!g.errs[k0 + i] && any[i] != null) { const d = (sc[0] - any[i]) / Math.max(1, Match.units(w[i]).length); if (d < -STRONG_BY) strong.push([d, i]); }
         for (const [, i] of strong.sort((a, b) => a[0] - b[0])) {
@@ -753,8 +760,8 @@ const Recite = (() => {
         }
       }
       asks.forEach(([kind, i], j) => {
-        const x = sc[1 + n + j], d = x - sc[0], k = k0 + i;
-        if (kind === 'order' && d >= SWAP_BY && x >= Math.max(left(i), left(i + 1))) swaps.push([d, i]);
+        const x = sc[1 + n + j], d = x - (at.ctx ?? sc[0]), k = k0 + i;
+        if (kind === 'order' && d >= SWAP_BY && d >= Math.max(left(i), left(i + 1)) - sc[0]) swaps.push([d, i]);
       });
       // (two words the other way round, and the aya as written then fits poorly about them: their
       // neighbours too fit better swapped; the likeliest swap only, of those sharing a word)
@@ -816,6 +823,14 @@ const Recite = (() => {
       if (x.state === 'err') e = MU_TYPE[x.type] || (x.heard && x.heard.length > 1 ? 'wrong' : 'skip');
       else if (closing && !decided) { decided = true; e = 'skip'; }
       if (e === 'skip' && graced()) e = null; // read while the page was away: taken as said
+      // (a word said right before in this reading, the reader having gone back over it since: not left out)
+      if (e === 'skip' && G.once?.[k]) { e = null; (m.passed ||= {})[k] = true; }
+      // (the reading's very first word: its first sound is cut by the microphone opening, or by the reader
+      // beginning as it does; a haraka wrong there alone, the rest of the word as written, is not marked)
+      if (e === 'haraka' && k === (m.firstK ??= base) && i === 0 && cur?.spans[0]) {
+        const a = Match.units(x.heard || ''), b = Match.units(cur.ph.slice(...cur.spans[0]));
+        if (a.length === b.length && a.slice(2).every((u, q) => u === b[q + 2])) e = null;
+      }
       // (left out or another, by the letters the model wrote: asked of what it heard there first)
       if (e && x.state === 'err' && RECHECK.includes(e) && cur?.spans[i]) e = unheard(k, i, x, states, cur, e);
       if (decided) {
@@ -824,7 +839,7 @@ const Recite = (() => {
           if (G.errs[k] !== e && G.errs[k] !== 'hint') { G.errs[k] = e; fresh = true; }
           if (cur?.spans[i]) G.heard[k] = { got: x.heard || '', want: cur.ph.slice(...cur.spans[i]) };
           if (e === 'skip') skips.push([k, 'skip']);
-        } else if (G.errs[k] && G.errs[k] !== 'hint') delete G.errs[k];
+        } else { if (G.errs[k] && G.errs[k] !== 'hint') delete G.errs[k]; if (x.state === 'ok') (G.once ||= {})[k] = true; }
       } else if (x.state === 'hear') tent = k + 1;
     });
     if (pos > G.pos) G.peek = false;
@@ -977,7 +992,7 @@ const Recite = (() => {
       const marks = [];
       // (or, just back after the phone closed the page, read while it was away: taken as said)
       const away = graced();
-      for (let k = from; k < m.starts[best.j]; k++) { if (away) delete G.errs[k]; else if (G.errs[k] !== 'hint') { G.errs[k] = 'skip'; marks.push([k, 'skip']); } delete G.heard[k]; }
+      for (let k = from; k < m.starts[best.j]; k++) { if (away || G.once?.[k]) delete G.errs[k]; else if (G.errs[k] !== 'hint') { G.errs[k] = 'skip'; marks.push([k, 'skip']); } delete G.heard[k]; }
       warnSkipped(marks);
     } else {
       // an aya before, every word of it marked left out, and those after it said: not gone back to,
@@ -992,9 +1007,12 @@ const Recite = (() => {
         return true;
       }
       if (!over) for (let k = from; k < G.words.length && k < from + G.words[from].of; k++) { if (G.errs[k] !== 'hint') delete G.errs[k]; delete G.heard[k]; }
+      // (gone back to read the stretch again: an aya of it marked said after its next is read anew)
+      for (let k = m.starts[Math.max(0, best.j - 1)]; k < G.words.length && k < from + (G.words[from]?.of || 0); k++) if (G.errs[k] === 'order' && !G.heard[k]) delete G.errs[k];
       toast(`رجعت إلى الآية ${ar(R.ayas[G.ayas[best.j]][1])}`);
     }
     (m.shaky ||= {})[G.ayas[m.c]] = true; m.shaky[G.ayas[best.j]] = true;
+    m.passed = {}; // (gone elsewhere: what is read from here on is read anew)
     m.c = best.j; m.w0 = 0; m.lead = true;
     G.pos = G.tent = m.starts[best.j];
     G.ver = {}; // (what was asked of the words left: no longer theirs)
