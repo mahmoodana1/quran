@@ -291,6 +291,7 @@ const Mu = (() => {
         if (d.type === 'flushed') { const f = onFlushed; onFlushed = null; f?.(); }
         if (d.type === 'recording') { const f = onRecording; onRecording = null; f?.(d.samples); }
         if (d.type === 'scored') { scores.get(d.id)?.(d.scores); scores.delete(d.id); }
+        if (d.type === 'pathed') { scores.get(d.id)?.(d.segs); scores.delete(d.id); }
         if (d.type === 'error') {
           if (!ready) { reset(); reject(new Error(d.message)); return; }
           console.warn('Muaalem:', d.message);
@@ -533,6 +534,13 @@ const Mu = (() => {
     if (!worker || !ready) return Promise.resolve(null);
     const id = ++scoreId;
     return new Promise(r => { scores.set(id, r); worker.postMessage({ type: 'score', id, from, to, texts }); });
+  }
+  // the reading's path through these words (each its sounds; start: begins an aya) on the model's frames
+  // [from, to) settled so far: which words were said, in what order, and where each began (ctc.js: path)
+  function path(from, to, words, start) {
+    if (!worker || !ready) return Promise.resolve(null);
+    const id = ++scoreId;
+    return new Promise(r => { scores.set(id, r); worker.postMessage({ type: 'path', id, from, to, words, start }); });
   }
   function recording() {
     if (!worker || !ready) return Promise.resolve(kept);
@@ -790,7 +798,7 @@ const Mu = (() => {
   }
 
   return {
-    CANDS, BASE_IDS, choice, mb, probe, upgrade, saved, savedVariants, use, bench: () => store.get('mu.bench', null), remove, load, prime, start, listen, stop, sounds, expect, expect2, locate, opening,
+    CANDS, BASE_IDS, choice, mb, probe, upgrade, saved, savedVariants, use, bench: () => store.get('mu.bench', null), remove, load, prime, start, listen, stop, sounds, expect, expect2, locate, opening, path,
     ready: () => ready, listening: () => !!mic, quiet, pace: () => ({ pace, near: refs ? refs.r.filter((_, i) => paceMask & 1 << i).map(([r]) => r) : [] }), lost: f => { onLost = f; }, sound: () => actx, info: () => info, recording,
     reprobe: () => { store.set('mu.choice', null); reset(); },
     rate, setRate, boost, score, warm, warmed: () => warmed, micCheck, micWhy: () => micErr, toCpu, lighter, dead: f => { onDead = f; },

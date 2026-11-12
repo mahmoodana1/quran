@@ -17,7 +17,7 @@
 //      · score {id, from, to, texts}
 // out: progress {loaded, total} · ready {loadMs, ep, threads} · warmed {done, total} · text {final, tent, conf, alts (per character), ms, lag}
 //      · scored {id, scores} · flushed · error {message}
-import { tokens, score } from './ctc.js';
+import { tokens, score, path } from './ctc.js';
 import { features, Mel } from './fbank.js';
 
 const ORT = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/';
@@ -528,6 +528,10 @@ onmessage = async ({ data }) => {
     }
     // how well each of the texts fits the recitation's frames [from, to) (ctc.js), once they are final
     if (data.type === 'score') { asked.push(data); scoreAsked(); }
+    if (data.type === 'path') { // the reading's path through these words, on the frames settled so far (ctc.js)
+      const ids = new Map(vocab.map((c, i) => [c, i]).filter(([, i]) => i > 0)), from = Math.max(0, data.from), to = Math.min(data.to, kept.length);
+      postMessage({ type: 'pathed', id: data.id, segs: keptL[from] && to > from ? path(t => keptL[t] || BLANK, from, to, data.words.map(w => Array.from(tokens([w], ids))), data.start) : null });
+    }
     if (data.type === 'audio') { // no shared memory: the page sends the samples
       const s = data.samples, w = written();
       for (let i = 0; i < s.length; i++) ring[(w + i) % ring.length] = s[i];

@@ -639,15 +639,22 @@ const Recite = (() => {
       // Looked for first, once enough is heard; the next aya is gone on to, its words marked, only
       // when what was heard is found nowhere else
       const weak = begun && !done && past != null && st.slice(n0).filter(x => x.state === 'ok').length < st.slice(n0).filter(x => x.state === 'err').length;
+      // (tracked: where the reading is among the ayas around is the tracker's to say, muTrack; asked
+      // only when the reading stops fitting: sounds heard after the aya's end that don't begin the
+      // next, or mistakes piling up in the aya, or nothing of it heard in a long stretch)
+      const tracked = !!m.at?.length;
+      { const okN = st.slice(0, n0).filter(x => x.state === 'ok').length, badN = st.slice(0, n0).filter(x => x.state === 'err').length;
+        m.trkNeed = !done && ((past != null && (!begun || st.slice(n0).filter(x => x.state === 'ok').length < st.slice(n0).filter(x => x.state === 'err').length) && Match.units(sub.slice(past)).length >= 8) || badN >= 2 || (!okN && su >= 20)); }
       if (weak) {
         const tail = Match.units(sub.slice(past, Math.max(past, fin))).length;
         if (tail < OVER || Date.now() - (m.relocAt || 0) < 800) break;
-        if (muRelocate(st.slice(0, n0), sub, fin, m.conf.slice(c0), m.alts.slice(c0), past, end)) continue;
+        if (tracked) { if (!(m.trk && m.trk.c === m.c && m.trk.cut === m.cut && Date.now() - m.trk.at < 2000)) break; }
+        else if (muRelocate(st.slice(0, n0), sub, fin, m.conf.slice(c0), m.alts.slice(c0), past, end)) continue;
         if (muFar(st.slice(0, n0), all, c0, past, end)) return;
         if (tail < OVER_FAR || m.farCand) break;
       }
       if (!begun) {
-        if (!done && muRelocate(st.slice(0, n0), sub, fin, m.conf.slice(c0), m.alts.slice(c0), past, end)) continue;
+        if (!done && !tracked && muRelocate(st.slice(0, n0), sub, fin, m.conf.slice(c0), m.alts.slice(c0), past, end)) continue;
         if (!done && muFar(st.slice(0, n0), all, c0, past, end)) return;
         break;
       }
@@ -665,9 +672,67 @@ const Recite = (() => {
       m.cut += st[n0].at[0]; m.c++; m.w0 = 0; m.lead = false;
     }
     if (G.pos >= G.words.length) return G.chain ? chain() : finish();
+    if (!done) muTrack();
     follow();
     paint();
     paintBar();
+  }
+  // Where the reading is, among the ayas around the one being said: the best path of what was heard
+  // since that aya began through their words (ctc.js: path), asked of the model's frames every
+  // TRK_EVERY ms. The path's last stretch of words in a row beginning in another aya than the one
+  // being said (and not simply the next): the reader went back, or left ayas out. The session goes
+  // on from there: ayas left out are marked (not those said right before), an aya gone back to is
+  // read anew. Ayas of two or three words that begin alike (ثُمَّ نَظَرَ · ثُمَّ عَبَسَ وَبَسَرَ) are told apart
+  // by the words after them, which matching one aya's letters at a time cannot do.
+  const TRK_EVERY = 600, TRK_BACK = 15, TRK_AHEAD = 8, TRK_MAX = 600, TRK_CAP = 220, TRK_WORDS = 3, TRK_SOUNDS = 12, TRK_LEAD = 60, TRK_OTHER = 40, TRK_PART = 0.25;
+  function muTrack() {
+    const g = G, m = g.mu;
+    if (!m?.at?.length || !m.trkNeed || m.trkBusy || g.done || Date.now() - (m.trkAt || 0) < TRK_EVERY) return;
+    const all = m.final + m.tent, c0 = Match.charAt(all, m.cut), fEnd = m.at[Math.min(m.at.length, m.final.length) - 1];
+    if (fEnd == null) return;
+    const f0 = Math.max(0, (m.at[Math.min(c0, m.at.length - 1)] ?? 0) - TRK_LEAD, fEnd - TRK_MAX); // (from a little before the aya: the words that led to it place it)
+    if (fEnd - f0 < 40) return;
+    // (a reader goes back to where the passage began, ayas before: as far back as TRK_CAP words allow)
+    let j0 = Math.max(0, m.c - TRK_BACK); const j1 = Math.min(g.ayas.length - 1, m.c + TRK_AHEAD), words = [], start = [], where = [];
+    while (j0 < m.c - 2 && m.starts[Math.min(j1 + 1, m.starts.length - 1)] - m.starts[j0] > TRK_CAP) j0++;
+    for (let j = j0; j <= j1; j++) { const e = Mu.expect(g.ayas[j]); e.spans.forEach((sp, wi) => { words.push(e.ph.slice(...sp)); start.push(wi === 0); where.push([j, wi]); }); }
+    m.trkBusy = true; m.trkAt = Date.now();
+    const c = m.c, cut = m.cut, w0 = m.w0;
+    Mu.path(f0, fEnd + 1, words, start).then(segs => {
+      m.trkBusy = false;
+      if (G !== g || g.mu !== m || g.done || m.c !== c || m.cut !== cut || m.w0 !== w0) return;
+      m.trk = { c, cut, at: Date.now() };
+      const ws = (segs || []).filter(x => x.w != null);
+      if (!ws.length) return;
+      // the last stretch of words in a row
+      let a = ws.length - 1;
+      while (a > 0 && (ws[a - 1].w === ws[a].w - 1 || ws[a - 1].w === ws[a].w)) a--;
+      const run = ws.slice(a), [j, wi] = where[run[0].w], said = run.filter(x => x.done);
+      // the aya being said among them, or on to the next: as it goes
+      if (run.some(x => where[x.w][0] === c) || (j === c + 1 && wi === 0)) return;
+      if (said.length < TRK_WORDS || said.reduce((p, x) => p + Match.units(words[x.w]).length, 0) < TRK_SOUNDS) return;
+      // (and what was heard from there on is those words, not other sounds with a word of them here and
+      // there — a reading gone to another sura is not this one's ayas: muFar's to find)
+      { const i0 = segs.indexOf(run[0]), before = segs[i0 - 1]?.g || 0, other = segs.slice(i0).reduce((p, x) => p + (x.g || 0), 0);
+        if (before > TRK_OTHER || other > TRK_PART * (fEnd - run[0].t)) return; }
+      const now = m.final + m.tent, ci = m.at.findIndex(f => f >= run[0].t);
+      if (ci < 0) return;
+      const to = m.starts[j] + wi, was = G.pos;
+      if (to > was) {
+        const marks = [], away = graced();
+        for (let k = was; k < to; k++) { if (away || G.once?.[k]) delete G.errs[k]; else if (G.errs[k] !== 'hint') { G.errs[k] = 'skip'; marks.push([k, 'skip']); } delete G.heard[k]; }
+        warnSkipped(marks);
+      } else {
+        // (gone back to read the stretch again: an aya of it marked said after its next is read anew)
+        for (let k = m.starts[Math.max(0, j - 1)]; k < was; k++) if (G.errs[k] === 'order' && !G.heard[k]) delete G.errs[k];
+        if (j !== c) toast(`رجعت إلى الآية ${ar(R.ayas[G.ayas[j]][1])}`);
+      }
+      (m.shaky ||= {})[G.ayas[c]] = true; m.shaky[G.ayas[j]] = true;
+      m.passed = {};
+      m.c = j; m.w0 = wi; m.cut = Match.units(now.slice(0, ci)).length; m.lead = true; m.open = false; m.relocAt = Date.now();
+      G.pos = G.tent = to; G.ver = {};
+      muFollow(false);
+    });
   }
   // each aya once said (or the last, as far as it was said), asked again of what the model heard (its frames' log-probabilities, ctc.js):
   // the aya as written scored against it with a word left out (each word marked so), with another
