@@ -88,8 +88,40 @@ const Recite = (() => {
   // ---- the speech model: asked for once, then kept
 
   let pending = null;
+  // a browser inside another app (WhatsApp, Facebook, the Google app…) often gives no microphone
+  // and keeps no downloads, and Xiaomi's own browser is behind on what the model needs: said
+  // before the first recitation there, with a way to the phone's real browser (Chrome by an
+  // Android intent, Safari by its own address scheme; the link copied too, should neither open).
+  // Once per opening inside an app, once ever in Xiaomi's browser; «المتابعة هنا» goes on as asked
+  let brTold = false;
+  function browserFirst(go) {
+    const I = typeof Install !== 'undefined' ? Install : null, br = I?.browser;
+    if (!I || I.inApk || I.os === 'desktop' || brTold || !['inapp', 'google', 'miui'].includes(br) || (br === 'miui' && store.get('rec.brTold', false))) return false;
+    brTold = true;
+    const ios = I.os === 'ios', name = ios ? 'Safari' : 'Chrome';
+    $('#rbName').textContent = name;
+    $('#rbGo').textContent = `افتح في ${name}`;
+    $('#rbLead').textContent = br === 'miui'
+      ? 'متصفح Mi يتأخر عمّا يحتاج إليه التسميع، فقد يكون بطيئًا أو لا يعمل. في Chrome يعمل أسرع، ويمكن تثبيت التطبيق منه.'
+      : 'أنت داخل متصفح تطبيق آخر، وهو في الغالب لا يعطي الميكروفون ولا يحفظ نموذج التسميع. افتح الصفحة في متصفح الهاتف ليعمل التسميع كما ينبغي.';
+    $('#rbGo').onclick = () => {
+      const url = location.origin + location.pathname;
+      navigator.clipboard?.writeText(url).catch(() => {});
+      location.href = ios ? 'x-safari-' + url
+        : `intent://${location.host}${location.pathname}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(url)};end`;
+      toast(`نُسخ الرابط — إن لم يُفتح ${name} فالصقه فيه`, 4000);
+    };
+    $('#rbStay').onclick = () => { if (br === 'miui') store.set('rec.brTold', true); hide($('#recBrowser')); go(); };
+    show($('#recBrowser'));
+    return true;
+  }
+  // a Xiaomi phone (Redmi, POCO): from the browser's name for itself, or the phone's model where
+  // the browser tells it (Chrome hides it from the name; Xiaomi's models are numbered 2201117TG, M2101K6G)
+  let XIAOMI = /Xiaomi|Redmi|POCO|MIUI|HyperOS/i.test(navigator.userAgent);
+  try { navigator.userAgentData?.getHighEntropyValues?.(['model']).then(v => { if (/redmi|poco|xiaomi|^mi \w|^M?2[0-5]\d{2}[0-9A-Z]{4,}$/i.test(v?.model || '')) XIAOMI = true; }).catch(() => {}); } catch {}
   // intent: what is about to happen ({ start: [from, review, opts] }), to go on with after an update
   function withModel(then, intent) {
+    if (browserFirst(() => withModel(then, intent))) return;
     if (MU()) {
       Mu.prime();
       // every use is checked first (its screen shown only for what takes a while or needs the reader)
@@ -162,7 +194,11 @@ const Recite = (() => {
     prepThen = then; prepIntent = intent;
     ['update', 'mic', 'model', 'warm'].forEach(id => prepStep(id, ''));
     $('#rpGo').hidden = true;
-    $('#rpLead').textContent = intent?.killed ? `أغلق الهاتف التطبيق أثناء القراءة ليوفّر الذاكرة${intent.light ? '، فاخترنا طريقة أخف لا تُثقل عليه' : ''}. نكمل من حيث توقفت.`
+    // (closed more than once: what the reader can do about it; a Xiaomi phone closes apps the soonest, and says where to stop it)
+    const again = intent?.killed && store.get('mu.kills', 0) >= 2 ? (XIAOMI
+      ? ' ليبقى مفتوحًا على هواتف شاومي وريدمي: أغلق التطبيقات الأخرى، واقفل هذا التطبيق في قائمة التطبيقات الأخيرة (ضغطة مطوّلة عليه ثم القفل)، واجعل «موفّر البطارية» له «بلا قيود» من إعدادات الهاتف ← التطبيقات.'
+      : /Android/i.test(navigator.userAgent) ? ' إن تكرر ذلك فأغلق التطبيقات الأخرى قبل التسميع.' : '') : '';
+    $('#rpLead').textContent = intent?.killed ? `أغلق الهاتف التطبيق أثناء القراءة ليوفّر الذاكرة${intent.light ? '، فاخترنا طريقة أخف لا تُثقل عليه' : ''}. نكمل من حيث توقفت.${again}`
       : intent?.fresh ? 'أنعشنا التطبيق قبل أن تبدأ، لتمضي القراءة دون انقطاع.'
       : after && intent?.mic ? 'أُعيد تحميل التطبيق. نتأكد من الميكروفون ونكمل.'
       : after ? 'حُدِّث التطبيق إلى نسخته الجديدة. نكمل تجهيز التسميع.' : 'لحظات، نجهّز كل شيء قبل أن تبدأ، فلا يقطعك شيء أثناء القراءة.';
@@ -363,7 +399,7 @@ const Recite = (() => {
     const words = ayas.flatMap(ayaWords);
     if (!words.length) return;
     G = { ayas, words, idx: new Map(words.map((w, k) => [w.p + ':' + w.n, k])), pos: 0, errs: {}, gone: new Set(),
-      hide: !!opts.test || (!opts.seed && store.get('recite.hide', false)), fast: setting('fastOn'), run: false, secs: 0, busy: 0,
+      hide: !!opts.test || (!opts.seed && store.get('recite.hide', false)), fast: setting('fastOn'), light: MU() && !!store.get('recite.light', false), run: false, secs: 0, busy: 0,
       review: !!review && !opts.test && !opts.kind, kind: opts.kind || null, test: !!opts.test, lastP: null, miss: 0, tent: 0, found: !!opts.stream };
     // Muaalem: c = the aya being said (in G.ayas), w0 = its first word still to
     // match, cut = how much of the reading belongs to ayas already done
@@ -535,10 +571,32 @@ const Recite = (() => {
       g.voiceT = setTimeout(() => { if (G === g) { g.voice = false; paintBar(); } }, 900);
     }
     if (grew) speed(g);
+    behind(g, d);
     muFollow(false);
     if (grew) g.grewAt = Date.now();
     atEnd(g);
   }
+  // a phone too slow to keep up with the reader (a full read's letters out LIGHT_LAG after their
+  // sound came in, the middle of the last LIGHT_N reads): the model then reads in long catch-up
+  // stretches, where a madd's or a ghunna's length and a letter's weight are heard wrong, and were
+  // marked wrongly. The light way then: words and harakat checked as ever, lengths and letters
+  // told from their like not. By itself both ways (back under LIGHT_OK), said once; kept for the
+  // next session to begin as this one ended
+  const LIGHT_LAG = 2000, LIGHT_OK = 1200, LIGHT_N = 6;
+  function behind(g, d) {
+    if (d.end == null || !(d.lag >= 0) || !g.run) return; // (full reads only: a glance reads the newest alone)
+    const l = g.lags ||= [];
+    l.push(d.lag);
+    if (l.length < LIGHT_N) return;
+    if (l.length > LIGHT_N) l.shift();
+    const mid = [...l].sort((a, b) => a - b)[LIGHT_N >> 1];
+    if (!g.light && mid > LIGHT_LAG) {
+      g.light = true; g.lags = [];
+      store.set('recite.light', true);
+      if (!g.lightSaid && (setting('tjMadd') || setting('tjGhunna'))) { g.lightSaid = true; toast('هاتفك يتأخر عن قراءتك: وضع خفيف، بلا فحص المدّ والغنّة', 3500); }
+    } else if (g.light && mid < LIGHT_OK) { g.light = false; g.lags = []; store.set('recite.light', false); }
+  }
+  const light = () => G ? !!G.light : false;
   // how fast the reader reads: sounds a second over the last FAST_WIN frames (40 ms) heard (each sound's time to
   // the next, a pause counted as at most 0.4 s). Fast reading turns the fast mode on by itself, past
   // FAST_AT for FAST_ON_MS; reading at a usual pace off, under FAST_OFF for FAST_OFF_MS (readings at a
@@ -1999,7 +2057,7 @@ const Recite = (() => {
   // (the session's own to its end, the last aya judged at «إنهاء» too; and an aya found by the header
   // mic after one, read at that one's pace)
   const fast = () => G ? !!G.fast : setting('fastOn');
-  const tjRules = () => fast() ? { madd: false, ghunna: false, munfasil: false, over: false, pace: pace() }
+  const tjRules = () => fast() || light() ? { madd: false, ghunna: false, munfasil: false, over: false, pace: pace() }
     : { madd: setting('tjMadd'), ghunna: setting('tjGhunna'), munfasil: setting('tjMunfasil'), over: setting('tjOver'), pace: pace() };
   // how this reader holds a natural madd, from their own readings (match.js: rules.pace), in
   // the model's letters and in time: how often each length in letters was heard (0 to 8, older
@@ -2060,7 +2118,7 @@ const Recite = (() => {
     }
   };
   const letNeed = pk => Match.pairType(pk) === 'near' ? 3 : LET_OFTEN;
-  const letRules = () => ({ heavy: setting('lHeavy') && !fast(), near: setting('lNear') && !fast(), often: (pk, need = LET_OFTEN) => letTimes(pk) + (Object.values(G?.mu?.letSeen || {}).includes(pk) ? 0 : 1) >= need });
+  const letRules = () => ({ heavy: setting('lHeavy') && !fast() && !light(), near: setting('lNear') && !fast() && !light(), often: (pk, need = LET_OFTEN) => letTimes(pk) + (Object.values(G?.mu?.letSeen || {}).includes(pk) ? 0 : 1) >= need });
   const toggle = (id, label, sub) => {
     const on = setting(id);
     return `<button class="row rc-set" data-rc-set="${id}" role="switch" aria-checked="${on}">
@@ -2692,6 +2750,7 @@ const Recite = (() => {
     // (on how many of the processor's cores it runs: one only where the browser doesn't allow more)
     const inf = Mu.info();
     if (!testing && inf?.ep === 'wasm') s.textContent += inf.threads > 1 ? ` · يعمل على ${ar(inf.threads)} أنوية` : ' · يعمل على نواة واحدة (لا يسمح المتصفح بأكثر)';
+    if (!testing && store.get('recite.light', false)) s.textContent += ' · وضع خفيف: الهاتف يتأخر عن القراءة، فلا يُفحص المدّ والغنّة حتى يلحق بها';
     b.innerHTML = `<button class="rc-not" data-rc-model="probe"${testing ? ' disabled' : ''}>${bench ? 'اختبر من جديد' : 'اختبر جهازك'}</button>`;
     const diag = $('#rcDiag');
     if (diag) diag.hidden = !Mu.ready();
@@ -3003,6 +3062,11 @@ const Recite = (() => {
         const have = await Mu.saved();
         if (!have) { toast(`الأسرع على جهازك: ${MU_NAMES[Mu.choice().id]}`); return; } // its size is on the button now
       }
+      // no room for it: said before the download, not after it (a phone nearly full)
+      const noRoom = 'لا مساحة كافية على الهاتف للنموذج — أفرغ بعض المساحة ثم أعد المحاولة';
+      const free = await Mu.room();
+      if (free != null && free < Mu.mb() * 1.3 && !(await Mu.saved())) { toast(noRoom, 4500); return; }
+      Mu.keepFiles();
       paintDl(0);
       Promise.all([Mu.load(paintDl), Mu.sounds()]).then(() => {
         hide($('#recIntro'));
@@ -3011,7 +3075,7 @@ const Recite = (() => {
         const f = pending;
         pending = null;
         f?.();
-      }, () => { paintDl(); toast('تعذر التنزيل — تحقق من الاتصال'); });
+      }, e => { paintDl(); /quota/i.test(e?.message || '') ? toast(noRoom, 4500) : toast('تعذر التنزيل — تحقق من الاتصال'); });
       return;
     }
     Listen.prime();

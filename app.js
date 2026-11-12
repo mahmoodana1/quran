@@ -988,10 +988,10 @@ function haptic(pattern = 10) {
 }
 
 let toastT;
-function toast(msg) {
+function toast(msg, ms = 1700) {
   const t = $('#toast');
   t.textContent = msg; show(t);
-  clearTimeout(toastT); toastT = setTimeout(() => hide(t), 1700);
+  clearTimeout(toastT); toastT = setTimeout(() => hide(t), ms);
 }
 
 // ---------------------------------------------------------------- bookmarks
@@ -1691,6 +1691,7 @@ function settingsHTML() {
     ${typeof Install !== 'undefined' ? Install.settingsHTML() : ''}
     <div class="group-label">المظهر</div>
     <div class="themes">${themes}</div>
+    <div class="group">${switchRow('lite', 'مظهر خفيف', 'بلا ضبابية خلف الأشرطة ولا حركات مستمرة: أسلس على الهواتف المتوسطة والقديمة')}</div>
 
     ${'wakeLock' in navigator ? `<div class="group-label">القراءة</div>
     <div class="group">${switchRow('awake', 'إبقاء الشاشة مضاءة', 'لا تنطفئ الشاشة وأنت تقرأ أو تسمّع، والتطبيق مفتوح')}</div>` : ''}
@@ -2215,7 +2216,7 @@ function applyTheme() {
   document.documentElement.dataset.theme = d;
   const m = document.querySelector('meta[name=theme-color]');
   if (m) m.content = THEME_BAR[d] || THEME_BAR.light;
-  document.querySelector('meta[name=color-scheme]')?.setAttribute('content', d === 'dark' ? 'dark' : 'light');
+  document.querySelector('meta[name=color-scheme]')?.setAttribute('content', d === 'dark' ? 'only dark' : 'only light');
   document.querySelector('meta[name=apple-mobile-web-app-status-bar-style]')?.setAttribute('content', d === 'dark' ? 'black-translucent' : 'default');
 }
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
@@ -2427,6 +2428,7 @@ $('#sheetBody').addEventListener('click', async e => {
     store.set(id, on);
     sw.setAttribute('aria-checked', on); sw.querySelector('.tog').classList.toggle('on', on);
     if (id === 'awake') syncAwake();
+    if (id === 'lite') document.documentElement.classList.toggle('lite', on);
     return;
   }
   const bk = e.target.closest('[data-backup]');

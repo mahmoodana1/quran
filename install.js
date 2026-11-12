@@ -326,5 +326,5 @@ const Install = (() => {
   $('#sheetBody').addEventListener('click', e => { if (e.target.closest('[data-install]')) open(); });
   offerSoon(30000);
 
-  return { open: () => open(), settingsHTML, installed };
+  return { open: () => open(), settingsHTML, installed, os: OS, browser: /MiuiBrowser/.test(ua) ? 'miui' : BROWSER, inApk: IN_APK };
 })();

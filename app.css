@@ -433,7 +433,7 @@ svg { fill: currentColor; }
   transform: translateX(-50%);
   background: rgba(36, 33, 29, .88); color: #fff; font-size: 14px; font-weight: 500;
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
-  padding: 9px 18px; border-radius: 22px; white-space: nowrap;
+  padding: 9px 18px; border-radius: 22px; width: max-content; max-width: calc(100vw - 28px); text-align: center; line-height: 1.5; /* (a long one wraps on a narrow phone) */
   box-shadow: 0 8px 24px rgba(0,0,0,.18);
   animation: toastIn .3s cubic-bezier(.2,.9,.3,1);
 }
@@ -2578,3 +2578,18 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
   box-shadow: inset 0 0 0 4px var(--p-green-2), inset 0 0 0 5px color-mix(in srgb, var(--p-gold) 70%, transparent); }
 .pp-se-hope b { font-size: 15px; font-weight: 800; line-height: 1.7; color: #f1dfae; }
 .pp-se-hope small { font-size: 12px; line-height: 1.8; opacity: .85; }
+
+/* ---------- a light look (html.lite: index.html decides it once for phones with little memory or
+   few cores; «مظهر خفيف» in the settings). No blur behind the floating parts (a budget phone's GPU
+   redraws it on every frame the page moves under it), which are made opaque enough to read
+   without it; and the rings that pulse by box-shadow (painted anew each frame, on the main
+   thread, which the recitation needs) beat by opacity instead */
+.lite *, .lite *::before, .lite *::after { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+.lite .bar { background: var(--surface); }
+.lite #tafsir { background: var(--card); }
+.lite #toast { background: rgba(36, 33, 29, .96); }
+.lite .rc-found:not(.landing) { background-color: color-mix(in srgb, var(--paper) 95%, transparent); }
+@keyframes liteBeat { 50% { opacity: .68; } }
+.lite #recBar .pl-main.live, .lite #recBar .pl-main.live.voice { animation: liteBeat 1.8s ease-in-out infinite; }
+.lite #recBar .pl-main.live.voice { animation-duration: .9s; }
+.lite .rc-find #dockMic::after { box-shadow: 0 0 0 5px color-mix(in srgb, var(--p-green, var(--accent)) 38%, transparent); animation: liteBeat 1.4s ease-in-out infinite; }

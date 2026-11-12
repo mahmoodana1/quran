@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="القرآن">
 <meta name="theme-color" content="#faf6f3">
-<meta name="color-scheme" content="light">
+<meta name="color-scheme" content="only light">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/icon-180.png">
 <link rel="icon" href="icons/icon-192.png">
@@ -22,8 +22,16 @@
     var d = t === 'auto' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : t;
     document.documentElement.dataset.theme = d;
     document.querySelector('meta[name=theme-color]').content = { light: '#faf6f3', sepia: '#f1e7d0', dark: '#15130f' }[d] || '#faf6f3';
-    document.querySelector('meta[name=color-scheme]').content = d === 'dark' ? 'dark' : 'light';
+    // ("only": a phone's forced dark mode, Xiaomi's among them, leaves the app's own colours alone)
+    document.querySelector('meta[name=color-scheme]').content = d === 'dark' ? 'only dark' : 'only light';
     document.querySelector('meta[name=apple-mobile-web-app-status-bar-style]').content = d === 'dark' ? 'black-translucent' : 'default';
+  } catch (e) {}
+  // a light look on phones with little memory or few cores (no blur behind the bars, no pulsing
+  // rings): theirs to turn on or off in the settings; decided once here, before first paint
+  try {
+    var l = JSON.parse(localStorage.getItem('q.lite'));
+    if (l == null) { l = (navigator.deviceMemory || 8) <= 4 || (navigator.hardwareConcurrency || 8) <= 4; localStorage.setItem('q.lite', JSON.stringify(l)); }
+    if (l) document.documentElement.classList.add('lite');
   } catch (e) {}
 })();
 </script>
@@ -274,6 +282,18 @@
     <div class="actions">
       <button id="riGo" class="primary">تنزيل النموذج</button>
       <button id="riLater">ليس الآن</button>
+    </div>
+  </div>
+</section>
+
+<!-- a browser inside another app (or one known to be poor at it): the recitation is better begun in a real one (recite.js: browserFirst) -->
+<section id="recBrowser" class="modal" hidden>
+  <div class="card rc-intro">
+    <h2>افتح التطبيق في <span id="rbName">Chrome</span></h2>
+    <p class="rc-lead" id="rbLead"></p>
+    <div class="actions">
+      <button id="rbGo" class="primary">افتح في Chrome</button>
+      <button id="rbStay">المتابعة هنا</button>
     </div>
   </div>
 </section>

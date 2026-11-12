@@ -30,7 +30,11 @@ const Mu = (() => {
   // on a GPU where that is clearly faster still (GPU_BY: a phone's GPU is the likelier to fail, to be
   // taken back, or to fill its memory); the others are there to choose in the settings
   const BASE_IDS = ['s8-cpu', 'q4-gpu'];
-  const GPU_BY = 1.4;
+  // (a phone with little memory, navigator.deviceMemory where the browser tells: its GPU must be
+  // faster by more to be taken, and with 2 GB or less it isn't offered at all unless asked for by
+  // hand: the page is what such a phone closes first when the model fills the GPU's memory)
+  const MEM = navigator.deviceMemory || 8;
+  const GPU_BY = MEM <= 4 ? 2 : 1.4;
   const PROBE_X = 19; // a full update (a WIN s window) takes about this many times the stand-in (2.5 s)
   const PROBE_SX = 8; // and a stream's read (1.5 s of new frames), its stand-in's
   // threads: a phone's cores are not alike (2 fast and 6 slow, say), and four threads, two of them on
@@ -74,7 +78,7 @@ const Mu = (() => {
     if (!mic) reset();
     const gpu = await gpuInfo();
     // (a GPU that failed here before is only tried again when everything is tested, by hand)
-    const noGpu = !gpu || (!all && store.get('mu.gpuFailed', false));
+    const noGpu = !gpu || (!all && (MEM <= 2 || store.get('mu.gpuFailed', false)));
     const list = CANDS.filter(c => (only ? only.includes(c.id) : all || BASE_IDS.includes(c.id)) && !(c.ep === 'webgpu' && (noGpu || (c.f16 && !gpu.f16))));
     const res = {}, cores = navigator.hardwareConcurrency || 4;
     // a worker's threads are set once: one worker for each number of them the stream is timed
@@ -195,6 +199,13 @@ const Mu = (() => {
     } catch {}
     return out;
   }
+  // room for the download: how many MB the browser will still let the app keep (null: it doesn't say)
+  async function room() {
+    try { const e = await within(navigator.storage.estimate(), 2000, null); return e?.quota ? Math.max(0, (e.quota - (e.usage || 0)) / 1e6) : null; } catch { return null; }
+  }
+  // the browser asked to keep the app's files when the phone runs short of space (a phone nearly
+  // full is where a browser throws a downloaded model away, and it is downloaded again each time)
+  function keepFiles() { try { navigator.storage?.persisted?.().then(p => p || navigator.storage.persist?.()).catch(() => {}); } catch {} }
   // use this candidate from now on (its time from the last test, if any)
   function use(id) {
     if (!CANDS.some(c => c.id === id) || choice()?.id === id) return;
@@ -801,6 +812,6 @@ const Mu = (() => {
     CANDS, BASE_IDS, choice, mb, probe, upgrade, saved, savedVariants, use, bench: () => store.get('mu.bench', null), remove, load, prime, start, listen, stop, sounds, expect, expect2, locate, opening, path,
     ready: () => ready, listening: () => !!mic, quiet, pace: () => ({ pace, near: refs ? refs.r.filter((_, i) => paceMask & 1 << i).map(([r]) => r) : [] }), lost: f => { onLost = f; }, sound: () => actx, info: () => info, recording,
     reprobe: () => { store.set('mu.choice', null); reset(); },
-    rate, setRate, boost, score, warm, warmed: () => warmed, micCheck, micWhy: () => micErr, toCpu, lighter, dead: f => { onDead = f; },
+    rate, setRate, boost, score, warm, warmed: () => warmed, micCheck, micWhy: () => micErr, toCpu, lighter, room, keepFiles, dead: f => { onDead = f; },
   };
 })();
