@@ -483,7 +483,11 @@ async function probe({ list, threads }) {
   for (const c of list) {
     try {
       const t0 = performance.now();
-      const s = await ort.InferenceSession.create(BASE + `muaalem/probe/${c.stream || c.variant}.onnx`, { executionProviders: [c.ep], graphOptimizationLevel: 'all' });
+      // (its file not had — no network, or not there yet — is not a model that doesn't run: said apart)
+      let graph;
+      try { const r = await fetch(BASE + `muaalem/probe/${c.stream || c.variant}.onnx`); if (!r.ok) throw new Error('HTTP ' + r.status); graph = new Uint8Array(await r.arrayBuffer()); }
+      catch (e) { postMessage({ type: 'probed', id: c.id, net: true, error: 'file: ' + String(e.message || e).slice(0, 120) }); continue; }
+      const s = await ort.InferenceSession.create(graph, { executionProviders: [c.ep], graphOptimizationLevel: 'all' });
       const input = c.stream ? sx() : { input_features: x };
       const run = async () => { const o = await s.run(input); for (const v of Object.values(o)) { await v.getData(); v.dispose?.(); } };
       for (let i = 0; i < 3; i++) await run(); // warm up (GPU shaders compile here)

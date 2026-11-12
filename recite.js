@@ -2566,7 +2566,7 @@ const Recite = (() => {
     const row = x => {
       const t = times[x.id], on = c?.id === x.id, got = have[x.variant];
       const speed = t === undefined ? '<span class="rc-mt">لم يُختبر</span>'
-        : t === null ? '<span class="rc-mt na">لا يعمل على جهازك</span>'
+        : t === null ? `<span class="rc-mt na">لا يعمل على جهازك${bench?.errs?.[x.id] ? ` <bdi dir="ltr" class="rc-why">${esc(bench.errs[x.id])}</bdi>` : ''}</span>`
         : `<span class="rc-mt">نحو ${ar(t)} م.ث</span><span class="rc-mbar"><i style="width:${Math.max(6, Math.round(fastest / t * 100))}%"></i></span>`;
       const tags = (t === null ? [] : [x.id === bench?.best ? 'الأسرع' : '', on ? 'المستعمل' : '', got ? 'على جهازك' : '']).filter(Boolean)
         .map(k => `<span class="rc-tag${k === 'المستعمل' ? ' on' : ''}">${k}</span>`).join('');

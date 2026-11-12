@@ -38,7 +38,7 @@ const Mu = (() => {
   // (in the choice); the others run on 4 as before
   const THREADS = [2, 4];
   const threads = () => { const c = store.get('mu.choice', null); return Math.min(c?.threads || 4, navigator.hardwareConcurrency || 4); };
-  const GEN = 2; // the candidates changed (the stream): a device chosen for before is timed again, once (upgrade)
+  const GEN = 3; // the candidates changed (the stream): a device chosen for before is timed again, once (upgrade)
   // how often the recitation is read: 'auto' (as often as the phone can at ease), 'fast', 'save' (mu-worker.js)
   const RATES = ['auto', 'fast', 'save'];
   const rate = () => RATES.includes(store.get('mu.rate')) ? store.get('mu.rate') : 'auto';
@@ -109,20 +109,25 @@ const Mu = (() => {
     }
     // each candidate's time, for choosing by hand in the settings: ms per update, null (doesn't
     // run here), or none yet (not tested); times from an earlier test are kept
-    const times = { ...store.get('mu.bench', null)?.times }, thr = { ...store.get('mu.bench', null)?.threads };
+    // (errs: why one didn't run, shown with it; one whose test file could not be had is not tested yet)
+    const times = { ...store.get('mu.bench', null)?.times }, thr = { ...store.get('mu.bench', null)?.threads }, errs = { ...store.get('mu.bench', null)?.errs };
     for (const c of CANDS) if (list.includes(c) || !gpu && c.ep === 'webgpu') {
+      delete errs[c.id];
+      if (res[c.id]?.net) { delete times[c.id]; errs[c.id] = res[c.id].error; continue; }
       times[c.id] = res[c.id] && !res[c.id].error ? Math.round(res[c.id].ms * (c.stream ? PROBE_SX : PROBE_X)) : null;
+      if (times[c.id] == null) errs[c.id] = res[c.id]?.error || (list.includes(c) ? 'no answer' : 'no GPU');
       if (c.stream && times[c.id] != null) thr[c.id] = res[c.id].threads;
     }
+    probe.net = list.some(c => res[c.id]?.net);
     const runs = list.filter(c => times[c.id] != null), base = runs.filter(c => BASE_IDS.includes(c.id));
     const ok = base.length ? base : runs;
-    if (!ok.length) throw new Error('no model runs on this device');
+    if (!ok.length) { store.set('mu.bench', { ...store.get('mu.bench', null), times, threads: thr, errs }); throw new Error('no model runs on this device'); }
     // the fastest (a GPU only when faster by GPU_BY than the CPU's best)
     const eff = c => times[c.id] * (c.ep === 'webgpu' && ok.some(x => x.ep !== 'webgpu') ? GPU_BY : 1);
     const best = ok.sort((a, b) => eff(a) - eff(b))[0];
-    if (only) { store.set('mu.bench', { ...store.get('mu.bench', null), at: Date.now(), times, threads: thr }); return best; } // (a part of the test: no choice made of it)
-    store.set('mu.bench', { at: Date.now(), times, threads: thr, best: best.id });
-    store.set('mu.gen', GEN);
+    if (only) { store.set('mu.bench', { ...store.get('mu.bench', null), at: Date.now(), times, threads: thr, errs }); return best; } // (a part of the test: no choice made of it)
+    store.set('mu.bench', { at: Date.now(), times, threads: thr, errs, best: best.id });
+    if (!probe.net) store.set('mu.gen', GEN); // (a file not had: timed again before a session, when it may be)
     const pick = id => ({ id, ms: times[id], threads: thr[id], at: Date.now() });
     if (!choice() || !keep) store.set('mu.choice', pick(best.id));
     else if (times[choice().id] != null) store.set('mu.choice', pick(choice().id)); // its time, fresh
@@ -134,12 +139,15 @@ const Mu = (() => {
   // faster here, its file not yet downloaded: the reader's to choose, in the settings), or null
   async function upgrade(onStep) {
     if (store.get('mu.gen', 1) >= GEN || !choice()) return null;
+    // (a stream found not to run before the reason was kept — its file may only not have been there yet: not tested)
+    const b0 = store.get('mu.bench', null);
+    if (b0?.times && !b0.errs) { for (const c of CANDS) if (c.stream && b0.times[c.id] === null) delete b0.times[c.id]; store.set('mu.bench', { ...b0, errs: {} }); }
     if (store.get('mu.big', false) || mic) { store.set('mu.gen', GEN); return null; }
     // (the stream alone is timed, a few seconds: the GPU's time is the one it had; a GPU may take a
     // minute to answer, or never, which is no way to begin a reading)
     const was = choice(), ws = CANDS.find(c => c.id === was.id);
     let best;
-    try { best = await probe(onStep, true, false, CANDS.filter(c => c.stream).map(c => c.id)); } catch { return null; } finally { store.set('mu.gen', GEN); }
+    try { best = await probe(onStep, true, false, CANDS.filter(c => c.stream).map(c => c.id)); } catch { return null; } finally { if (!probe.net) store.set('mu.gen', GEN); }
     const t = store.get('mu.bench', null)?.times?.[best.id];
     if (best.id === was.id || t == null) return null;
     if (ws?.ep === 'webgpu' && was.ms != null && was.ms * GPU_BY < t) return null; // its GPU is still clearly the faster

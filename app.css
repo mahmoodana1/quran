@@ -1583,6 +1583,7 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 .rc-mn small { font-weight: 400; color: var(--muted); margin-inline-start: 6px; }
 .rc-mt { grid-area: t; font-size: .86em; color: var(--muted); font-variant-numeric: tabular-nums; }
 .rc-mt.na { grid-column: 1 / -1; grid-row: 2; }
+.rc-why { display: block; font-size: .8em; opacity: .7; word-break: break-word; }
 .rc-mbar { grid-area: b; height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; }
 .rc-mbar i { display: block; height: 100%; background: var(--accent); border-radius: 3px; }
 .rc-tags { grid-area: g; display: flex; gap: 6px; flex-wrap: wrap; }
