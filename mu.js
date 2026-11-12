@@ -32,7 +32,7 @@ const Mu = (() => {
   const BASE_IDS = ['s8-cpu', 'q4-gpu'];
   const GPU_BY = 1.4;
   const PROBE_X = 19; // a full update (a WIN s window) takes about this many times the stand-in (2.5 s)
-  const PROBE_SX = 13; // and a stream's read (1.5 s of new frames), its stand-in's
+  const PROBE_SX = 8; // and a stream's read (1.5 s of new frames), its stand-in's
   // threads: a phone's cores are not alike (2 fast and 6 slow, say), and four threads, two of them on
   // slow cores, can be slower than two: the stream is timed with each of THREADS, the faster kept
   // (in the choice); the others run on 4 as before
@@ -67,14 +67,15 @@ const Mu = (() => {
   }
   // onStep(done, total); resolves with the fastest 4-bit candidate, which becomes
   // the choice unless keep (a choice made by hand stays); all: the bigger ones too
-  async function probe(onStep, keep = false, all = false) {
+  // only: just these candidates (ids)
+  async function probe(onStep, keep = false, all = false, only = null) {
     // the model in use let go first (loaded again when next needed): two at once on a phone
     // fill its memory, and the test then times them fighting over it
     if (!mic) reset();
     const gpu = await gpuInfo();
     // (a GPU that failed here before is only tried again when everything is tested, by hand)
     const noGpu = !gpu || (!all && store.get('mu.gpuFailed', false));
-    const list = CANDS.filter(c => (all || BASE_IDS.includes(c.id)) && !(c.ep === 'webgpu' && (noGpu || (c.f16 && !gpu.f16))));
+    const list = CANDS.filter(c => (only ? only.includes(c.id) : all || BASE_IDS.includes(c.id)) && !(c.ep === 'webgpu' && (noGpu || (c.f16 && !gpu.f16))));
     const res = {}, cores = navigator.hardwareConcurrency || 4;
     // a worker's threads are set once: one worker for each number of them the stream is timed
     // with (where the page can have threads at all), the rest in the last (4)
@@ -96,7 +97,8 @@ const Mu = (() => {
           wait();
           if (d.type === 'probed') {
             d.threads = Math.min(th, cores);
-            if (!res[d.id] || res[d.id].error || (!d.error && d.ms < res[d.id].ms)) res[d.id] = d; // (the stream: its faster number of threads)
+            // (the stream: more threads only where they are faster by a tenth or more; as fast on fewer, the phone stays cooler)
+            if (!res[d.id] || res[d.id].error || (!d.error && d.ms < res[d.id].ms * 0.9)) res[d.id] = d;
             onStep?.(++done, total);
           }
           if (d.type === 'probedAll') end();
@@ -118,6 +120,7 @@ const Mu = (() => {
     // the fastest (a GPU only when faster by GPU_BY than the CPU's best)
     const eff = c => times[c.id] * (c.ep === 'webgpu' && ok.some(x => x.ep !== 'webgpu') ? GPU_BY : 1);
     const best = ok.sort((a, b) => eff(a) - eff(b))[0];
+    if (only) { store.set('mu.bench', { ...store.get('mu.bench', null), at: Date.now(), times, threads: thr }); return best; } // (a part of the test: no choice made of it)
     store.set('mu.bench', { at: Date.now(), times, threads: thr, best: best.id });
     store.set('mu.gen', GEN);
     const pick = id => ({ id, ms: times[id], threads: thr[id], at: Date.now() });
@@ -132,10 +135,14 @@ const Mu = (() => {
   async function upgrade(onStep) {
     if (store.get('mu.gen', 1) >= GEN || !choice()) return null;
     if (store.get('mu.big', false) || mic) { store.set('mu.gen', GEN); return null; }
-    const was = choice();
+    // (the stream alone is timed, a few seconds: the GPU's time is the one it had; a GPU may take a
+    // minute to answer, or never, which is no way to begin a reading)
+    const was = choice(), ws = CANDS.find(c => c.id === was.id);
     let best;
-    try { best = await probe(onStep, true); } catch { store.set('mu.gen', GEN); return null; }
-    if (best.id === was.id || !best.stream) return null;
+    try { best = await probe(onStep, true, false, CANDS.filter(c => c.stream).map(c => c.id)); } catch { return null; } finally { store.set('mu.gen', GEN); }
+    const t = store.get('mu.bench', null)?.times?.[best.id];
+    if (best.id === was.id || t == null) return null;
+    if (ws?.ep === 'webgpu' && was.ms != null && was.ms * GPU_BY < t) return null; // its GPU is still clearly the faster
     if (!(await savedVariants())[best.variant]) return 'offer';
     use(best.id);
     return 'moved';
