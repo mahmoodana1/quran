@@ -1,0 +1,18 @@
+# Every day: are the recordings, fonts and models the app loads from other sites still there and
+# unchanged (tools/check-sources.mjs)? A failed run is mailed to the repository's owner.
+name: sources
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node tools/check-sources.mjs

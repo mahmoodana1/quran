@@ -218,6 +218,7 @@ const Prayer = (() => {
         <label class="field"><span>الهيئة</span>${sel('method', Object.entries(METHODS).map(([k, v]) => [k, v.name]), c.method)}</label>
         <label class="field"><span>العصر</span>${sel('asr', [[1, 'المثل (الجمهور)'], [2, 'المثلان (الحنفية)']], c.asr)}</label>
       </div>
+      ${typeof Extras !== 'undefined' ? Extras.remindRowHTML('prayer') + Extras.calendarHTML() : ''}
       <p class="note pr-note">تُحسب المواقيت على الجهاز دون اتصال بالإنترنت، وقد تختلف دقيقة أو دقيقتين عن التقويم المحلي المعتمد؛ فاعتمد تقويم بلدك إن خالف.</p>`;
   }
 
@@ -311,5 +312,14 @@ const Prayer = (() => {
     mount();
   }
 
-  return { mount, onChange, startCompass };
+  // the times of the next n days, from today, at the chosen place: [{ ymd, times: { fajr: Date, ... } }]
+  function upcoming(n = 1) {
+    const c = cfg(), p = place(), m = METHODS[c.method] || METHODS.awqaf;
+    let d = ymd(new Date(), p.tz);
+    const out = [];
+    for (let i = 0; i < n; i++, d = nextDay(d)) out.push({ ymd: d, times: compute(...d, p, m, c.asr) });
+    return { place: p, days: out };
+  }
+
+  return { mount, onChange, startCompass, upcoming, NAMES };
 })();

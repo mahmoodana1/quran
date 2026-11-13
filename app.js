@@ -228,6 +228,20 @@ function newKhatma(name, riwaya = 'hafs', cover = 0) {
 const READ_MS = 10000;
 const pagesRead = k => (k.pages || '').split('').filter(c => c === '1').length;
 const khatmaTotal = k => k === K && R ? R.pages.length : k.total || 604; // (k.total: its riwaya's pages, kept when open)
+// a khatma with a goal (k.goal: finished in so many days): today's portion (Plan.ward)
+function khatmaWard(k) {
+  if (!k.goal?.days) return null;
+  const total = khatmaTotal(k), m = (k.pages || '').padEnd(total, '0'), unread = [];
+  for (let i = 0; i < total; i++) { const p = ((k.page || 1) - 1 + i) % total + 1; if (m[p - 1] !== '1') unread.push(p); }
+  return Plan.ward(k, total, pagesRead(k), unread);
+}
+function wardText(k) {
+  const w = khatmaWard(k);
+  if (!w || w.done) return '';
+  const pg = n => n === 1 ? 'صفحة' : n === 2 ? 'صفحتان' : n <= 10 ? `${ar(n)} صفحات` : `${ar(n)} صفحة`;
+  if (!w.rest) return `وِرد اليوم تمّ (${pg(w.today)}) · بقي ${ar(w.left)} ${w.left <= 10 ? 'أيام' : 'يومًا'}`;
+  return `وِرد اليوم: ${pg(w.rest)}${w.today ? ' أخرى' : ''}${w.from ? ` من صفحة ${ar(w.from)}` : ''}${w.behind > 2 ? ` · متأخر ${pg(w.behind)}` : ''}${w.over ? ' · انتهت المدة' : ''}`;
+}
 function khatmaPct(k) {
   const n = pagesRead(k), t = khatmaTotal(k);
   return n >= t ? 100 : Math.min(99, Math.floor(n / t * 100));
@@ -256,7 +270,10 @@ function markRead(k, p) {
   const total = R.pages.length;
   let m = (k.pages || '').padEnd(total, '0').slice(0, total);
   if (m[p - 1] === '1') return;
+  if (k.day?.d !== Plan.dayKey()) k.day = { d: Plan.dayKey(), n0: pagesRead(k) }; // (the day's portion counts from here)
   k.pages = m = m.slice(0, p - 1) + '1' + m.slice(p);
+  const w = khatmaWard(k);
+  if (w && !w.rest && w.today && !k.day.ok) { k.day.ok = 1; toast(`أتممت وِرد اليوم من «${k.name}»، تقبّل الله`, 3000); }
   if (!m.includes('0') && !k.endShown) {
     // the whole mushaf read: counted now, whatever is chosen on the screen that says so
     k.done = (k.done || 0) + 1;
@@ -2260,11 +2277,13 @@ function settingsHTML() {
       <button class="row" data-backup="load"><span class="main"><span class="t">استعادة من نسخة</span><span class="s">من ملف حفظته من قبل، على هذا الجهاز أو غيره</span></span><svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button>
     </div>
     <p class="note">بيانات التطبيق محفوظة على جهازك، وقد يمسحها المتصفح إن قلّت مساحته أو طال تركه. احفظ نسخة بين حين وآخر، أو فعّل المزامنة.</p>
+    ${Extras.dataLineHTML()}
 
     <div class="group-label" id="set-app">التطبيق</div>
     <div class="group">
       <div class="row"><span class="main"><span class="t">النسخة</span><span class="s" id="appVer">…</span></span><button class="rc-not" data-app-update>تحقق من التحديث</button></div>
       <div class="row"><span class="main"><span class="t">المساحة المستعملة</span><span class="s" id="appStore">…</span></span></div>
+      <button class="row" data-xs="tour"><span class="main"><span class="t">جولة في التطبيق</span><span class="s">ما يخفى منه: بطاقة الآية والكلمة والسورة، والحفظ، واللوحات</span></span><svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button>
     </div>
 
     <div class="group-label" id="set-rw">الرواية</div>
@@ -2402,12 +2421,15 @@ async function saveBackup() {
   }
   const d = new Date(), name = `quran-backup-${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}.json`;
   const file = new File([JSON.stringify({ app: 'quran', v: 1, t: Date.now(), data })], name, { type: 'application/json' });
-  try { if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: 'نسخة احتياطية' }); return; } } catch (e) { if (e.name === 'AbortError') return; }
+  try { if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title: 'نسخة احتياطية' }); backedUp(); return; } } catch (e) { if (e.name === 'AbortError') return; }
+  backedUp();
   const a = document.createElement('a');
   a.href = URL.createObjectURL(file); a.download = name;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
+// (the reminder to back up waits two weeks again)
+function backedUp() { store.set('backup.at', Date.now()); if (!$('#sheet').hidden) renderSheet(); }
 function loadBackup() {
   const inp = document.createElement('input');
   inp.type = 'file'; inp.accept = 'application/json,.json';
@@ -2937,7 +2959,7 @@ function suraRow(s, extra = '') {
 // the khatma shelf, first thing in the bookmarks tab
 function khatmaRowHTML() {
   return `<div class="group kh-entry"><button class="row" data-open-lib><span class="mini-cover">${coverHTML(K, true)}</span>
-    <span class="main"><span class="t">ختماتي</span><span class="s">${esc(K.name)} · ${ar(khatmaPct(K))}٪ · صفحة ${ar(K.page)}${KH.length > 1 ? ` · ${ar(KH.length)} ختمات` : ''}</span></span>
+    <span class="main"><span class="t">ختماتي</span><span class="s">${esc(K.name)} · ${ar(khatmaPct(K))}٪ · صفحة ${ar(K.page)}${KH.length > 1 ? ` · ${ar(KH.length)} ختمات` : ''}</span>${wardText(K) ? `<span class="s kh-ward">${wardText(K)}</span>` : ''}</span>
     <svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button></div>`;
 }
 
@@ -2975,6 +2997,10 @@ const PLACES = [
   ['settings', 'المظهر', 'فاتح، ورقي، داكن، أو تلقائي', 'مظهر داكن ليلي فاتح ورقي الوان لون'],
   ['settings', 'دون اتصال', 'تحميل المصحف والتلاوة والتفسير', 'تحميل تنزيل انترنت اتصال صوت تفسير تلاوه'],
   ['settings', 'إبقاء الشاشة مضاءة', 'لا تنطفئ وأنت تقرأ', 'شاشه اضاءه تنطفئ قفل سطوع'],
+  ['adhkar', 'المسبحة', 'عدّاد التسبيح والاستغفار', 'مسبحه سبحه تسبيح عداد استغفار تهليل'],
+  ['prayer', 'التقويم الهجري', 'الشهر الهجري والمناسبات والأيام البيض', 'تقويم هجري مناسبات رمضان عيد عرفه عاشوراء صيام بيض'],
+  ['prayer', 'تنبيه الصلاة', 'المواقيت في تقويم جهازك، وإشعار عند الوقت', 'تنبيه منبه اذان تذكير اشعار تقويم'],
+  ['hifz', 'تذكير الحفظ', 'تذكير يومي في تقويم جهازك', 'تذكير منبه حفظ مراجعه اشعار'],
   ['settings', 'نسخة احتياطية', 'احفظ بياناتك في ملف أو استعدها', 'نسخه احتياطي استعاده حفظ بيانات نقل'],
   ['settings', 'التحديث', 'الإصدار، والتحقق من نسخة جديدة', 'تحديث اصدار نسخه جديده'],
   ['settings', 'الإعدادات', 'كل الإعدادات', 'اعدادات ضبط'],
@@ -3034,7 +3060,7 @@ function renderSheet() {
   } else if (tab === 'suras') {
     html = juzStripHTML() + '<div class="group">' + META.suras.map((_, i) => suraRow(i + 1)).join('') + '</div>';
   } else if (tab === 'adhkar') {
-    html = '<div id="adhkarList"></div>';
+    html = Extras.misbahaRowHTML() + '<div id="adhkarList"></div>';
   } else if (tab === 'recite') {
     html = Recite.panelHTML();
   } else if (tab === 'hifz') {
@@ -3081,10 +3107,12 @@ function renderSheet() {
 $('#sheetBody').addEventListener('change', e => {
   const sel = e.target.closest('[data-pr]');
   if (sel) Prayer.onChange(sel);
+  if (Extras.onChange(e)) return;
   Hifz.onChange(e);
 });
 $('#sheetBody').addEventListener('click', async e => {
   if (typeof Sync !== 'undefined' && e.target.closest('#syncCard') && Sync.onClick(e)) return;
+  if (Extras.onClick(e)) return;
   const th = e.target.closest('[data-theme-set]');
   if (th) { store.set('theme', th.dataset.themeSet); applyTheme(); renderSheet(); return; }
   if (e.target.closest('[data-open-lib]')) { openLibrary(); return; }
@@ -3237,6 +3265,7 @@ function renderShelf() {
         <div class="book-sub">${riwayaName(k.riwaya)}</div>
         <div class="prog"><i style="width:${pct}%"></i></div>
         <div class="book-meta"><span>قرأت ${ar(pagesRead(k))} من ${ar(khatmaTotal(k))} صفحة</span><span>${ar(pct)}٪</span></div>
+        ${wardText(k) ? `<div class="book-ward">${wardText(k)}</div>` : ''}
         ${k.done ? `<div class="book-done">✓ ${k.done === 1 ? 'ختمة مكتملة' : `${ar(k.done)} ختمات مكتملة`}</div>` : ''}
       </div>
     </div>`;
@@ -3289,6 +3318,7 @@ function openEditor(k) {
   f.name.value = k ? k.name : `ختمة ${ar(KH.length + 1)}`;
   f.riwaya.innerHTML = META.riwayat.map(r => `<option value="${r.id}">رواية ${r.name}</option>`).join('');
   f.riwaya.value = k ? k.riwaya : 'hafs';
+  f.goal.value = String(k?.goal?.days || 0);
   const cover = k ? k.cover : KH.length % COVERS.length;
   $('#swatches').innerHTML = COVERS.map((c, i) =>
     `<label class="sw" style="--c1:${c.bg[0]};--c2:${c.bg[1]};--gold:${c.gold}"><input type="radio" name="cover" value="${i}"${i === cover ? ' checked' : ''}><span></span></label>`).join('');
@@ -3316,6 +3346,7 @@ $('#khForm').addEventListener('submit', async e => {
   if (editing) {
     const riwayaChanged = editing.riwaya !== f.riwaya.value;
     Object.assign(editing, { name, cover: +f.cover.value });
+    setGoal(editing, +f.goal.value);
     if (riwayaChanged) {
       editing.riwaya = f.riwaya.value;
       editing.mark = null; editing.page = 1; editing.pages = ''; editing.endShown = false;
@@ -3326,14 +3357,23 @@ $('#khForm').addEventListener('submit', async e => {
     renderShelf();
   } else {
     const k = newKhatma(name, f.riwaya.value, +f.cover.value);
+    setGoal(k, +f.goal.value);
     KH.push(k); saveKh();
     hide($('#khEdit'));
     await openKhatma(k.id);
     toast('بدأت ختمة جديدة');
   }
 });
+// a goal set or changed counts from today, with what is left
+function setGoal(k, days) {
+  if ((k.goal?.days || 0) === days) return;
+  k.goal = days ? { days, start: Date.now() } : null;
+  k.day = { d: Plan.dayKey(), n0: pagesRead(k) };
+}
 $('#khRestart').onclick = () => {
   Object.assign(editing, { page: 1, mark: null, endShown: false, pages: '' });
+  if (editing.goal) editing.goal.start = Date.now();
+  editing.day = null;
   saveKh();
   hide($('#khEdit'));
   if (editing === K) { S.page = 1; renderAll(); }
@@ -3362,6 +3402,8 @@ function showDone() {
 }
 $('#doneAgain').onclick = () => {
   Object.assign(K, { page: 1, mark: null, endShown: false, pages: '' });
+  if (K.goal) K.goal.start = Date.now();
+  K.day = null;
   saveKh();
   hide($('#done'));
   S.page = 1; renderAll();
@@ -3385,6 +3427,7 @@ $('#doneLater').onclick = () => hide($('#done'));
     restoreUI();      // and what was open
     Recite.prepResume(); // a recitation being prepared when an update was applied
     if (typeof Sync !== 'undefined') Sync.start(); // signed in: what the other devices have
+    Extras.boot();
   } catch (err) {
     $('#loading').textContent = 'تعذر التحميل — تحقق من الاتصال';
     console.error(err);

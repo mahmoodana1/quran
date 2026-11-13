@@ -1932,6 +1932,7 @@ const Recite = (() => {
     l.sessions.length = Math.min(l.sessions.length, 60);
     store.set(key(), l);
     weakMap = null;
+    if (typeof Hifz !== 'undefined') setTimeout(() => Hifz.check(), 0); // (today's revision done? the day kept)
     store.set('recite.last.' + R.id, Math.min(said[said.length - 1].ai + 1, R.ayas.length - 1));
   }
 

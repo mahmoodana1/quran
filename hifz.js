@@ -45,7 +45,7 @@ const Hifz = (() => {
   // ---- the lesson
   function lesson() {
     const L = store.get('hifz.' + R.id, null);
-    if (L && R.ayas[L.a] && R.ayas[L.b] && L.a <= L.b && R.ayas[L.a][0] === R.ayas[L.b][0]) return L;
+    if (L && R.ayas[L.a] && R.ayas[L.b] && L.a <= L.b && R.ayas[L.a][0] === R.ayas[L.b][0]) return L; // (L.pg: page by page)
     // none yet: today's portion of the plan in التسميع, else the page being read
     const said = log().said || {}, plan = store.get('recite.plan.' + R.id, null);
     if (plan && R.suraStart[plan.s] != null) {
@@ -59,7 +59,13 @@ const Hifz = (() => {
     const s = R.ayas[a][0], end = R.suraStart[s] + sizeOf(s) - 1;
     return { a, b: Math.min(end, a + n - 1) };
   }
-  const setLesson = L => store.set('hifz.' + R.id, { a: L.a, b: L.b });
+  const setLesson = L => store.set('hifz.' + R.id, L.pg ? { a: L.a, b: L.b, pg: 1 } : { a: L.a, b: L.b });
+  // a page as the lesson: from aya a to the end of its page (or of its surah, if that comes first)
+  function pageSpan(a) {
+    let b = a;
+    while (b + 1 < R.ayas.length && R.ayas[b + 1][2] === R.ayas[a][2] && R.ayas[b + 1][0] === R.ayas[a][0]) b++;
+    return { a, b, pg: 1 };
+  }
   const listOf = L => Array.from({ length: L.b - L.a + 1 }, (_, i) => L.a + i);
   const lessonKey = L => `${R.id}:${L.a}-${L.b}`;
   const rangeText = L => `${suraName(R.ayas[L.a][0])} ${ar(R.ayas[L.a][1])}${L.b > L.a ? '–' + ar(R.ayas[L.b][1]) : ''}`;
@@ -72,23 +78,64 @@ const Hifz = (() => {
   function markStep(L, k) {
     const s = { ...stepsDone(L), [k]: 1 };
     store.set('hifz.day', { d: today(), k: lessonKey(L), s });
+    mark(1);
     if (!$('#sheet').hidden && tab === 'hifz') renderSheet();
   }
 
-  // ---- revision: memorized in the last 7 days (السبقي), and the rest in `days` shares, one a day (المنزل)
+  // ---- revision (Plan.revision): السبقي, what was memorized in the last 7 days, every day; المنزل, the
+  // older pages, the least recently recited first and the weak ones (mistakes in التسميع not yet mended)
+  // more often. Today's pages are chosen once a day (hifz.plan.<riwaya>) so reciting them doesn't
+  // change them; done when every aya of both was recited today.
   function review(L) {
-    const l = log(), said = l.said || {}, first = l.first || {}, week = Date.now() - 7 * 864e5;
-    const near = [], far = [];
-    for (const k of Object.keys(said)) {
-      const ai = +k;
-      if (!R.ayas[ai] || (ai >= L.a && ai <= L.b)) continue;
-      const t = first[k] > 1e9 ? first[k] : said[k];
-      (t >= week && first[k] !== 1 ? near : far).push(ai);
+    const l = log(), said = l.said || {}, first = l.first || {}, o = opts();
+    const weak = new Set(Object.keys(l.ayas || {}).filter(k => !l.ayas[k].done).map(Number));
+    const r = Plan.revision({ ayas: R.ayas, said, first, weak, days: o.days, skip: ai => ai >= L.a && ai <= L.b });
+    const key = 'hifz.plan.' + R.id, d = today();
+    let c = store.get(key, null);
+    if (c?.d !== d || c.days !== o.days) { c = { d, days: o.days, part: r.part, pages: r.pages, weakPages: r.weakPages, late: r.late }; store.set(key, c); }
+    const part = c.part.filter(ai => said[ai] && !(ai >= L.a && ai <= L.b));
+    const start = Plan.dayStart(), all = [...r.near, ...part];
+    const left = all.filter(ai => !(said[ai] >= start));
+    return { near: r.near, part, pages: c.pages, weakPages: c.weakPages, late: c.late, total: r.total, all, left, done: all.length > 0 && !left.length };
+  }
+  // the days: hifz.hist.<riwaya> = { day: 1 (something done) | 2 (the whole revision done) }
+  const histKey = () => 'hifz.hist.' + R.id;
+  function mark(v = 1) {
+    const h = store.get(histKey(), {}), d = today();
+    if ((h[d] || 0) >= v) return;
+    h[d] = v;
+    const ks = Object.keys(h);
+    if (ks.length > 400) ks.slice(0, ks.length - 400).forEach(k => delete h[k]);
+    store.set(histKey(), h);
+  }
+  // after a recitation (recite.js) or on opening the panel: today's revision done?
+  function check() {
+    if (!R) return;
+    const l = log();
+    if ((l.days || {})[today()]) mark(1);
+    if (opts().review && review(lesson()).done) {
+      const was = store.get(histKey(), {})[today()] === 2;
+      mark(2);
+      if (!was) toast('أتممت مراجعة اليوم، تقبّل الله منك', 3000);
     }
-    near.sort((x, y) => x - y); far.sort((x, y) => x - y);
-    const days = Math.max(1, Math.min(opts().days, far.length || 1)), i = dayNo() % days;
-    const per = Math.ceil(far.length / days), part = far.slice(i * per, (i + 1) * per);
-    return { near, far, part, i, days };
+  }
+  function days() {
+    const l = log(), h = store.get(histKey(), {}), active = new Set(Object.keys(h)), full = new Set(Object.keys(h).filter(k => h[k] === 2));
+    for (const [k, n] of Object.entries(l.days || {})) if (n) active.add(k);
+    for (const t of Object.values(l.first || {})) if (t > 1e9) active.add(today(t));
+    return { active, full };
+  }
+  function daysHTML() {
+    const { active, full } = days(), st = Plan.streak(active), strip = Plan.lastDays(28, active, full);
+    const said = Object.keys(log().said || {}).filter(k => R.ayas[+k]), pages = new Set(said.map(k => R.ayas[+k][2]));
+    const pct = Math.round(said.length / R.ayas.length * 1000) / 10;
+    const wd = ['ح', 'ن', 'ث', 'ر', 'خ', 'ج', 'س'];
+    return `<div class="pp-h hz-h"><b>أيامك</b><small>${st.now ? `${ar(st.now)} ${st.now === 1 ? 'يوم' : st.now === 2 ? 'يومان' : st.now <= 10 ? 'أيام' : 'يومًا'} متتالية${st.today ? '' : ' · أكملها اليوم'}` : 'ابدأ اليوم سلسلة أيامك'}</small></div>
+      <div class="group hz-days">
+        <div class="hz-strip">${strip.map(x => `<i class="${x.full ? 'full' : x.on ? 'on' : ''}${x.today ? ' now' : ''}" title="${x.key}"><span>${wd[x.wd]}</span></i>`).join('')}</div>
+        <div class="hz-key"><span><i class="on"></i>حفظ أو تسميع</span><span><i class="full"></i>المراجعة كلها</span>${st.best > st.now ? `<span>أطول سلسلة: ${ar(st.best)}</span>` : ''}</div>
+        <div class="hz-tot"><b>${ar(said.length)}</b><small>آية</small><b>${ar(pages.size)}</b><small>صفحة</small><b>${ar(pct)}٪</b><small>من القرآن</small></div>
+      </div>`;
   }
   const listText = list => list.length ? `${ayaLabel(list[0])}${list.length > 1 ? ` – ${R.ayas[list.at(-1)][0] === R.ayas[list[0]][0] ? ar(R.ayas[list.at(-1)][1]) : ayaLabel(list.at(-1))}` : ''}` : '';
 
@@ -126,7 +173,7 @@ const Hifz = (() => {
     const on = STEPS.filter(([k]) => o.steps[k]), plays = on.filter(([k]) => k !== 'recite');
     const allPlayed = plays.length && plays.every(([k]) => done[k]);
     const pr = PRESETS.find(p => p[0] === presetOf(o));
-    let h = `<div class="hz">
+    let h = `<div class="hz">${typeof Extras !== 'undefined' ? Extras.safetyHTML() : ''}
       <section class="hz-lesson">
         <div class="hz-l-top"><small>درسك</small><button class="hz-edit" data-hz-view="edit" aria-label="غيّر الدرس">${IC.edit}<span>غيّر</span></button></div>
         <b class="hz-l-name">${rangeText(L)}</b>
@@ -145,13 +192,20 @@ const Hifz = (() => {
       <button class="hz-way" data-hz-view="way">${IC.tune}<span><b>طريقتك في الحفظ</b><small>${pr ? pr[1] : 'مخصّصة'} · ${ar(on.length)} ${on.length <= 2 ? (on.length === 1 ? 'خطوة' : 'خطوتان') : 'خطوات'} · ${o.rate === 1 ? 'سرعة عادية' : o.rate < 1 ? 'أبطأ' : 'أسرع'}</small></span>${IC.back.replace('M9.5 6l6 6-6 6', 'M14.5 6l-6 6 6 6')}</button>`;
     if (o.review) {
       const rv = review(L);
-      h += `<div class="pp-h hz-h"><b>مراجعة اليوم</b><small>بلا مراجعة يتفلّت الحفظ</small></div>`;
-      if (!rv.near.length && !rv.far.length) h += `<p class="hz-empty">ما تحفظه يُراجَع هنا: القريب منه كل يوم، والقديم جزءًا جزءًا حتى يُختم كل ${ar(o.days)} أيام.</p>`;
-      else h += `<div class="group hz-rev">
-        ${revRow('near', 'القريب', rv.near.length ? `ما حفظته هذا الأسبوع · ${ayaN(rv.near.length)}` : 'لا جديد هذا الأسبوع', rv.near)}
-        ${revRow('far', 'المنزل', rv.part.length ? `${listText(rv.part)} · ${ayaN(rv.part.length)}${rv.days > 1 ? ` · ${ar(rv.i + 1)} من ${ar(rv.days)}` : ''}` : 'لا قديم بعد', rv.part)}
+      h += `<div class="pp-h hz-h"><b>مراجعة اليوم</b><small>${rv.done ? 'أتممتها اليوم، بارك الله فيك' : rv.all.length ? `بقي ${ayaN(rv.left.length)} تُسمَّع اليوم` : 'بلا مراجعة يتفلّت الحفظ'}</small></div>`;
+      if (!rv.near.length && !rv.part.length) h += `<p class="hz-empty">ما تحفظه يُراجَع هنا: القريب منه كل يوم، والقديم صفحاتٍ كل يوم حتى يُختم كل ${ar(o.days)} أيام، وما أخطأت فيه في التسميع يعود أسرع.</p>`;
+      else {
+        const pg = rv.pages.length, st = new Set(rv.left);
+        const nearDone = rv.near.length && rv.near.every(a => !st.has(a)), farDone = rv.part.length && rv.part.every(a => !st.has(a));
+        h += `<div class="group hz-rev${rv.done ? ' ok' : ''}">
+        ${revRow('near', 'القريب', rv.near.length ? `ما حفظته هذا الأسبوع · ${ayaN(rv.near.length)}` : 'لا جديد هذا الأسبوع', rv.near, nearDone)}
+        ${revRow('far', 'المنزل', rv.part.length ? `${pg === 1 ? 'صفحة واحدة' : pg === 2 ? 'صفحتان' : `${ar(pg)} صفحات`}${rv.weakPages ? `، ${rv.weakPages === 1 ? 'إحداها' : ar(rv.weakPages)} فيها مواضع ضعف` : ''}</span><span class="s hz-pg">${rv.pages.length === 1 ? 'الصفحة' : 'الصفحات'} ${Plan.pageRuns(rv.pages, ar)}` : 'لا قديم بعد', rv.part, farDone)}
       </div>`;
+        if (rv.late) h += `<p class="hz-late">تأخّرت ${ar(rv.late)} ${rv.late <= 10 && rv.late > 2 ? 'صفحات' : 'صفحة'} عن موعد مراجعتها، وستأتي أولًا في الأيام القادمة.</p>`;
+      }
     }
+    h += daysHTML();
+    h += typeof Extras !== 'undefined' ? Extras.remindRowHTML('hifz') : '';
     h += `<button class="hz-more" data-hz-recite>خطة الحفظ، وتقدّمك، ومواضع ضعفك في التسميع ${IC.back.replace('M9.5 6l6 6-6 6', 'M14.5 6l-6 6 6 6')}</button></div>`;
     return h;
   }
@@ -187,8 +241,8 @@ const Hifz = (() => {
     return `<div class="hz-o"><span>${label}</span><div class="hz-chips">${list.map(([v, t]) =>
       `<button data-hz-opt="${k}" data-v="${v}" class="${v === cur ? 'on' : ''}">${t}</button>`).join('')}</div></div>`;
   }
-  function revRow(k, t, sub, list) {
-    return `<div class="row hz-rr"><span class="hz-rk ${k}">${t}</span><span class="main"><span class="s">${sub}</span></span>
+  function revRow(k, t, sub, list, ok) {
+    return `<div class="row hz-rr${ok ? ' ok' : ''}"><span class="hz-rk ${k}">${ok ? '✓ ' : ''}${t}</span><span class="main"><span class="s">${sub}</span></span>
       ${list.length ? `<button class="hz-rb" data-hz-rev="${k}" data-how="play" aria-label="استمع">${IC.play}</button><button class="hz-rb" data-hz-rev="${k}" data-how="recite" aria-label="سمّع">${IC.mic}</button>` : ''}</div>`;
   }
 
@@ -203,6 +257,7 @@ const Hifz = (() => {
         <div class="hz-stps">${stepper('a', L.a - a0 + 1, 'من الآية')}${stepper('b', L.b - a0 + 1, 'إلى الآية')}</div>
         <div class="hz-o"><span>أو اختر سريعًا</span><div class="hz-chips">
           <button data-hz-quick="page">الصفحة التي تقرؤها</button>
+          <button data-hz-quick="wpage" class="${L.pg ? 'on' : ''}">صفحة صفحة</button>
           <button data-hz-quick="next">الآيات التالية</button>
           ${[3, 5, 7, 10].map(k => `<button data-hz-len="${k}" class="${list.length === k ? 'on' : ''}">${ayaN(k)}</button>`).join('')}
           <button data-hz-len="${n}" class="${list.length === n ? 'on' : ''}">السورة كلها</button>
@@ -225,6 +280,7 @@ const Hifz = (() => {
         const s = { ...stepsDone(L) };
         ks.forEach(k => { s[k] = 1; });
         store.set('hifz.day', { d: today(), k: lessonKey(L), s });
+        mark(1);
         toast(o.steps.recite ? 'انتهت الجلسة — سمّعه الآن من حفظك' : 'انتهت الجلسة، بارك الله فيك', 3000);
         if (o.steps.recite) openSheet('hifz');
       });
@@ -246,6 +302,7 @@ const Hifz = (() => {
       l.said ||= {}; l.first ||= {};
       for (const a of list) if (!l.said[a]) { l.said[a] = Date.now(); l.first[a] = Date.now(); }
       store.set('recite.' + R.id, l);
+      mark(1);
       setLesson(nextLesson(L));
       toast('بارك الله لك — هذا درسك التالي');
       haptic([10, 40, 10]);
@@ -281,7 +338,7 @@ const Hifz = (() => {
     const st = t.closest('[data-hz-step]');
     if (st) {
       const s = R.ayas[L.a][0], a0 = R.suraStart[s], end = a0 + sizeOf(s) - 1, d = +st.dataset.d;
-      const N = { ...L };
+      const N = { a: L.a, b: L.b };
       if (st.dataset.hzStep === 'a') { N.a = Math.max(a0, Math.min(end, L.a + d)); N.b = Math.max(N.a, N.b); }
       else { N.b = Math.max(a0, Math.min(end, L.b + d)); N.a = Math.min(N.a, N.b); }
       setLesson(N); renderSheet(); haptic(4);
@@ -289,11 +346,12 @@ const Hifz = (() => {
     }
     const q = t.closest('[data-hz-quick]');
     if (q) {
-      if (q.dataset.hzQuick === 'page') {
-        const pi = pageInfo(S.page), s = R.ayas[pi.first][0];
-        let b = pi.first;
-        while (b + 1 < R.ayas.length && R.ayas[b + 1][2] === S.page && R.ayas[b + 1][0] === s) b++;
-        setLesson({ a: pi.first, b });
+      if (q.dataset.hzQuick === 'page') setLesson(pageSpan(pageInfo(S.page).first));
+      else if (q.dataset.hzQuick === 'wpage') {
+        // from the start of the lesson's page
+        let a = L.a;
+        while (a > 0 && R.ayas[a - 1][2] === R.ayas[L.a][2] && R.ayas[a - 1][0] === R.ayas[L.a][0]) a--;
+        setLesson(pageSpan(a));
       } else setLesson(nextLesson(L));
       renderSheet(); haptic(5);
       return true;
@@ -309,6 +367,7 @@ const Hifz = (() => {
   }
   // as many ayas after this lesson, in its surah (or the next surah from its start)
   function nextLesson(L) {
+    if (L.pg) return L.b + 1 < R.ayas.length ? pageSpan(L.b + 1) : L;
     const n = L.b - L.a + 1, s = R.ayas[L.a][0], end = R.suraStart[s] + sizeOf(s) - 1;
     if (L.b < end) return span(L.b + 1, n);
     return s < 114 ? span(R.suraStart[s + 1], n) : L;
@@ -321,7 +380,7 @@ const Hifz = (() => {
     renderSheet();
     return true;
   }
-  function mounted() {}
+  function mounted() { check(); }
   const reset = () => { view = ''; };
   // a surah to memorize (its card on the page): from its first aya not yet memorized, as many as the
   // lesson had, and the panel opened on it
@@ -334,5 +393,5 @@ const Hifz = (() => {
     if (a > a0) toast(`تابع ${suraName(su)} من الآية ${ar(R.ayas[a][1])}`);
   }
 
-  return { panelHTML, onClick, onChange, mounted, reset, learnSura, view: view0, setView: v => { view = v; } };
+  return { check, panelHTML, onClick, onChange, mounted, reset, learnSura, view: view0, setView: v => { view = v; } };
 })();

@@ -2988,3 +2988,98 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 .sb-row button span { font-size: 12.5px; white-space: nowrap; }
 .rc-sb-p { row-gap: 6px; }
 .rc-sb-p .rc-bar { flex: 1 1 100%; }
+
+/* ---------------------------------------------------------------- extras.js and the plans (plan.js) */
+/* revision done, late pages, the days kept */
+.hz-rev.ok { outline: 1.5px solid color-mix(in srgb, var(--ok) 55%, transparent); }
+.row.hz-rr.ok .s { color: var(--muted); }
+.row.hz-rr.ok .hz-rk { color: var(--ok); }
+.hz-late { margin: -2px 6px 10px; font-size: 12.5px; color: var(--muted); line-height: 1.7; }
+.hz-days { padding: 14px 14px 12px; }
+.hz-strip { display: grid; grid-template-columns: repeat(14, 1fr); gap: 5px; }
+.hz-strip i { aspect-ratio: 1; border-radius: 6px; background: var(--tint); display: grid; place-items: center; }
+.hz-strip i span { font-style: normal; font-size: 9px; font-weight: 700; color: var(--faint); }
+.hz-strip i.on { background: color-mix(in srgb, var(--ok) 32%, transparent); }
+.hz-strip i.full { background: var(--ok); }
+.hz-strip i.full span { color: #fff; }
+.hz-strip i.now { box-shadow: 0 0 0 1.5px var(--gold-ink); }
+.hz-key { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 10px; font-size: 12px; color: var(--muted); font-weight: 600; }
+.hz-key span { display: inline-flex; align-items: center; gap: 5px; }
+.hz-key i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.hz-key i.on { background: color-mix(in srgb, var(--ok) 32%, transparent); }
+.hz-key i.full { background: var(--ok); }
+.hz-tot { display: flex; align-items: baseline; gap: 4px 6px; flex-wrap: wrap; margin-top: 12px; padding-top: 10px; border-top: 1px dotted var(--p-rule); }
+.hz-tot b { font-size: 18px; font-weight: 900; color: var(--p-ink); }
+.hz-tot small { font-size: 12.5px; color: var(--muted); font-weight: 700; margin-inline-end: 10px; }
+
+/* the data at risk */
+.xs-safe { margin: 0 0 14px; padding: 14px 14px 12px; border-radius: 16px; background: color-mix(in srgb, #e3a63b 16%, var(--surface)); border: 1px solid color-mix(in srgb, #e3a63b 45%, transparent); display: flex; flex-direction: column; gap: 6px; }
+.xs-safe b { font-size: 15px; font-weight: 800; }
+.xs-safe small { font-size: 13px; line-height: 1.7; color: var(--ink); opacity: .85; }
+.xs-acts { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+.xs-acts button, .xs-ch button { padding: 7px 12px; border-radius: 999px; font-size: 13px; font-weight: 700; background: var(--surface); border: 1px solid var(--line); color: var(--ink); }
+.xs-acts button.on, .xs-ch button.on { background: var(--accent); color: var(--on-accent); border-color: transparent; }
+.xs-line { margin-top: -4px; }
+
+/* reminders */
+.xs-rem input[type="time"] { font: inherit; font-size: 16px; font-weight: 700; padding: 6px 8px; border-radius: 10px; border: 1px solid var(--line); background: var(--paper-hi); color: var(--ink); }
+.xs-rem .xs-go .t, .xs-rem [data-xs="cal-pray"] .t { color: var(--accent); font-weight: 700; }
+.xs-ch { gap: 6px; flex-wrap: wrap; }
+
+/* the khatma's portion of the day */
+.kh-ward, .book-ward { color: var(--gold-ink) !important; font-weight: 700; }
+.book-ward { font-size: 12.5px; margin-top: 4px; }
+
+/* the Hijri calendar */
+.xs-cal { padding: 12px 12px 10px; }
+.xs-cal-h { display: flex; align-items: baseline; gap: 8px; margin: 0 4px 10px; }
+.xs-cal-h b { font-size: 17px; font-weight: 900; }
+.xs-cal-h small { color: var(--faint); font-size: 12px; font-weight: 700; }
+.xs-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
+.xs-grid > span { font-size: 10.5px; font-weight: 700; color: var(--faint); padding-bottom: 2px; }
+.xs-grid i { font-style: normal; border-radius: 9px; padding: 5px 0 3px; display: flex; flex-direction: column; align-items: center; line-height: 1.15; }
+.xs-grid i b { font-size: 15px; font-weight: 800; }
+.xs-grid i small { font-size: 9.5px; color: var(--faint); font-weight: 600; }
+.xs-grid i.fast { background: var(--tint); }
+.xs-grid i.occ { background: color-mix(in srgb, #e3a63b 30%, transparent); }
+.xs-grid i.now { box-shadow: inset 0 0 0 1.8px var(--accent); }
+.xs-cal-k { display: flex; gap: 14px; margin: 10px 4px 0; font-size: 11.5px; color: var(--muted); font-weight: 600; }
+.xs-cal-k span { display: inline-flex; align-items: center; gap: 5px; }
+.xs-cal-k i { width: 10px; height: 10px; border-radius: 3px; }
+.xs-cal-k i.occ { background: color-mix(in srgb, #e3a63b 30%, transparent); }
+.xs-cal-k i.fast { background: var(--tint-2); }
+.xs-occ .when { font-size: 13px; font-weight: 700; color: var(--gold-ink); white-space: nowrap; }
+
+/* the misbaha */
+.xs-mrow { margin-bottom: 12px; }
+.xs-bead { width: 30px; height: 30px; flex: none; border-radius: 50%; background: radial-gradient(circle at 35% 35%, #d7b979, #8a6a32); box-shadow: inset 0 -2px 4px rgba(0,0,0,.25); }
+.xs-ms { position: fixed; inset: 0; z-index: 60; background: var(--paper); display: flex; flex-direction: column; align-items: center; gap: 14px;
+  padding: calc(10px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom)); animation: fade .2s ease; }
+.xs-ms[hidden] { display: none; }
+.xs-ms-top { width: 100%; max-width: 480px; display: flex; align-items: center; justify-content: space-between; }
+.xs-ms-top b { font-size: 18px; font-weight: 900; }
+.xs-ms-top button { font-size: 15px; font-weight: 700; color: var(--accent); padding: 8px 10px; min-width: 44px; }
+.xs-dk { display: flex; gap: 6px; overflow-x: auto; max-width: 100%; padding: 2px 2px 6px; scrollbar-width: none; }
+.xs-dk button, .xs-tg button { flex: none; padding: 8px 13px; border-radius: 999px; font-size: 14px; font-weight: 700; background: var(--tint); color: var(--ink); }
+.xs-dk button.on, .xs-tg button.on { background: var(--accent); color: var(--on-accent); }
+.xs-tap { position: relative; width: min(78vw, 340px); aspect-ratio: 1; border-radius: 50%; margin: auto 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  background: radial-gradient(circle at 50% 40%, var(--paper-hi), var(--surface)); box-shadow: var(--shadow-float); touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.xs-tap:active { transform: scale(.985); }
+.xs-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
+.xs-ring circle { fill: none; stroke-width: 5; stroke: var(--tint-2); }
+.xs-ring circle:last-child { stroke: var(--gold-ink); stroke-linecap: round; stroke-dasharray: 597; transition: stroke-dashoffset .15s ease; }
+.xs-word { font-family: amiri, var(--ui); font-size: 24px; font-weight: 700; color: var(--gold-ink); text-align: center; padding: 0 24px; }
+.xs-n { font-size: 64px; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1; }
+.xs-of { font-size: 14px; color: var(--muted); font-weight: 700; min-height: 1em; }
+.xs-tg { display: flex; gap: 8px; }
+.xs-today { color: var(--muted); font-weight: 700; font-size: 13px; }
+
+/* the tour */
+.xs-tour .card { gap: 12px; }
+.xs-tour p { margin: 0; font-size: 15.5px; line-height: 1.9; text-align: center; color: var(--ink); }
+.xs-dots { display: flex; justify-content: center; gap: 6px; direction: rtl; }
+.hz-rr .s.hz-pg { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+.xs-dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--tint-2); }
+.xs-dots i.on { background: var(--accent); width: 20px; border-radius: 4px; }
+.xs-skip { align-self: center; font-size: 13px; color: var(--muted); padding: 6px; }
+.card > * { flex-shrink: 0; } /* (a card taller than the screen scrolls; its parts are not squeezed) */

@@ -225,6 +225,11 @@
     <div class="fields">
       <label class="field"><span>الاسم</span><input name="name" maxlength="40"></label>
       <label class="field"><span>الرواية</span><select name="riwaya"></select></label>
+      <label class="field"><span>أختمها في</span><select name="goal">
+        <option value="0">بلا مدة</option><option value="3">٣ أيام</option><option value="7">أسبوع</option><option value="10">١٠ أيام</option>
+        <option value="15">١٥ يومًا</option><option value="20">٢٠ يومًا</option><option value="30">شهر (جزء كل يوم)</option>
+        <option value="40">٤٠ يومًا</option><option value="60">شهرين</option><option value="90">٣ أشهر</option><option value="180">٦ أشهر</option><option value="365">سنة</option>
+      </select></label>
     </div>
     <p id="khWarn" class="kh-warn" hidden>تغيير الرواية يعيد الختمة إلى الصفحة الأولى.</p>
     <div class="fields"><div class="field"><span>الغلاف</span><div id="swatches" class="swatches"></div></div></div>
@@ -445,6 +450,7 @@
 </nav>
 
 <audio id="audio" preload="auto"></audio>
+<script src="plan.js"></script>
 <script src="prayer.js"></script>
 <script src="app.js"></script>
 <script src="adhkar.js"></script>
@@ -457,5 +463,6 @@
 <script src="install.js"></script>
 <script src="desk.js"></script>
 <script src="sync.js"></script>
+<script src="extras.js"></script>
 </body>
 </html>

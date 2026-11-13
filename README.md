@@ -89,3 +89,20 @@ the [Quranic Arabic Corpus](https://corpus.quran.com), GNU GPL). Republished her
 Quranpedia.net and the dump's version, as its license asks.
 
     python3 tools/words.py data/hafs.json meanings.json.gz morphology.json.gz data/words
+
+## Tests
+
+    node --test tests/                 # plans (plan.js), the data agreeing with itself, التسميع's matching
+    node tools/check-sources.mjs       # the recordings, fonts and models loaded from other sites
+
+Both run on GitHub Actions: the tests on every push (`tests.yml`), the sources every day (`sources.yml`;
+a recording replaced by another, or gone, fails the run).
+
+## License
+
+The app's own code is under the GNU Affero General Public License v3.0 (`LICENSE`), as the speech
+model التسميع runs on, [Muaalem](https://huggingface.co/sysofwan/hifzguide-muaalem-mini), is. The
+rest keeps its own terms: the KFGQPC fonts and text (King Fahd Complex), Amiri (SIL OFL), Quranpedia's
+data (free for use in apps, credited), the Quranic Arabic Corpus (GNU GPL), the tafsir
+(spa5k/tafsir_api) and the recitations, which are streamed from everyayah.com and mp3quran.net and
+not redistributed here.
