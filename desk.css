@@ -22,7 +22,7 @@ body.desk * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--m
 /* ---------- the pages ---------- */
 body.desk #viewport, body.desk #probe { top: var(--dk-top); right: var(--dk-r); bottom: var(--dk-b); left: var(--dk-l); }
 body.desk #probe { padding: 0; }
-body.desk .slot { overflow: hidden auto; }
+body.desk .slot { overflow: hidden auto; contain: layout style; }
 .spread {
   display: flex; justify-content: center; align-items: stretch; direction: rtl;
   min-height: 100%; padding: 14px 0; box-sizing: border-box;
@@ -184,10 +184,13 @@ body.dk-sizing * { user-select: none !important; }
 /* ---------- the bars: over the pages' room; an aya's card, a word's, beside what was pressed ---------- */
 body.desk .bar { left: calc(var(--dk-l) + 12px); right: calc(var(--dk-r) + 12px); bottom: calc(var(--dk-b) + 14px); }
 body.desk .bar.pop {
-  left: var(--px, 0); top: var(--py, 0); right: auto; bottom: auto; width: 400px; max-width: none; margin: 0;
+  right: auto; bottom: auto; width: 400px; max-width: none; margin: 0;
+  left: 0; top: 0; translate: var(--px, 0) var(--py, 0);
   transform: none; transform-origin: 50% 0; animation: dkPop .16s ease;
-  transition: left .22s cubic-bezier(.2, .9, .3, 1), top .22s cubic-bezier(.2, .9, .3, 1);
+  transition: translate .22s cubic-bezier(.2, .9, .3, 1);
 }
+/* (nothing blurred behind a bar: it is drawn again at every step of what moves under or with it) */
+body.desk .bar { background: color-mix(in srgb, var(--surface) 97%, transparent); -webkit-backdrop-filter: none; backdrop-filter: none; }
 @keyframes dkPop { from { opacity: 0; transform: scale(.96) translateY(-4px); } }
 body.desk .bar.pop.leaving { animation: dkPopOut .12s ease forwards; }
 @keyframes dkPopOut { to { opacity: 0; transform: scale(.97); } }
@@ -256,15 +259,53 @@ body[data-sync-state="run"] #dbSync svg { animation: dkSync 1.2s ease-in-out inf
 body[data-sync-state="fail"] #dbSync { color: var(--danger); }
 @keyframes dkSync { 50% { opacity: .35; } }
 
-/* التسميع: a wider panel, and what a phone swipes sideways laid out as rows of cards */
-body.desk.side-wide { --dk-panel: clamp(460px, 44vw, 720px); }
-body.desk #sheet .pp-hi b { white-space: normal; overflow: visible; }
-body.desk #sheet .pp-cards, body.desk #sheet .pp-revs {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px;
-  overflow: visible; margin-inline: 0; padding-inline: 0; scroll-snap-type: none;
+
+/* a long list in a panel: the rows out of sight are not laid out until they come into it */
+body.desk #sheetBody button.row { content-visibility: auto; contain-intrinsic-size: auto 63px; }
+
+/* ---------- التسميع, in a panel as wide as the others: what a phone swipes sideways is a list
+   here (today's wird, a row each) or a grid (the revisions), and its type the panels' own size */
+body.desk #sheet .pp-top { margin: 0 0 12px; gap: 8px; }
+body.desk #sheet .pp-hi small { font-size: 12px; }
+body.desk #sheet .pp-hi b { font-size: 16.5px; white-space: normal; overflow: visible; }
+body.desk #sheet .pp-h { margin: 20px 0 8px; }
+body.desk #sheet .pp-h b { font-size: 15px; font-weight: 800; }
+body.desk #sheet .pp-h small, body.desk #sheet .pp-h button { font-size: 12.5px; }
+body.desk #sheet .pp-h button { padding: 3px 8px; margin-inline-end: -8px; border-radius: 8px; }
+body.desk #sheet .pp-h button:hover { background: var(--tint); }
+body.desk #sheet .pp-sub-h { font-size: 13px; }
+body.desk #sheet .pp-cards { display: flex; flex-direction: column; gap: 8px; overflow: visible; margin: 0; padding: 0; scroll-snap-type: none; }
+body.desk #sheet .pp-c {
+  width: auto; min-height: 0; padding: 10px 12px; border-radius: 16px; box-shadow: none;
+  display: grid; grid-template-columns: 38px minmax(0, 1fr) 36px; column-gap: 12px; row-gap: 0; align-items: center;
 }
-body.desk #sheet .pp-revs { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
-body.desk #sheet .pp-cards > *, body.desk #sheet .pp-revs > * { width: auto; min-width: 0; max-width: none; flex: none; }
-body.desk #sheet .pp-c, body.desk #sheet .pp-rev, body.desk #sheet .pp-words button, body.desk #sheet .pp-wide-b { transition: transform .15s ease, box-shadow .15s ease; }
-body.desk #sheet .pp-c:hover, body.desk #sheet .pp-rev:hover, body.desk #sheet .pp-words button:hover { transform: translateY(-2px); }
+body.desk #sheet .pp-c::after { display: none; }
+body.desk #sheet .pp-c > * { grid-column: 2; }
+body.desk #sheet .pp-c-i { grid-column: 1; grid-row: 1 / span 4; width: 38px; height: 38px; border-radius: 12px; margin: 0; }
+body.desk #sheet .pp-c-i svg { width: 20px; height: 20px; }
+body.desk #sheet .pp-c-k { font-size: 11.5px; }
+body.desk #sheet .pp-c-t { font-size: 15.5px; font-weight: 800; }
+body.desk #sheet .pp-c-s { font-size: 12.5px; padding: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.desk #sheet .pp-c-bar { width: 100%; height: 4px; margin: 6px 0 2px; }
+body.desk #sheet .pp-c-go { position: static; grid-column: 3; grid-row: 1 / span 4; width: 36px; height: 36px; box-shadow: none; }
+body.desk #sheet .pp-c-go svg { width: 18px; height: 18px; }
+body.desk #sheet .pp-c .pp-pen { position: static; grid-column: 3; grid-row: 1; justify-self: center; display: none; }
+body.desk #sheet .pp-plan { padding: 12px; gap: 12px; border-radius: 16px; }
+body.desk #sheet .pp-plan-r { width: 78px; height: 78px; }
+body.desk #sheet .pp-plan-r b { font-size: 14px; }
+body.desk #sheet .pp-plan-r small { font-size: 12px; }
+body.desk #sheet .pp-plan-x > b { font-size: 15px; font-weight: 800; }
+body.desk #sheet .pp-revs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; overflow: visible; margin: 0; padding: 0; }
+body.desk #sheet .pp-rev { min-width: 0; padding: 9px 12px; border-radius: 14px; }
+body.desk #sheet .pp-rev b { font-size: 15px; font-weight: 800; }
+body.desk #sheet .pp-rev small { font-size: 11.5px; }
+body.desk #sheet .pp-t { min-height: 72px; padding: 10px; border-radius: 14px; }
+body.desk #sheet .pp-t b { font-size: 20px; }
+body.desk #sheet .pp-t small { font-size: 11.5px; }
+body.desk #sheet .pp-t.big { min-height: 150px; box-shadow: none; }
+body.desk #sheet .pp-t.big b { font-size: 34px; }
+body.desk #sheet .pp-t.big small { font-size: 12px; }
+body.desk #sheet .pp-c, body.desk #sheet .pp-rev, body.desk #sheet .pp-words button, body.desk #sheet .pp-wide-b { transition: filter .15s ease, background-color .15s ease; }
+body.desk #sheet .pp-c:hover, body.desk #sheet .pp-rev:hover, body.desk #sheet .pp-words button:hover, body.desk #sheet .pp-wide-b:hover { filter: brightness(1.06); }
+body.desk #sheet .pp-c:active, body.desk #sheet .pp-rev:active { transform: none; filter: brightness(.96); }
 body.desk #sheet .pp-icons button:hover, body.desk #sheet .pp-back:hover { background: var(--tint-2); }

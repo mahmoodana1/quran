@@ -94,9 +94,12 @@ function syncDock() {
   $('#dockPanels').classList.toggle('on', panels);
   $('#dockQuran').classList.toggle('on', !panels);
   // (a computer's screen: the panels stand beside the pages, which make room for them)
-  document.body.classList.toggle('side-up', panels);
-  document.body.classList.toggle('tf-up', panelOpen($('#tafsir')));
+  const cl = document.body.classList, tf = panelOpen($('#tafsir'));
+  const moved = S.desk && (cl.contains('side-up') !== panels || cl.contains('tf-up') !== tf);
+  cl.toggle('side-up', panels);
+  cl.toggle('tf-up', tf);
   if (typeof Desk !== 'undefined') Desk.sync();
+  if (moved) reroom();
 }
 $('#dockPanels').onclick = () => {
   if (panelOpen($('#adhkar'))) Adhkar.close();
@@ -587,22 +590,26 @@ function drawBands(root) {
   root.querySelectorAll('.hl').forEach(h => {
     if (!want.has(+h.dataset.a) || want.get(+h.dataset.a) !== h.className.replace(' in', '')) h.remove();
   });
+  // (all measured first, then drawn: no layout between one line and the next)
+  const draw = [];
   for (const [ai, cls] of want) {
-    root.querySelectorAll('.ln').forEach(ln => {
-      if (ln.querySelector(`.hl[data-a="${ai}"]`)) return;
-      const ws = ln.querySelectorAll(`.w[data-a="${ai}"]`);
-      if (!ws.length) return;
+    const lns = new Map();
+    root.querySelectorAll(`.w[data-a="${ai}"]`).forEach(w => { const ln = w.closest('.ln'); if (ln) lns.set(ln, [...(lns.get(ln) || []), w]); });
+    for (const [ln, ws] of lns) {
+      if (ln.querySelector(`.hl[data-a="${ai}"]`)) continue;
       let l = Infinity, r = -Infinity;
       ws.forEach(w => { l = Math.min(l, w.offsetLeft); r = Math.max(r, w.offsetLeft + w.offsetWidth); });
       const fs = parseFloat(getComputedStyle(ln).fontSize) || 20;
-      const pad = fs * 0.12;
-      const h = document.createElement('div');
-      h.className = cls;
-      h.dataset.a = ai;
-      h.style.left = (l - pad) + 'px';
-      h.style.width = (r - l + pad * 2) + 'px';
-      ln.prepend(h);
-    });
+      draw.push([ln, ai, cls, l, r, fs * 0.12]);
+    }
+  }
+  for (const [ln, ai, cls, l, r, pad] of draw) {
+    const h = document.createElement('div');
+    h.className = cls;
+    h.dataset.a = ai;
+    h.style.left = (l - pad) + 'px';
+    h.style.width = (r - l + pad * 2) + 'px';
+    ln.prepend(h);
   }
 }
 
@@ -625,20 +632,80 @@ function prefetchFonts() {
   for (const d of S.two ? [0, 1, 2, 3, -1, -2, 4, 5] : [0, 1, -1, 2, -2]) ensurePageFont(b + d);
 }
 
+// On a computer the pages out of sight (the ones before and after) are drawn a moment later, once
+// what is moving has come to rest: a turn, or a panel opening, waits for the pages in sight only
+let late = [], lateT = 0;
+function fillSlot(sl, p, now = !S.desk) {
+  late = late.filter(x => x[0] !== sl);
+  sl._st = sl._sf = 0;
+  if (now) { sl.replaceChildren(slotContent(p)); sl.scrollTop = 0; return; }
+  sl.replaceChildren();
+  late.push([sl, p]);
+  clearTimeout(lateT);
+  lateT = setTimeout(fillLate, 380);
+}
+function fillLate() {
+  clearTimeout(lateT);
+  for (const [sl, p] of late.splice(0)) { sl.replaceChildren(slotContent(p)); sl.scrollTop = 0; paintMarks(sl); }
+  prefetchFonts();
+}
+
 function renderAll() {
   measure();
   prefetchFonts();
   const b = base(S.page), st = S.two ? 2 : 1;
-  [b - st, b, b + st].forEach((p, i) => { slots[i].replaceChildren(slotContent(p)); slots[i].scrollTop = 0; });
+  [b - st, b, b + st].forEach((p, i) => fillSlot(slots[i], p, i === 1 || !S.desk));
   placeSlots();
   paintMarks();
   startReading();
   if (typeof Desk !== 'undefined') Desk.sync();
+  if (S.desk) noteRect();
 }
+
+// A computer's panels stand beside the pages: as one opens or closes the pages are drawn again in
+// the room left, and glide from where they were to where they are now. Drawn once, and in the
+// frame the panel starts to move in: the pages are taken off first (so that nothing the panel
+// measures of itself lays them out again in between), and put back, new, once all that was asked
+// for is done. Where they were is what was noted the last time they were drawn (S.rect, and a
+// slot's own scrolling), not asked of the layout now
+let roomQ = null;
+function reroom() {
+  if (!R || roomQ) return;
+  const sc = slots[1];
+  roomQ = { kids: [...sc.childNodes], was: S.rect, st: sc._st || 0, f: sc._sf || 0 };
+  sc.replaceChildren();
+  queueMicrotask(() => {
+    const { kids, was, st, f } = roomQ, probe = $('#probe');
+    roomQ = null;
+    if (probe.clientWidth === S.W && probe.clientHeight === S.H) { if (!sc.firstChild) sc.replaceChildren(...kids); return; }
+    renderAll();
+    if (f) sc.scrollTop = f * sc.scrollHeight;
+    const sp = sc.firstElementChild, now = sc.querySelector('.page')?.getBoundingClientRect();
+    cancelAnimationFrame(rectRaf);
+    S.rect = now && { left: now.left, right: now.right, top: now.top + sc.scrollTop, width: now.width };
+    if (!was?.width || !now?.width || !sp.animate || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    // (the first page drawn, before and after: the others keep their place by it)
+    const k = was.width / now.width, o = sp.getBoundingClientRect();
+    const dx = was.right - (o.left + (now.right - o.left) * k), dy = was.top - st - (o.top + (now.top - o.top) * k);
+    if (Math.abs(k - 1) < .002 && Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+    sp.animate([{ transformOrigin: '0 0', transform: `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px) scale(${k.toFixed(4)})` }, { transformOrigin: '0 0', transform: 'none' }],
+      { duration: 300, easing: 'cubic-bezier(.2, .9, .3, 1)' });
+  });
+}
+let rectRaf = 0;
+function noteRect() {
+  cancelAnimationFrame(rectRaf);
+  rectRaf = requestAnimationFrame(() => {
+    const sc = slots[1], r = sc.querySelector('.page')?.getBoundingClientRect();
+    S.rect = r && !sc.firstElementChild.getAnimations?.().length ? { left: r.left, right: r.right, top: r.top + sc.scrollTop, width: r.width } : S.rect;
+  });
+}
+slots.forEach(sl => sl.addEventListener('scroll', () => { sl._st = sl.scrollTop; sl._sf = sl.scrollTop / sl.scrollHeight; }, { passive: true }));
 
 function goTo(p, { animate = false, from = 0 } = {}) {
   p = Math.max(1, Math.min(R.pages.length, p));
   if (p === S.page) return;
+  if (late.length) fillLate();
   // (two facing pages: a step is the two of them, and none at all to the page beside)
   const st = S.two ? 2 : 1, step = (base(p) - base(S.page)) / st;
   S.page = p;
@@ -654,16 +721,15 @@ function goTo(p, { animate = false, from = 0 } = {}) {
     void slots[1].offsetWidth;
     placeSlots(0, true);
     const fresh = step === 1 ? 2 : 0;
-    slots[fresh].replaceChildren(slotContent(base(p) + (step === 1 ? st : -st)));
-    slots[fresh].scrollTop = 0;
-    drawBands(slots[fresh]);
+    fillSlot(slots[fresh], base(p) + (step === 1 ? st : -st));
+    if (!S.desk) drawBands(slots[fresh]);
   } else {
     renderAll();
   }
   const cur = scroller();
   if (cur && step) cur.scrollTop = 0;
   if (typeof Desk !== 'undefined') Desk.sync();
-  prefetchFonts();
+  if (!late.length) prefetchFonts(); // (or with the pages drawn late)
   keepClear();
   setTimeout(keepClear, 420); // once the slide has settled
 }
@@ -775,6 +841,7 @@ wordAudio.addEventListener('error', () => { sayEl?.classList.remove('say'); if (
     if (Math.hypot(mx, my) > 8) clearTimeout(pressT);
     if (!axis && Math.hypot(mx, my) > 8) axis = Math.abs(mx) > Math.abs(my) ? 'x' : 'y';
     if (axis !== 'x') return;
+    if (late.length) fillLate();
     dx = mx;
     const b = base(S.page), st = S.two ? 2 : 1;
     if ((dx > 0 && b + st > R.pages.length) || (dx < 0 && b <= 1)) dx /= 3;

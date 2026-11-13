@@ -98,12 +98,14 @@ const Desk = (() => {
   }
 
   // ---- the look of things kept in step with where the reader is
+  // (written only when it changes: this runs at every turn, every panel, every class of the body's)
+  const put = (sel, t) => { const el = $(sel); if (el.textContent !== t) el.textContent = t; };
   function sync() {
     if (!!S.desk !== on) S.desk ? enter() : leave();
     if (!on || !R) return;
     const pages = shownPages(), fa = R.ayas[pageInfo(pages[0]).first], la = R.ayas[pageInfo(pages[pages.length - 1]).last];
-    $('#dbSura').textContent = fa[0] === la[0] ? `سورة ${suraName(fa[0])}` : `${suraName(fa[0])} – ${suraName(la[0])}`;
-    $('#dbPage').textContent = (pages.length > 1 ? `الصفحتان ${ar(pages[0])}–${ar(pages[1])}` : `الصفحة ${ar(pages[0])}`) + ` · الجزء ${ar(R.ayas[pageInfo(S.page).first][3])}`;
+    put('#dbSura', fa[0] === la[0] ? `سورة ${suraName(fa[0])}` : `${suraName(fa[0])} – ${suraName(la[0])}`);
+    put('#dbPage', (pages.length > 1 ? `الصفحتان ${ar(pages[0])}–${ar(pages[1])}` : `الصفحة ${ar(pages[0])}`) + ` · الجزء ${ar(R.ayas[pageInfo(S.page).first][3])}`);
     const playing = P.ai != null && !audio.paused;
     const pb = $('#dbPlay');
     if (pb.dataset.s !== String(playing)) { pb.dataset.s = playing; pb.innerHTML = svg(IC[playing ? 'pause' : 'play']); pb.classList.toggle('on', playing); }
@@ -112,24 +114,22 @@ const Desk = (() => {
     const tb = $('#dbTwo'), two = !!store.get('desk.two', true);
     if (tb.dataset.s !== String(two)) { tb.dataset.s = two; tb.innerHTML = svg(IC[two ? 'two' : 'one']); }
     tb.classList.toggle('dim', two && !S.two); // (asked for, no room for it)
-    $('#dbZoom').textContent = ar(Math.round(zoom() * 100)) + '٪';
+    put('#dbZoom', ar(Math.round(zoom() * 100)) + '٪');
     // the rail: the panel standing open, or the pages
     const open = panelOpen($('#adhkar')) ? 'adhkar' : panelOpen($('#library')) ? 'marks' : panelOpen($('#sheet')) ? (tab === 'suras' || $('#q').value.trim() ? 'suras' : tab) : 'read';
     document.querySelectorAll('#deskRail [data-dr]').forEach(b => b.classList.toggle('on', b.dataset.dr === open));
     $('#dbWhere').classList.toggle('on', open === 'suras');
-    // (التسميع is a page of numbers and cards: given more room than a list needs)
-    document.body.classList.toggle('side-wide', open === 'recite');
     // the line under the pages
     const n = R.pages.length, f = n > 1 ? (S.page - 1) / (n - 1) : 0;
     $('#dsFill').style.width = (f * 100).toFixed(2) + '%';
     $('#dsKnob').style.right = (f * 100).toFixed(2) + '%';
-    $('#dsN').textContent = `${ar(S.page)} / ${ar(n)}`;
-    $('#dsPct').textContent = `${K.name} · ${ar(khatmaPct(K))}٪`;
+    put('#dsN', `${ar(S.page)} / ${ar(n)}`);
+    put('#dsPct', `${K.name} · ${ar(khatmaPct(K))}٪`);
     if ($('#dsTicks').dataset.r !== R.id) {
       $('#dsTicks').dataset.r = R.id;
       $('#dsTicks').innerHTML = juzStarts().map((p, j) => p > 1 ? `<u style="right:${((p - 1) / (n - 1) * 100).toFixed(2)}%"></u>` : '').join('');
     }
-    if (panelOpen($('#sheet'))) $('#sheetSub').textContent = `${K.name} · ${META.riwayat.find(r => r.id === R.id)?.name || ''} · صفحة ${ar(S.page)}`;
+    if (panelOpen($('#sheet'))) put('#sheetSub', `${K.name} · ${META.riwayat.find(r => r.id === R.id)?.name || ''} · صفحة ${ar(S.page)}`);
     $('#dkNextPg').disabled = base(S.page) + (S.two ? 2 : 1) > n;
     $('#dkPrevPg').disabled = base(S.page) <= 1;
     // the surah list open beside the pages: the surah being read marked as the pages turn
@@ -320,7 +320,7 @@ const Desk = (() => {
 
     // the press a card opens by; the aya under the mouse; a word clicked twice; the right button
     vp.addEventListener('pointerdown', e => { at = { x: e.clientX, y: e.clientY, t: performance.now(), el: e.target.closest?.('.w, .band') || null }; }, true);
-    const hover = ai => { if (S.hover === ai) return; S.hover = ai; drawBands(document); };
+    const hover = ai => { if (S.hover === ai) return; S.hover = ai; drawBands(slots[1]); };
     vp.addEventListener('mouseover', e => {
       if (!on) return;
       const w = e.target.closest?.('.w[data-a]');

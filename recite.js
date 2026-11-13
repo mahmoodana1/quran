@@ -2233,6 +2233,7 @@ const Recite = (() => {
     return last >= 0 && last + 1 < a0 + n ? last + 1 : a0;
   }
 
+  const FMT = {};
   const ICONS = {
     review: '<svg viewBox="0 0 24 24"><path d="M4.5 12a7.5 7.5 0 0113-5.1M19.5 12a7.5 7.5 0 01-13 5.1"/><path d="M17.5 3.5v3.4h-3.4M6.5 20.5v-3.4h3.4"/></svg>',
     test: '<svg viewBox="0 0 24 24"><path d="M6.5 4.5h11v15h-11z"/><path d="M9.5 9.5l1.6 1.6 3.4-3.4M9.5 15h5"/></svg>',
@@ -2306,7 +2307,7 @@ const Recite = (() => {
     for (const k of Object.keys(said)) { const a = R.ayas[+k]; if (a) { got[a[0]]++; lastIn[a[0]] = Math.max(lastIn[a[0]], said[k]); } }
     const today = l.days?.[day()] || 0, run = streak(l), pl = planInfo(l), revs = revisions(l, pl && !pl.finished ? pl.s : 0);
     const n = Object.keys(said).filter(k => R.ayas[+k]).length;
-    const fmt = o => new Intl.DateTimeFormat('ar-u-nu-arab', o);
+    const fmt = o => { const k = JSON.stringify(o); return FMT[k] || (FMT[k] = new Intl.DateTimeFormat('ar-u-nu-arab', o)); }; // (making one is slow: kept)
     const es = store.get('recite.editS', 0);
     if (view === 'sura' && !sizes[es]) { store.set('recite.view', ''); return panelHTML(); }
     if (view) return `<div class="pp pp-sub"><div class="pp-bar"><button class="pp-back" data-rc-view="${view === 'sura' ? store.get('recite.editFrom', '') : ''}" aria-label="رجوع">${ICONS.back}</button><b>${view === 'sura' ? `سورة ${suraName(es)}` : VIEWS[view] || ''}</b></div>
