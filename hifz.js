@@ -323,6 +323,16 @@ const Hifz = (() => {
   }
   function mounted() {}
   const reset = () => { view = ''; };
+  // a surah to memorize (its card on the page): from its first aya not yet memorized, as many as the
+  // lesson had, and the panel opened on it
+  function learnSura(su) {
+    const a0 = R.suraStart[su], n = sizeOf(su), said = log().said || {}, L = lesson();
+    let a = a0;
+    while (a < a0 + n - 1 && said[a]) a++;
+    setLesson(span(a, Math.min(L.b - L.a + 1, 10)));
+    openSheet('hifz');
+    if (a > a0) toast(`تابع ${suraName(su)} من الآية ${ar(R.ayas[a][1])}`);
+  }
 
-  return { panelHTML, onClick, onChange, mounted, reset, view: view0, setView: v => { view = v; } };
+  return { panelHTML, onClick, onChange, mounted, reset, learnSura, view: view0, setView: v => { view = v; } };
 })();

@@ -1039,9 +1039,98 @@ $('#suraBar').addEventListener('click', e => {
   const a = b.dataset.sb;
   closeSura();
   if (a === 'start') Recite.start(R.suraStart[su]);
+  if (a === 'info') openSuraInfo(su);
+  if (a === 'hifz') Hifz.learnSura(su);
   if (a === 'go') Recite.start(from);
   if (a === 'play') playFrom(R.suraStart[su]);
 });
+
+// ---------------------------------------------------------------- about a surah
+// What is said about it (الموسوعة القرآنية, quranpedia.net; tools/surahinfo.py): a few facts, then
+// its overview, topics (each a tap to its ayas), aims, virtue, causes of revelation and the
+// Prophet's practice with it, in four tabs at most. Ayas are named in Hafs numbering. (Its causes of
+// revelation are with each aya's tafsir: asbabHTML.)
+const SI_V = 1;
+let siData = null, siSura = null, siTab = 'intro';
+const SI_TABS = [['intro', 'نبذة'], ['topics', 'موضوعاتها'], ['purposes', 'مقاصدها'], ['grace', 'فضلها']];
+const loadSuraInfo = () => (siData ||= loadJSON(`data/surah-info.json?v=${SI_V}`).catch(e => { siData = null; throw e; }));
+// a hafs aya (surah, aya) in the riwaya being read
+function fromHafsSA(s, a) {
+  let h = 0;
+  while (h < META.hafs.length && META.hafs[h][0] < s) h++;
+  return R.fromHafs[h + a - 1];
+}
+async function openSuraInfo(su) {
+  closeSura();
+  if (!$('#tafsir').hidden) closeTafsir();
+  siSura = su; siTab = 'intro';
+  const [nm, , , , place] = META.suras[su - 1], a0 = R.suraStart[su], n = (R.suraStart[su + 1] ?? R.ayas.length) - a0;
+  $('#siTitle').textContent = `سورة ${nm}`;
+  $('#siSub').textContent = 'الموسوعة القرآنية';
+  $('#siFacts').innerHTML = '';
+  $('#siSeg').innerHTML = '';
+  $('#siBody').innerHTML = '<div class="tf-wait">جارٍ التحميل…</div>';
+  show($('#suraInfo'));
+  haptic(6);
+  let d;
+  try { d = (await loadSuraInfo()).surahs[su - 1]; } catch { if (siSura === su) $('#siBody').innerHTML = '<div class="tf-wait">تعذّر التحميل — تحقق من الاتصال</div>'; return; }
+  if (siSura !== su) return;
+  const p0 = R.ayas[a0][2], p1 = R.ayas[a0 + n - 1][2], j0 = R.ayas[a0][3], j1 = R.ayas[a0 + n - 1][3];
+  const fact = (b, t) => `<span><b>${b}</b><small>${t}</small></span>`;
+  $('#siFacts').innerHTML = [
+    fact(d.type || (place === 'makkah' ? 'مكية' : 'مدنية'), 'نزولها'),
+    d.order && fact(ar(d.order), 'ترتيب نزولها'),
+    fact(ar(n), 'آياتها'),
+    d.words && fact(ar(d.words), 'كلماتها'),
+    fact(p0 === p1 ? ar(p0) : `${ar(p0)}–${ar(p1)}`, p0 === p1 ? 'صفحتها' : 'صفحاتها'),
+    fact(j0 === j1 ? ar(j0) : `${ar(j0)}–${ar(j1)}`, 'الجزء'),
+  ].filter(Boolean).join('');
+  SI_VER = siData && (await siData).version || '';
+  const tabs = SI_TABS.filter(([k]) => d[k] || (k === 'grace' && d.prophet));
+  $('#siSeg').innerHTML = tabs.map(([k, t]) => `<button data-si="${k}"${k === siTab ? ' class="on"' : ''}>${t}</button>`).join('');
+  paintSuraInfo(d);
+}
+function paintSuraInfo(d) {
+  const body = $('#siBody');
+  // a heading (a paragraph begun with "* "), Quran in its font, ayas named a tap away; topics' ranges too
+  const para = t => {
+    let h = t.replace(/<q>/g, '<span class="q">').replace(/<\/q>/g, '</span>')
+      .replace(/<a data-ia="(\d+):(\d+)">/g, '<a class="si-ia" data-ia="$1:$2" role="button">');
+    if (siTab === 'topics') h = h.replace(/\(([٠-٩\d]+)\s*[-–]\s*([٠-٩\d]+)\)/, (m, x) => `<a class="si-ia" data-ia="${siSura}:${toLatinDigits(x)}" role="button">${m}</a>`);
+    const head = /^\*\s*/.test(t);
+    return head ? `<h4>${h.replace(/^\*\s*/, '')}</h4>` : siTab === 'topics' && /^\d+\./.test(t) ? `<p class="si-li">${h.replace(/^(\d+)\.\s*/, (m, k) => `<i>${ar(k)}</i>`)}</p>` : `<p>${h}</p>`;
+  };
+  // (the overview with its names; the virtue with the Prophet's practice with it)
+  const more = (k, t) => d[k] ? `<h4 class="si-h">${t}</h4>` + d[k].map(para).join('') : '';
+  let h = (d[siTab] || []).map(para).join('');
+  if (siTab === 'intro') h += more('names', 'أسماؤها');
+  if (siTab === 'grace') h += more('prophet', 'من هدي النبي ﷺ معها');
+  if (siTab === 'intro' && d.counts?.length) h += `<h4>عدد آياتها في مذاهب العدّ</h4><div class="si-counts">${d.counts.map(([t, v]) => `<span><b>${ar(v)}</b><small>${t.replace(/^العد\s*/, '')}</small></span>`).join('')}</div>`;
+  h += `<p class="si-src">المصدر: <a href="https://quranpedia.net/surah/${siSura}" target="_blank" rel="noopener">الموسوعة القرآنية quranpedia.net</a> ${SI_VER ? ` · نسخة ${esc(SI_VER)}` : ''}</p>`;
+  body.innerHTML = h;
+  body.scrollTop = 0;
+}
+let SI_VER = '';
+$('#siSeg').addEventListener('click', async e => {
+  const b = e.target.closest('[data-si]');
+  if (!b || siSura == null) return;
+  siTab = b.dataset.si;
+  document.querySelectorAll('#siSeg button').forEach(x => x.classList.toggle('on', x === b));
+  b.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
+  paintSuraInfo((await loadSuraInfo()).surahs[siSura - 1]);
+  haptic(4);
+});
+$('#siBody').addEventListener('click', e => {
+  const a = e.target.closest('[data-ia]');
+  if (!a) return;
+  const [s, n] = a.dataset.ia.split(':').map(Number), ai = fromHafsSA(s, n);
+  if (ai == null || !R.ayas[ai]) return;
+  closeSuraInfo();
+  goTo(R.ayas[ai][2]);
+  setTimeout(() => flashAya(ai), 300);
+});
+function closeSuraInfo() { siSura = null; hide($('#suraInfo')); }
+$('#siClose').onclick = closeSuraInfo;
 
 // an update waiting (a new service worker took over): applied by loading the page again,
 // never in the middle of something, and with a screen saying so. resume: what to do once
@@ -1757,11 +1846,33 @@ async function openTafsir(ai, mode = tfMode) {
       const label = to > from ? `تفسير الآيات ${ar(from)}–${ar(to)}` : '';
       html += (label ? `<div class="tf-group">${label}</div>` : '') + tafsirHTML(e);
     }
-    body.innerHTML = html || '<div class="tf-wait">لا يوجد تفسير لهذه الآية</div>';
+    let why = '';
+    try { why = await asbabHTML(a); } catch {}
+    if (tfAya !== ai) return;
+    body.innerHTML = why + (html || '<div class="tf-wait">لا يوجد تفسير لهذه الآية</div>');
     body.scrollTop = 0;
   } catch {
     if (tfAya === ai) body.innerHTML = '<div class="tf-wait">تعذّر تحميل التفسير — تحقق من الاتصال أو حمّله من الإعدادات</div>';
   }
+}
+
+// the cause of revelation of an aya, where one is known (الموسوعة القرآنية; tools/surahinfo.py):
+// folded, above the tafsir; its ayas in Hafs numbering, a heading per cause
+let asbab = null;
+async function asbabHTML(a) {
+  const d = (await (asbab ||= loadJSON('data/asbab.json?v=1').catch(e => { asbab = null; throw e; }))).ayas;
+  const want = [];
+  for (let h = a[5]; h <= a[6]; h++) {
+    const [s, n] = META.hafs[h];
+    for (const k of Object.keys(d)) {
+      const m = k.match(/^(\d+):(\d+)(?:-(\d+))?$/);
+      if (+m[1] === s && n >= +m[2] && n <= +(m[3] || m[2]) && !want.includes(k)) want.push(k);
+    }
+  }
+  if (!want.length) return '';
+  const p = t => t.replace(/<a [^>]*>|<\/a>/g, '').replace(/<q>/g, '<span class="q">').replace(/<\/q>/g, '</span>');
+  const body = want.flatMap(k => d[k]).map(t => /^\*/.test(t) ? `<h4>${p(t.replace(/^\*\s*/, ''))}</h4>` : `<p>${p(t)}</p>`).join('');
+  return `<details class="tf-why"><summary><b>سبب نزولها</b><small>${want.length > 1 ? `${ar(want.length)} روايات` : 'من الموسوعة القرآنية'}</small></summary>${body}<p class="si-src">المصدر: الموسوعة القرآنية quranpedia.net</p></details>`;
 }
 
 function closeTafsir() {
@@ -1895,6 +2006,11 @@ const mushafTasks = () => [
   ...META.riwayat.map(r => ({ cache: MUSHAF_CACHE, url: new URL(`data/${r.id}.json?v=${DATA_VERSION}`, location.href).href })),
   // when each aya starts in the recitations (the audio itself is saved apart)
   ...META.riwayat.filter(r => r.id !== 'hafs').map(r => ({ cache: MUSHAF_CACHE, url: new URL(`data/audio/${r.id}.json?v=${AUDIO_DATA_VERSION}`, location.href).href })),
+  // (and of the further reciters of a riwaya)
+  ...Object.entries(MORE_VOICES).flatMap(([rid, l]) => l.map(([k]) => ({ cache: MUSHAF_CACHE, url: new URL(`data/audio/${rid}.${k}.json?v=${AUDIO_DATA_VERSION}`, location.href).href }))),
+  // what is said about each surah, and the causes of revelation
+  { cache: MUSHAF_CACHE, url: new URL(`data/surah-info.json?v=${SI_V}`, location.href).href },
+  { cache: MUSHAF_CACHE, url: new URL('data/asbab.json?v=1', location.href).href },
   { cache: MUSHAF_CACHE, url: Adhkar.url() },
   ...LOCAL_FONTS.map(f => ({ cache: MUSHAF_CACHE, url: new URL(`fonts/${f}.woff2`, location.href).href })),
   ...Array.from({ length: 604 }, (_, i) => ({ cache: FONT_CACHE, url: `${QCF_BASE}p${i + 1}.woff2` })),
