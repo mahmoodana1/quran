@@ -221,7 +221,7 @@ const Recite = (() => {
     const run = ++prepRun;
     prepThen = then; prepIntent = intent; gate = intent || null;
     ['update', 'mic', 'model', 'warm'].forEach(id => prepStep(id, ''));
-    $('#rpGo').hidden = true; $('#rpManual').hidden = true;
+    $('#rpGo').hidden = true; $('#rpManual').hidden = !manualOk(); // (the way on without any of it: there from the first)
     // (closed more than once: what the reader can do about it; a Xiaomi phone closes apps the soonest, and says where to stop it)
     const again = intent?.killed && store.get('mu.kills', 0) >= 2 ? (XIAOMI
       ? ' ليبقى مفتوحًا على هواتف شاومي وريدمي: أغلق التطبيقات الأخرى، واقفل هذا التطبيق في قائمة التطبيقات الأخيرة (ضغطة مطوّلة عليه ثم القفل)، واجعل «موفّر البطارية» له «بلا قيود» من إعدادات الهاتف ← التطبيقات.'
@@ -274,7 +274,7 @@ const Recite = (() => {
       const r = await Mu.micCheck();
       clearTimeout(slow);
       if (!live()) return;
-      $('#rpGo').hidden = true; $('#rpManual').hidden = true;
+      $('#rpGo').hidden = true;
       // allowed, and the phone never gave the microphone: the page loaded again, once, by itself
       // (it is given at once then), and on from here
       let hung = null;
@@ -2445,7 +2445,7 @@ const Recite = (() => {
       <header class="pp-top">
         <div class="pp-hi"><small>${hi}</small><b>${esc(fmt({ weekday: 'long', day: 'numeric', month: 'long' }).format(new Date()))}</b></div>
         <span class="pp-flame${run ? '' : ' cold'}" aria-label="${run ? streakText(run) : 'لا سلسلة بعد'}">${ICONS.flame}<b>${ar(run)}</b></span>
-        <span class="pp-icons"><button data-rc-view="log" aria-label="السجل">${ICONS.clock}</button><button data-rc-view="set" aria-label="إعدادات التسميع">${ICONS.gear}</button></span>
+        <span class="pp-icons"><button data-rc-manual class="pp-mic${setting('manual') ? ' off' : ''}" aria-pressed="${setting('manual')}" aria-label="${setting('manual') ? 'التسميع بلا ميكروفون: اضغط للعودة إلى الميكروفون' : 'سمّع بلا ميكروفون'}"><svg viewBox="0 0 24 24"><path d="M12 3.5a3 3 0 00-3 3v5a3 3 0 006 0v-5a3 3 0 00-3-3zM6.5 11a5.5 5.5 0 0011 0M12 16.5v4"/>${setting('manual') ? '<path d="M4.5 4.5l15 15"/>' : ''}</svg></button><button data-rc-view="log" aria-label="السجل">${ICONS.clock}</button><button data-rc-view="set" aria-label="إعدادات التسميع">${ICONS.gear}</button></span>
       </header>`;
     h += weekHTML();
 
@@ -2813,15 +2813,15 @@ const Recite = (() => {
 
     // ---- الإعدادات, and how it all works
     function setHTML() {
-      const MIC = () => MU() && !setting('manual'); // (what the microphone's reading is judged by: not shown without it)
+      const byMic = () => MU() && !setting('manual'); // (what the microphone's reading is judged by: not shown without it)
       return `<div class="group">
         ${toggle('manual', 'بلا ميكروفون', 'تختبر نفسك بنفسك: الآيات مخفية، تقرأ الآية من حفظك ثم تُظهرها وتلمس ما أخطأت فيه. بلا نموذج ولا ميكروفون')}
         ${setting('manual') ? '' : toggle('hide', 'ابدأ والكلمات مخفية', 'تظهر كل كلمة حين تقرؤها')}
         ${toggle('sound', 'صوت واهتزاز عند الخطأ', 'نغمة خفيفة واهتزاز حين تُعلَّم كلمة')}
         ${toggle('blind', 'تسميع أعمى', 'مع الإخفاء: لا أثر لما بعدك، فلا عدد للكلمات ولا أرقام للآيات')}
         ${toggle('weak', 'مواضع الضعف في المصحف', 'خط منقّط خفيف تحت كلمات أخطأت فيها')}
-        ${MIC() ? toggle('fastOn', 'القراءة السريعة', 'كل جلسة تبدأ بها. وتعمل وحدها إن أسرعت، وتتوقف إن عدت إلى قراءتك المعتادة، أو بزر «سريع»: يُعلَّم فيها ما تجاوزته أو قرأته بكلمة أخرى، والحركة إن سُمعت الكلمة واضحة؛ ولا يُفحص المدّ ولا الغنّة ولا الحروف المتقاربة') : ''}
-        ${MIC() ? `<div class="group-label">التجويد</div>
+        ${byMic() ? toggle('fastOn', 'القراءة السريعة', 'كل جلسة تبدأ بها. وتعمل وحدها إن أسرعت، وتتوقف إن عدت إلى قراءتك المعتادة، أو بزر «سريع»: يُعلَّم فيها ما تجاوزته أو قرأته بكلمة أخرى، والحركة إن سُمعت الكلمة واضحة؛ ولا يُفحص المدّ ولا الغنّة ولا الحروف المتقاربة') : ''}
+        ${byMic() ? `<div class="group-label">التجويد</div>
         ${toggle('tjMadd', 'المدّ', 'يُعلَّم المدّ الطبيعي إن قُصِر، والمتصل واللازم إن لم يُمَدّا')}
         ${setting('tjMadd') ? toggle('tjMunfasil', 'المدّ المنفصل أربع حركات', 'قراءة الشاطبية؛ إن تركتها مطفأة فالقصر جائز') : ''}
         ${toggle('tjOver', 'المدّ الزائد', 'يُعلَّم المدّ الطبيعي إن زِيد فيه كثيرًا، والحرف القصير إن مُدّ')}
@@ -3053,6 +3053,14 @@ const Recite = (() => {
     const pk = e.target.closest('[data-rc-plan]');
     if (pk) { setPlan(+pk.dataset.rcPlan); return true; }
     // (a page of its own over the panel, or back to it)
+    // the microphone, on or put away, from the panel's head: every session begun from then on
+    if (e.target.closest('[data-rc-manual]')) {
+      const off = !setting('manual');
+      if (G && !G.done) muteMic(off); else store.set('recite.manual', off);
+      if (!G || G.done) toast(off ? 'التسميع بلا ميكروفون ولا نموذج: تقرأ من حفظك ثم تُظهر الآية وتعلّم أخطاءك بنفسك' : 'التسميع بالميكروفون: يتابعك التطبيق كلمةً كلمة', 3800);
+      rerender(); haptic(6);
+      return true;
+    }
     const vw = e.target.closest('[data-rc-view]');
     if (vw) { suraEdit = null; store.set('recite.view', vw.dataset.rcView); renderSheet(); $('#sheetBody').scrollTop = 0; haptic(5); return true; }
     if (e.target.closest('[data-rc-review]')) { closeSheet(); start(null, weakAyas()); return true; }

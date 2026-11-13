@@ -2158,6 +2158,9 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 .pp-flame.cold svg { animation: none; }
 @keyframes ppFlick { 50% { transform: scale(1.12) rotate(-4deg); } }
 .pp-icons { display: flex; gap: 6px; flex: none; }
+/* (the date in full beside the icons: on two lines where one is too short) */
+.pp-hi b { white-space: normal !important; font-size: clamp(17px, 4.9vw, 21px); }
+.pp-icons .pp-mic.off { color: var(--on-accent); background: var(--accent); border-color: transparent; }
 .pp-icons button { width: 38px; height: 38px; border-radius: 13px; display: grid; place-items: center; color: var(--ink); background: var(--surface); border: .5px solid var(--line); }
 .pp-icons svg, .pp-back svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
