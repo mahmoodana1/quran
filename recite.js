@@ -111,6 +111,8 @@ const Recite = (() => {
         : `intent://${location.host}${location.pathname}#Intent;scheme=https;package=com.android.chrome;S.browser_fallback_url=${encodeURIComponent(url)};end`;
       toast(`نُسخ الرابط — إن لم يُفتح ${name} فالصقه فيه`, 4000);
     };
+    $('#rbManual').hidden = !manualOk();
+    $('#rbManual').onclick = goManual;
     $('#rbStay').onclick = () => { if (br === 'miui') store.set('rec.brTold', true); hide($('#recBrowser')); go(); };
     show($('#recBrowser'));
     return true;
@@ -120,7 +122,24 @@ const Recite = (() => {
   let XIAOMI = /Xiaomi|Redmi|POCO|MIUI|HyperOS/i.test(navigator.userAgent);
   try { navigator.userAgentData?.getHighEntropyValues?.(['model']).then(v => { if (/redmi|poco|xiaomi|^mi \w|^M?2[0-5]\d{2}[0-9A-Z]{4,}$/i.test(v?.model || '')) XIAOMI = true; }).catch(() => {}); } catch {}
   // intent: what is about to happen ({ start: [from, review, opts] }), to go on with after an update
+  // What was asked for when the model or the microphone stood in the way (gate), so that it can go
+  // on without them: a recitation begun, or one under way, can (the reader checks their own
+  // reading: step()); finding an aya by voice, or fetching a model, cannot. Offered wherever the
+  // way is barred: the model not on the device, the browser not one that gives the microphone,
+  // the microphone refused or silent, the model not loading
+  let gate = null;
+  const manualOk = () => !!(gate?.start || (G && !G.done));
+  function goManual() {
+    const g = gate;
+    prepRun++; clearTimeout(prepT); pending = null;
+    ['#recPrep', '#recIntro', '#recBrowser'].forEach(x => hide($(x)));
+    store.set('recite.manual', true);
+    if (G && !G.done) { if (!G.manual) muteMic(true); return; }
+    toast('التسميع بلا ميكروفون — تعود إليه متى شئت من زر الميكروفون في شريط التسميع', 4200);
+    if (g?.start) start(...g.start);
+  }
   function withModel(then, intent) {
+    gate = intent || null;
     if (browserFirst(() => withModel(then, intent))) return;
     if (MU()) {
       Mu.prime();
@@ -145,13 +164,22 @@ const Recite = (() => {
   // the model was loaded again while listening (see Mu.recover): the reading
   // goes on from where it was, or the search starts over
   Mu.lost(err => {
-    if (err) { if (F) stopFind(); if (G?.run) pause(); toast('تعذر تحضير التسميع — أعد فتح التطبيق'); return; }
+    if (err) {
+      if (F) stopFind();
+      const g = G;
+      if (g?.run) pause();
+      if (g && !g.done) trouble('model', 'تعذّر تحميله على هذا الجهاز — أعد المحاولة، أو تابع بلا ميكروفون', 'توقف نموذج التعرّف، فأوقفنا التسميع مؤقتًا. جلستك كما هي.',
+        () => { hide($('#recPrep')); Mu.prime(); withModel(() => { if (G === g) resume(); }, {}); });
+      else toast('تعذر تحضير التسميع — أعد فتح التطبيق');
+      return;
+    }
     if (F) { stopFind(); findMu(true); return; }
     if (G?.run && G.mu) { pause(); setTimeout(() => { if (G && !G.run && !G.done) resume(); }, 100); }
   });
 
   // p: 0..1 while downloading, 'probe' while timing the models on this device
   function paintDl(p) {
+    $('#riManual').hidden = !manualOk();
     const busy = p != null;
     if (p === 'probe') {
       $('#riProg').hidden = true; $('#riGo').disabled = true; $('#riLater').hidden = true;
@@ -184,16 +212,16 @@ const Recite = (() => {
   const reveal = () => { clearTimeout(prepT); show($('#recPrep')); };
   const ask = (text, f) => { $('#rpGo').hidden = false; $('#rpGo').textContent = text; $('#rpGo').onclick = f; reveal(); };
   function prepStep(id, state, note = '') {
-    if (state === 'fail') reveal();
+    if (state === 'fail') { $('#rpManual').hidden = !manualOk(); reveal(); }
     const li = $(`#recPrep [data-rp="${id}"]`);
     li.className = state; // '', 'doing', 'done', 'skip', 'fail'
     li.querySelector('small').textContent = note;
   }
   async function prep(then, intent, after) {
     const run = ++prepRun;
-    prepThen = then; prepIntent = intent;
+    prepThen = then; prepIntent = intent; gate = intent || null;
     ['update', 'mic', 'model', 'warm'].forEach(id => prepStep(id, ''));
-    $('#rpGo').hidden = true;
+    $('#rpGo').hidden = true; $('#rpManual').hidden = true;
     // (closed more than once: what the reader can do about it; a Xiaomi phone closes apps the soonest, and says where to stop it)
     const again = intent?.killed && store.get('mu.kills', 0) >= 2 ? (XIAOMI
       ? ' ليبقى مفتوحًا على هواتف شاومي وريدمي: أغلق التطبيقات الأخرى، واقفل هذا التطبيق في قائمة التطبيقات الأخيرة (ضغطة مطوّلة عليه ثم القفل)، واجعل «موفّر البطارية» له «بلا قيود» من إعدادات الهاتف ← التطبيقات.'
@@ -240,12 +268,13 @@ const Recite = (() => {
         try { st = (await Promise.race([navigator.permissions?.query({ name: 'microphone' }), new Promise(r => setTimeout(r, 500))]))?.state; } catch {}
         if (!live() || st === 'granted') return; // allowed: still opening (asked again meanwhile)
         prepStep('mic', 'doing', 'لم يظهر طلب الإذن؟ اسمح للمتصفح بالميكروفون من إعدادات الهاتف: التطبيقات ← المتصفح (Chrome) ← الأذونات ← الميكروفون ← السماح، ثم أعد المحاولة');
+        $('#rpManual').hidden = !manualOk();
         ask('أعد المحاولة', () => prep(then, intent));
       }, 8000);
       const r = await Mu.micCheck();
       clearTimeout(slow);
       if (!live()) return;
-      $('#rpGo').hidden = true;
+      $('#rpGo').hidden = true; $('#rpManual').hidden = true;
       // allowed, and the phone never gave the microphone: the page loaded again, once, by itself
       // (it is given at once then), and on from here
       let hung = null;
@@ -255,7 +284,7 @@ const Recite = (() => {
         return reloadApp(intent);
       }
       if (r !== 'ok') {
-        prepStep('mic', 'fail', r === 'denied' ? 'لم يُسمح به — اسمح به من إعدادات المتصفح ثم أعد المحاولة، أو سمّع بلا ميكروفون من إعدادات التسميع'
+        prepStep('mic', 'fail', r === 'denied' ? 'لم يُسمح به. اسمح به من إعدادات المتصفح (القفل بجانب العنوان ← الميكروفون ← السماح) ثم أعد المحاولة، أو تابع بلا ميكروفون: تقرأ من حفظك ثم تُظهر الآية وتعلّم أخطاءك بنفسك'
           : r === 'silent' ? 'لا يصل منه صوت — إن فصلت سماعة أو غيّرت الميكروفون فأعد تحميل التطبيق'
           : r === 'hung' ? 'سمحتَ به، لكن الهاتف لم يُعطِ المتصفح الميكروفون. افتح إعدادات الهاتف ← التطبيقات ← المتصفح (Chrome) ← الأذونات ← الميكروفون ← «السماح أثناء استخدام التطبيق»، وأغلق أي تطبيق يستعمله (مكالمة، تسجيل، مساعد صوتي)، ثم أعد المحاولة'
           : 'تعذّر فتح الميكروفون — تأكد أن المتصفح مسموح له به في إعدادات الهاتف وأن تطبيقًا آخر لا يستعمله، ثم أعد تحميل التطبيق');
@@ -305,6 +334,16 @@ const Recite = (() => {
     then();
   }
   $('#rpCancel').onclick = () => { prepRun++; clearTimeout(prepT); hide($('#recPrep')); };
+  $('#rpManual').onclick = () => goManual();
+  // the microphone or the model lost with a session under way: said on the same screen, with the
+  // ways on (again, or without the microphone)
+  function trouble(step, note, lead, again) {
+    prepRun++; clearTimeout(prepT);
+    ['update', 'mic', 'model', 'warm'].forEach(id => prepStep(id, ''));
+    $('#rpLead').textContent = lead;
+    prepStep(step, 'fail', note);
+    ask('أعد المحاولة', again);
+  }
   // the model didn't load (or stopped answering): said so, with a way to try again
   function modelFail() {
     prepStep('model', 'fail', 'تعذّر تحميله على هذا الجهاز — أعد المحاولة، وإن تكرر فأغلق التطبيقات الأخرى وأعد فتح التطبيق');
@@ -535,7 +574,12 @@ const Recite = (() => {
     G.run = true; G.t = G.lastAct = Date.now();
     hide($('#recWord'));
     const g = G;
-    const noMic = () => { if (G === g) { pause(); toast('لا يمكن الوصول إلى الميكروفون — اسمح به من إعدادات المتصفح، أو سمّع بلا ميكروفون من إعدادات التسميع', 4500); } };
+    const noMic = () => {
+      if (G !== g) return;
+      pause(); micOk = false;
+      trouble('mic', 'لا يمكن الوصول إليه — اسمح به من إعدادات المتصفح ثم أعد المحاولة، أو تابع بلا ميكروفون', 'لم نصل إلى الميكروفون، فأوقفنا التسميع مؤقتًا. جلستك كما هي.',
+        () => { hide($('#recPrep')); withModel(() => { if (G === g) resume(); }, {}); });
+    };
     if (g.manual) { clearInterval(timer); timer = setInterval(tick, 500); paintBar(); return; }
     if (MU()) {
       const h = d => onMu(g, d);
@@ -3180,13 +3224,7 @@ const Recite = (() => {
   };
   $('#riLater').onclick = () => { pending = null; hide($('#recIntro')); };
   // (no model, no microphone: the reader checks their own reading; the setting says so from then on)
-  $('#riManual').onclick = () => {
-    const then = pending;
-    pending = null; hide($('#recIntro'));
-    store.set('recite.manual', true);
-    toast('التسميع بلا ميكروفون — تغيّره متى شئت من إعدادات التسميع', 3600);
-    then?.();
-  };
+  $('#riManual').onclick = () => goManual();
 
   $('#rdList').addEventListener('click', e => {
     const b = e.target.closest('[data-rd-gone]');
