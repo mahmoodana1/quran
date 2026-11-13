@@ -491,10 +491,7 @@ const Recite = (() => {
     syncBubble();
     if (back) { keep(true); toast(manual ? 'استُعيدت جلستك — تابع من حيث توقفت' : 'استُعيدت جلستك — اضغط الميكروفون لتتابع'); return; }
     resume();
-    if (manual && store.get('recite.manualTold', 0) < 3) {
-      store.set('recite.manualTold', store.get('recite.manualTold', 0) + 1);
-      toast(`اقرأ الآية من حفظك ثم ${S.desk ? 'اضغط المسافة' : 'المس الزر'} لتظهر · المس كلمةً أخطأت فيها لتعلّمها`, 5200);
-    }
+    if (manual) howTo();
   }
 
   // ---- without the microphone: the ayas hidden, the reader says one from memory and then asks for
@@ -502,19 +499,57 @@ const Recite = (() => {
   // and the next one is the one to say. A word they got wrong they touch (again: not wrong after
   // all); the word they are on touched is a hint, as ever. All else is the session as it is: its
   // record, its summary, the plan, the revisions
-  function step() {
+  function step(word = false) {
     const g = G;
-    if (!g?.manual || g.done) return;
+    if (!g?.manual || g.done) return false;
     if (!g.run) resume();
-    if (g.pos >= g.words.length) return;
+    if (g.pos >= g.words.length) return false;
     const now = Date.now(), w = g.words[g.pos];
     g.secs += Math.min(MANUAL_IDLE, (now - g.t) / 1000); g.t = g.lastAct = now; // (left open is not time spent reciting)
-    g.pos = g.tent = Math.min(g.pos - w.wi + w.of, g.words.length);
+    g.pos = g.tent = word ? g.pos + 1 : Math.min(g.pos - w.wi + w.of, g.words.length);
     g.peek = false;
-    haptic(6);
+    haptic(word ? 3 : 6);
     paint();
-    if (g.pos >= g.words.length) return g.chain ? chain() : finish();
-    follow(); paintBar(); keep(true);
+    if (g.pos >= g.words.length) { g.chain ? chain() : finish(); return false; }
+    follow(); paintBar(); keep(!word);
+    return true;
+  }
+  // held (a finger on the page or on the bar's button, the space key): the words come one after
+  // another for as long as it is held, so a reader not sure of what comes next sees only as much
+  // as they need. Counted as said, like the aya asked for whole
+  const HOLD_MS = 380, HOLD_EVERY = 300;
+  let holdT = 0, holdI = 0, holdN = 0;
+  function holdStart() {
+    holdEnd();
+    if (!G?.manual || G.done) return;
+    holdN = 0;
+    const one = () => { holdN++; if (!step(true)) holdEnd(true); };
+    holdT = setTimeout(() => { one(); holdI = setInterval(one, HOLD_EVERY); }, HOLD_MS);
+  }
+  // (true: words were shown by it, so what ends it, a click or a key let go, asks for nothing more)
+  function holdEnd(keep = false) {
+    clearTimeout(holdT); clearInterval(holdI); holdT = holdI = 0;
+    const used = holdN > 0;
+    if (!keep) holdN = 0;
+    return used;
+  }
+  // how it goes, said the first three times it is used
+  function howTo() {
+    const n = store.get('recite.howSeen', 0);
+    if (n >= 3) return;
+    store.set('recite.howSeen', n + 1);
+    const d = S.desk, I = p => `<svg viewBox="0 0 24 24">${p}</svg>`;
+    const tips = [
+      [I('<path d="M4 7h16M4 12h16M4 17h9" stroke-dasharray="3 3"/>'), 'اقرأ الآية من حفظك، بصوتك أو في نفسك. الآيات مخفية حتى تطلبها.'],
+      [I('<path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>'), d ? 'اضغط <b>المسافة</b> أو انقر الصفحة لتظهر الآية وتتحقق منها، ثم اقرأ التي بعدها.' : '<b>المس الصفحة</b> أو زر العين لتظهر الآية وتتحقق منها، ثم اقرأ التي بعدها.'],
+      [I('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'), d ? 'نسيت ما بعدها؟ <b>أطل الضغط</b> على المسافة أو الصفحة: تظهر الكلمات واحدةً واحدة حتى ترفع إصبعك.' : 'نسيت ما بعدها؟ <b>أطل اللمس</b>: تظهر الكلمات واحدةً واحدة حتى ترفع إصبعك.'],
+      [I('<path d="M4 18h16" stroke-dasharray="2 3"/><path d="M8 13l4-7 4 7"/>'), `${d ? 'انقر' : 'المس'} أي <b>كلمة أخطأت فيها</b> لتعلّمها، ${d ? 'وانقرها' : 'والمسها'} ثانيةً لتلغي. تُحفظ أخطاؤك وتقدّمك كالمعتاد.`],
+      [MIC, 'زر الميكروفون في الشريط يعيدك إلى التسميع بالميكروفون متى شئت.'],
+    ];
+    $('#rhPoints').innerHTML = tips.map(([i, t]) => `<div>${i}<span>${t}</span></div>`).join('');
+    $('#rhNote').textContent = n < 2 ? `يظهر هذا الشرح في أول ثلاث مرات (${ar(n + 1)} من ٣).` : 'هذه آخر مرة يظهر فيها هذا الشرح. تجده دائمًا في «كيف يعمل التسميع».';
+    $('#rhOk').onclick = () => hide($('#recHow'));
+    show($('#recHow'));
   }
   const MANUAL_IDLE = 90;
   const muStarts = words => { const starts = []; words.forEach((w, k) => { if (w.wi === 0) starts.push(k); }); return starts; };
@@ -528,7 +563,8 @@ const Recite = (() => {
       g.manual = true; g.hide = true; g.peek = false; g.tent = g.pos;
       store.set('recite.manual', true);
       paint(); resume();
-      toast(`بلا ميكروفون: اقرأ الآية ثم ${S.desk ? 'اضغط المسافة' : 'المس الزر'} لتظهر، والمس ما أخطأت فيه`, 3600);
+      if (store.get('recite.howSeen', 0) < 3) howTo();
+      else toast(`بلا ميكروفون: اقرأ الآية ثم ${S.desk ? 'اضغط المسافة' : 'المس الصفحة'} لتظهر، وأطل الضغط لتظهر كلمةً كلمة`, 3600);
       return;
     }
     // back to the microphone: its model and its permission seen to first, as at any start
@@ -2858,7 +2894,7 @@ const Recite = (() => {
       [MIC, 'اضغط رقم أي آية في المصحف ثم «تسميع»، أو الميكروفون أعلى الصفحة واقرأ: نجد الآية ونتابعك منها.'],
       ['<svg viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg>', '«إخفاء» يخفي ما بعد موضعك. إن توقفت، تظهر لك الكلمة التالية تلميحًا.'],
       ['<svg viewBox="0 0 24 24"><path d="M4 18h16" stroke-dasharray="2 3"/><path d="M8 13l4-7 4 7"/></svg>', 'المس الكلمة المخطوءة لترى ما سُمِع، أو لتسمعها، أو لتلغي الخطأ إن لم تخطئ.'],
-      ['<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>', 'بلا ميكروفون؟ فعّله من إعدادات التسميع ⚙: تقرأ الآية من حفظك ثم تُظهرها وتلمس ما أخطأت فيه.'],
+      ['<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>', 'بلا ميكروفون (زر الميكروفون أعلى هذه اللوحة أو في شريط التسميع): تقرأ الآية من حفظك ثم تلمس الصفحة لتظهر، وتطيل اللمس لتظهر كلمةً كلمة، وتلمس ما أخطأت فيه لتعلّمه.'],
       ['<svg viewBox="0 0 24 24"><path d="M12 3.5l2.4 5 5.4.6-4 3.7 1.1 5.4L12 15.5l-4.9 2.7 1.1-5.4-4-3.7 5.4-.6z"/></svg>', `تُتقَن الآية بقراءتها صحيحة في ${ar(MASTER_DAYS)} أيام مختلفة، فتخرج من مواضع الضعف.`],
       ['<svg viewBox="0 0 24 24"><rect x="5.5" y="10.5" width="13" height="9.5" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 017 0v2.5"/></svg>', 'يعمل على جهازك دون إنترنت، وصوتك لا يغادره.'],
     ];
@@ -3157,8 +3193,22 @@ const Recite = (() => {
 
   // going on after a pause: if the model was let go meanwhile (Mu's idle unload), or the microphone
   // or an update needs seeing to, the steps first, on their screen
+  // held: the words one by one (the click that ends it asks for nothing more)
+  let heldAt = 0;
+  const held = () => { if (holdEnd()) heldAt = Date.now(); };
+  $('#recToggle').addEventListener('pointerdown', e => { if (e.button === 0 || e.pointerType !== 'mouse') holdStart(); });
+  for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) $('#recToggle').addEventListener(ev, held);
+  (vp => {
+    let x = 0, y = 0;
+    vp.addEventListener('pointerdown', e => { if (G?.manual && (e.button === 0 || e.pointerType !== 'mouse')) { x = e.clientX; y = e.clientY; holdStart(); } });
+    vp.addEventListener('pointermove', e => { if (holdT && Math.hypot(e.clientX - x, e.clientY - y) > 10) up(); });
+    const up = () => { if (holdEnd()) { heldAt = Date.now(); vp.dataset.swiped = '1'; setTimeout(() => delete vp.dataset.swiped, 400); } };
+    vp.addEventListener('pointerup', up, true);
+    vp.addEventListener('pointercancel', up, true);
+    vp.addEventListener('pointerleave', up);
+  })($('#viewport'));
   $('#recToggle').onclick = () => {
-    if (G?.manual) return step();
+    if (G?.manual) return Date.now() - heldAt < 400 ? null : step();
     if (G?.run) return pause();
     const g = G;
     if (MU() && g && !g.done) return withModel(() => { if (G === g) resume(); }, {});
@@ -3270,5 +3320,5 @@ const Recite = (() => {
 
   syncBubble();
 
-  return { start, cancel, paint, onTap, card, suraCard, showWord, prepResume, wordStats, resetWord, ago, restore, syncBubble, mic, panelHTML, mounted, onSheetClick, active: () => !!G, _g: () => G };
+  return { holdStart, holdEnd, manual: () => !!G?.manual && !G.done, start, cancel, paint, onTap, card, suraCard, showWord, prepResume, wordStats, resetWord, ago, restore, syncBubble, mic, panelHTML, mounted, onSheetClick, active: () => !!G, _g: () => G };
 })();

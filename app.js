@@ -779,7 +779,7 @@ wordAudio.addEventListener('error', () => { sayEl?.classList.remove('say'); if (
 // closes it as its own close button does; never while that button is hidden or disabled
 // (the model downloading, say). The install card has its own outside tap (install.js).
 (() => {
-  const CLOSE = { khEdit: '#khCancel', done: '#doneLater', recIntro: '#riLater', micIntro: '#miLater', recPrep: '#rpCancel', recDone: '#rdOk', install: '#inLater' };
+  const CLOSE = { khEdit: '#khCancel', done: '#doneLater', recIntro: '#riLater', micIntro: '#miLater', recPrep: '#rpCancel', recHow: '#rhOk', recDone: '#rdOk', install: '#inLater' };
   const closer = m => { const b = $(CLOSE[m.id]); return b && !b.hidden && !b.disabled && b.offsetParent !== null ? b : null; };
   // (Escape on a computer: the card on top closed as by its own button; true if there was one)
   window.closeTopCard = () => { const m = [...document.querySelectorAll('.modal:not([hidden]):not(.leaving)')].filter(x => CLOSE[x.id]).pop(); const b = m && closer(m); if (b) b.click(); return !!m; };

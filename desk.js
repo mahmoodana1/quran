@@ -418,6 +418,20 @@ const Desk = (() => {
     document.addEventListener('keydown', keys);
   }
 
+  // the space: the recitation's or the player's; reciting without the microphone it is let go
+  // for the aya, and held for its words one by one (recite.js: holdStart)
+  let spaceHeld = false;
+  function space() {
+    if (!Recite.manual()) return play();
+    spaceHeld = true;
+    Recite.holdStart();
+  }
+  addEventListener('keyup', e => {
+    if (e.key !== ' ' || !spaceHeld) return;
+    spaceHeld = false;
+    if (!Recite.holdEnd() && Recite.manual()) $('#recToggle').click();
+  });
+  addEventListener('blur', () => { if (spaceHeld) { spaceHeld = false; Recite.holdEnd(); } });
   function keys(e) {
     if (!on || !R || e.defaultPrevented) return;
     const t = e.target, typing = t.closest?.('input, textarea, select, [contenteditable]');
@@ -440,7 +454,7 @@ const Desk = (() => {
     if (document.querySelector('.modal:not([hidden]), .rc-found:not([hidden])')) return;
     const btn = t.closest?.('button, a, [role=button], summary');
     // (reciting, the space is the recitation's whatever button was pressed last)
-    if (btn && k === ' ' && Recite.active() && !$('#recBar').hidden && !e.repeat) { e.preventDefault(); btn.blur(); return play(); }
+    if (btn && k === ' ' && Recite.active() && !$('#recBar').hidden) { e.preventDefault(); btn.blur(); return e.repeat ? null : space(); }
     if (btn && (k === ' ' || k === 'Enter')) return;
     const done = () => e.preventDefault();
     if (mod) {
@@ -460,7 +474,7 @@ const Desk = (() => {
       case 'ArrowDown': case 'j': if (!rec) { done(); step(1); } break;
       case 'ArrowUp': case 'k': if (!rec) { done(); step(-1); } break;
       case 'Enter': if (!rec && sel() != null) { done(); at.t = 0; $('#ayaBar')._key = null; openActions(sel()); } break;
-      case ' ': done(); if (!e.repeat) play(); break;
+      case ' ': done(); if (!e.repeat) space(); break;
       case '/': done(); focusSearch(); break;
       case '?': case '؟': done(); show($('#deskHelp')); break;
       case '+': case '=': done(); setZoom(zoom() * 1.1); break;
