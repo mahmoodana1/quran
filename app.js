@@ -925,8 +925,7 @@ wordAudio.addEventListener('error', () => { sayEl?.classList.remove('say'); if (
     const act = e.target.closest('[data-act]');
     if (act) {
       const a = act.dataset.act;
-      if (a === 'index') openSheet('suras');
-      else if (a === 'suras') openSheet('suras');
+      if (a === 'index' || a === 'suras') openSheet(); // (the panel last open, as it was left)
       else if (a === 'bm') toggleBookmark(+act.closest('.page')?.dataset.page || S.page);
       else if (a === 'mic') Recite.mic();
       return;
@@ -1100,7 +1099,7 @@ function restoreUI() {
   else if (u.act != null && R.ayas[u.act]) openActions(u.act);
   if (u.sheet) openSheet(u.sheet);
 }
-document.addEventListener('visibilitychange', () => { if (document.hidden) keepUI(); });
+document.addEventListener('visibilitychange', () => { if (document.hidden) { keepUI(); if (panelOpen($('#sheet'))) keepPanel(); } });
 addEventListener('pagehide', keepUI);
 
 function openActions(i) {
@@ -1433,9 +1432,12 @@ function* ayaItems(ai, rec, base, intro, extra) {
 // all of them o.whole times; o.link: aya by aya, each followed by all of them
 // from the first so far), with a pause after each to repeat it (o.gap: times
 // its length)
+// (o.seq: several such, one after the other, each its name before its labels)
 function* drill(list, o) {
-  const rec = P.rec, base = voice('hafs').base;
-  function* one(ai, lab, intro) {
+  if (o.seq) { for (const x of o.seq) yield* drill(list, x); return; }
+  const rec = P.rec, base = voice('hafs').base, pre = o.name ? o.name + ' · ' : '';
+  function* one(ai, lab0, intro) {
+    const lab = lab0 ? pre + lab0 : o.name || '';
     yield* ayaItems(ai, rec, base, intro, { lab });
     if (o.gap) yield { gap: o.gap, ai, lab };
   }
@@ -2671,17 +2673,31 @@ function applyTheme() {
 }
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
 
-let tab = 'suras';
+// the panel last open, its own page and how far down it was (ui.panel), to come back to it
+const PANELS = ['suras', 'hifz', 'recite', 'adhkar', 'marks', 'prayer', 'settings'];
+let tab = (p => PANELS.includes(p?.tab) ? p.tab : 'suras')(store.get('ui.panel', null));
+function keepPanel() {
+  if ($('#q').value.trim()) return;
+  store.set('ui.panel', { tab, set: setView, hz: typeof Hifz !== 'undefined' ? Hifz.view() : '', y: $('#sheetBody').scrollTop });
+}
 function openRecite() { openSheet('recite'); }
 // the same panel, on its settings page
 function openReciteSettings() { openSheet('recite', 'set'); }
 // (on a computer the panel stands beside the pages: going somewhere from it leaves it open)
 const dismissSheet = () => { if (!S.desk) closeSheet(); };
-function openSheet(t = tab, view = '', keepQuery = false) {
+// with no panel named: the one last open, as it was left
+function openSheet(t, view = '', keepQuery = false) {
+  const back = t == null ? store.get('ui.panel', null) : null;
+  if (t == null) t = tab;
   tab = t;
-  store.set('recite.view', t === 'recite' ? view : ''); // (التسميع's own pages: its main one, unless asked)
-  setView = t === 'settings' ? view : '';
-  if (typeof Hifz !== 'undefined') Hifz.reset();
+  if (back) {
+    setView = t === 'settings' ? back.set || '' : '';
+    if (typeof Hifz !== 'undefined') Hifz.setView(t === 'hifz' ? back.hz || '' : '');
+  } else {
+    store.set('recite.view', t === 'recite' ? view : ''); // (التسميع's own pages: its main one, unless asked)
+    setView = t === 'settings' ? view : '';
+    if (typeof Hifz !== 'undefined') Hifz.reset();
+  }
   railOpen(false);
   $('#sheetSub').textContent = `${K.name} · ${META.riwayat.find(r => r.id === R.id)?.name || ''} · صفحة ${ar(S.page)}`;
   if (!(S.desk && !$('#tafsir').hidden)) closeActions(); // (a computer: the tafsir stays at its own side)
@@ -2689,8 +2705,10 @@ function openSheet(t = tab, view = '', keepQuery = false) {
   Adhkar.load().then(() => { if ($('#q').value.trim() && !$('#sheet').hidden) renderSheet(); }).catch(() => {}); // so the search finds adhkar too
   if (!keepQuery) $('#q').value = '';
   renderSheet();
+  if (back?.tab === t && back.y) $('#sheetBody').scrollTop = back.y;
+  keepPanel();
 }
-function closeSheet() { stopPreview(); hide($('#sheet')); $('#q').blur(); if (S.desk && $('#q').value) { $('#q').value = ''; renderSheet(); } }
+function closeSheet() { keepPanel(); stopPreview(); hide($('#sheet')); $('#q').blur(); if (S.desk && $('#q').value) { $('#q').value = ''; renderSheet(); } }
 $('#sheetClose').onclick = closeSheet;
 // the side rail of the panels: on a phone it comes over the panel from the button beside it, and
 // goes once a panel is chosen (or the panel is touched); on a wide screen it stays
@@ -2705,8 +2723,10 @@ const TAB_NAMES = { suras: 'السور', hifz: 'الحفظ', recite: 'التسم
 $('#tabs').addEventListener('click', e => {
   const b = e.target.closest('[data-tab]');
   if (!b) return;
+  keepPanel();
   tab = b.dataset.tab;
   setView = '';
+  Hifz.reset();
   stopPreview();
   $('#q').value = '';
   if (!wide.matches) railOpen(false);

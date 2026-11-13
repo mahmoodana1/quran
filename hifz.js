@@ -10,13 +10,29 @@
 // over every few days (المنزل).
 //
 // store: hifz.<riwaya> = { a, b } the lesson (first and last aya); hifz.o = how
-// to repeat; hifz.day = the steps done today, and of which lesson.
+// to repeat and which steps make the routine (a preset or the reader's own); hifz.day = the steps done
+// today, and of which lesson. «ابدأ الجلسة» plays the routine's listening steps as one recording.
 // Uses (app.js): R, META, S, store, ar, esc, suraName, ayaLabel, pageInfo, playDrill,
 // stopAudio, renderSheet, dismissSheet, closeSheet, openSheet, goTo, flashAya, toast, haptic, Recite.
 
 const Hifz = (() => {
-  const DEF = { each: 5, whole: 2, gap: 1, rate: 1, hide: true, days: 7 };
-  const opts = () => { const o = { ...DEF, ...store.get('hifz.o', {}) }; if (o.whole >= 1e9) o.whole = Infinity; return o; };
+  const view0 = () => view;
+  // each: listening, times an aya; whole: then the lesson; rEach / gap: repeating after the reciter, times an
+  // aya and the pause (times the aya's length); lEach: linking, times an aya; steps: which are in the routine
+  const DEF = { each: 5, whole: 2, rEach: 3, gap: 1, lEach: 2, rate: 1, hide: true, days: 7, review: true,
+    steps: { listen: true, repeat: true, link: true, recite: true } };
+  const PRESETS = [
+    ['light', 'خفيف', 'لمن يحفظ بسرعة', { each: 3, whole: 1, rEach: 2, lEach: 1, gap: 1 }],
+    ['mid', 'متوازن', 'لأكثر الحفّاظ', { each: 5, whole: 2, rEach: 3, lEach: 2, gap: 1 }],
+    ['deep', 'متقن', 'تكرار كثير لحفظ راسخ', { each: 10, whole: 3, rEach: 5, lEach: 3, gap: 1.5 }],
+  ];
+  const opts = () => {
+    const o = { ...DEF, ...store.get('hifz.o', {}) };
+    o.steps = { ...DEF.steps, ...o.steps };
+    if (o.whole >= 1e9) o.whole = Infinity;
+    return o;
+  };
+  const presetOf = o => PRESETS.find(([, , , p]) => Object.entries(p).every(([k, v]) => o[k] === v))?.[0] || 'custom';
   const setOpt = (k, v) => store.set('hifz.o', { ...store.get('hifz.o', {}), [k]: v });
   const today = (t = Date.now()) => { const d = new Date(t); return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`; };
   const dayNo = () => { const d = new Date(); return Math.floor((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())) / 864e5); };
@@ -90,49 +106,82 @@ const Hifz = (() => {
     tune: '<svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/></svg>',
   };
 
+  const STEPS = [
+    ['listen', 'استمع', o => o.each > 1 ? `كل آية ${times(o.each)}، ثم الدرس ${times(o.whole)}` : `الدرس ${times(o.whole)}`],
+    ['repeat', 'ردّد', o => `يقرأ القارئ الآية ${o.rEach > 1 ? times(o.rEach) + ' ' : ''}ويسكت لتعيدها بعده`],
+    ['link', 'اربط', o => `آية آية${o.lEach > 1 ? ` (${times(o.lEach)})` : ''}، وبعد كلٍّ من الأولى إليها`],
+    ['recite', 'سمّع', o => o.hide ? 'من حفظك والكلمات مخفية، والتطبيق يتابعك' : 'من حفظك، والتطبيق يتابعك'],
+  ];
+  // what each listening step plays
+  const stepPlay = (k, o) => k === 'listen' ? { name: 'استمع', each: o.each, whole: o.whole }
+    : k === 'repeat' ? { name: 'ردّد', each: o.rEach, whole: o.rEach > 1 ? 0 : 1, gap: o.gap }
+    : k === 'link' ? { name: 'اربط', link: true, each: o.lEach } : null;
+
   function panelHTML() {
     if (view === 'edit') return editHTML();
+    if (view === 'way') return wayHTML();
     const L = lesson(), o = opts(), list = listOf(L), said = log().said || {};
     const done = stepsDone(L), have = list.filter(a => said[a]).length, all = have === list.length;
-    const s = R.ayas[L.a][0], words = list.reduce((t, a) => t + R.text[a].split(' ').length - 1, 0);
-    const steps = [
-      ['listen', IC.listen, 'استمع', o.each > 1 ? `كل آية ${times(o.each)}، ثم الدرس ${times(o.whole)}` : `الدرس ${times(o.whole)}`],
-      ['repeat', IC.repeat, 'ردّد', 'يقرأ القارئ الآية ويسكت لتعيدها بعده'],
-      ['link', IC.link, 'اربط', 'آية، ثم من الأولى إليها، حتى يتصل الدرس'],
-      ['recite', IC.mic, 'سمّع', o.hide ? 'من حفظك والكلمات مخفية، والتطبيق يتابعك' : 'من حفظك، والتطبيق يتابعك'],
-    ];
-    const rv = review(L);
+    const words = list.reduce((t, a) => t + R.text[a].split(' ').length - 1, 0);
+    const on = STEPS.filter(([k]) => o.steps[k]), plays = on.filter(([k]) => k !== 'recite');
+    const allPlayed = plays.length && plays.every(([k]) => done[k]);
+    const pr = PRESETS.find(p => p[0] === presetOf(o));
     let h = `<div class="hz">
       <section class="hz-lesson">
         <div class="hz-l-top"><small>درسك</small><button class="hz-edit" data-hz-view="edit" aria-label="غيّر الدرس">${IC.edit}<span>غيّر</span></button></div>
         <b class="hz-l-name">${rangeText(L)}</b>
         <span class="hz-l-sub">${ayaN(list.length)} · ${ar(words)} كلمة · صفحة ${ar(R.ayas[L.a][2])}${R.ayas[L.b][2] !== R.ayas[L.a][2] ? '–' + ar(R.ayas[L.b][2]) : ''}${have ? ` · حفظت ${ar(have)} منها` : ''}</span>
-        <button class="hz-show" data-hz-show>${IC.book}<span>اعرضه في المصحف</span></button>
-      </section>
-      <ol class="hz-steps">${steps.map(([k, ic, t, sub], i) => {
-        const ok = k === 'recite' ? all : done[k];
-        return `<li><button class="hz-step${ok ? ' ok' : ''}" data-hz-go="${k}"><span class="hz-n">${ok ? IC.check : ar(i + 1)}</span>
-          <span class="hz-st"><b>${t}</b><small>${sub}</small></span><span class="hz-ic">${ic}</span></button></li>`;
+        <div class="hz-l-acts"><button class="hz-show" data-hz-show>${IC.book}<span>في المصحف</span></button><button class="hz-show" data-hz-reciter>${IC.listen}<span>${esc(reciterFull(R.id))}</span></button></div>
+      </section>`;
+    // one tap for the whole routine (the listening steps, one after the other), then the recitation
+    if (plays.length) h += `<button class="hz-go${allPlayed ? ' ok' : ''}" data-hz-all><span class="hz-go-i">${allPlayed ? IC.check : IC.play}</span>
+        <span><b>${allPlayed ? 'أعد الجلسة' : 'ابدأ الجلسة'}</b><small>${plays.map(([, t]) => t).join(' ثم ')} · دون توقف${o.steps.recite && !all ? '، ثم سمّع' : ''}</small></span></button>`;
+    h += `<ol class="hz-steps">${on.map(([k, t, sub]) => {
+        const ok = k === 'recite' ? all : done[k], i = STEPS.findIndex(x => x[0] === k);
+        return `<li><button class="hz-step${ok ? ' ok' : ''}" data-hz-go="${k}"><span class="hz-n">${ok ? IC.check : ar(on.findIndex(x => x[0] === k) + 1)}</span>
+          <span class="hz-st"><b>${t}</b><small>${sub(o)}</small></span><span class="hz-ic">${[IC.listen, IC.repeat, IC.link, IC.mic][i]}</span></button></li>`;
       }).join('')}</ol>
       <button class="hz-done${all ? ' ok' : ''}" data-hz-memo>${all ? 'حفظتَه، ما شاء الله — إلى الدرس التالي' : 'حفظتُ هذا الدرس — إلى التالي'}</button>
-
-      <details class="hz-opts"${store.get('hifz.open', false) ? ' open' : ''}><summary>${IC.tune}<span><b>طريقة التكرار</b><small>${o.each > 1 ? `الآية ${times(o.each)}` : 'بلا تكرار للآية'} · الدرس ${times(o.whole)} · ${o.rate === 1 ? 'سرعة عادية' : `سرعة ${ar(o.rate).replace('.', '٫')}×`}</small></span></summary>
-        ${chips('each', 'تكرار كل آية', [[1, '١'], [3, '٣'], [5, '٥'], [7, '٧'], [10, '١٠'], [20, '٢٠']], o.each)}
-        ${chips('whole', 'تكرار الدرس كله', [[1, '١'], [2, '٢'], [3, '٣'], [5, '٥'], [0, '∞']], o.whole === Infinity ? 0 : o.whole)}
-        ${chips('gap', 'مهلة الترديد بعد كل آية', [[0.5, 'نصفها'], [1, 'مثلها'], [1.5, 'مرة ونصف'], [2, 'ضعفها']], o.gap)}
-        ${chips('rate', 'سرعة التلاوة', [[0.75, 'أبطأ'], [1, 'عادية'], [1.25, 'أسرع']], o.rate)}
-        ${chips('days', 'تُراجَع محفوظاتك القديمة كلها كل', [[3, '٣ أيام'], [5, '٥'], [7, '٧'], [10, '١٠'], [14, '١٤'], [30, '٣٠']], o.days)}
-        <button class="hz-sw rc-set" data-hz-hide role="switch" aria-checked="${o.hide}"><span>إخفاء الكلمات عند التسميع</span><span class="tog${o.hide ? ' on' : ''}"><i></i></span></button>
-      </details>
-
-      <div class="pp-h hz-h"><b>مراجعة اليوم</b><small>بلا مراجعة يتفلّت الحفظ</small></div>`;
-    if (!rv.near.length && !rv.far.length) h += `<p class="hz-empty">ما تحفظه يُراجَع هنا: القريب منه كل يوم، والقديم جزءًا جزءًا حتى يُختم كل ${ar(o.days)} أيام.</p>`;
-    else h += `<div class="group hz-rev">
+      <button class="hz-way" data-hz-view="way">${IC.tune}<span><b>طريقتك في الحفظ</b><small>${pr ? pr[1] : 'مخصّصة'} · ${ar(on.length)} ${on.length <= 2 ? (on.length === 1 ? 'خطوة' : 'خطوتان') : 'خطوات'} · ${o.rate === 1 ? 'سرعة عادية' : o.rate < 1 ? 'أبطأ' : 'أسرع'}</small></span>${IC.back.replace('M9.5 6l6 6-6 6', 'M14.5 6l-6 6 6 6')}</button>`;
+    if (o.review) {
+      const rv = review(L);
+      h += `<div class="pp-h hz-h"><b>مراجعة اليوم</b><small>بلا مراجعة يتفلّت الحفظ</small></div>`;
+      if (!rv.near.length && !rv.far.length) h += `<p class="hz-empty">ما تحفظه يُراجَع هنا: القريب منه كل يوم، والقديم جزءًا جزءًا حتى يُختم كل ${ar(o.days)} أيام.</p>`;
+      else h += `<div class="group hz-rev">
         ${revRow('near', 'القريب', rv.near.length ? `ما حفظته هذا الأسبوع · ${ayaN(rv.near.length)}` : 'لا جديد هذا الأسبوع', rv.near)}
         ${revRow('far', 'المنزل', rv.part.length ? `${listText(rv.part)} · ${ayaN(rv.part.length)}${rv.days > 1 ? ` · ${ar(rv.i + 1)} من ${ar(rv.days)}` : ''}` : 'لا قديم بعد', rv.part)}
       </div>`;
+    }
     h += `<button class="hz-more" data-hz-recite>خطة الحفظ، وتقدّمك، ومواضع ضعفك في التسميع ${IC.back.replace('M9.5 6l6 6-6 6', 'M14.5 6l-6 6 6 6')}</button></div>`;
     return h;
+  }
+
+  // ---- the way of memorizing: a preset, the steps in the routine, each step's repeats, and the rest
+  function wayHTML() {
+    const o = opts(), pre = presetOf(o);
+    const sec = (k, t, body) => o.steps[k] ? `<div class="hz-sec"><b>${t}</b>${body}</div>` : '';
+    return `<div class="pp pp-sub"><div class="pp-bar"><button class="pp-back" data-hz-view="" aria-label="رجوع">${IC.back}</button><b>طريقتك في الحفظ</b></div>
+      <div class="pp-subb hz-ed">
+        <div class="hz-presets">${PRESETS.map(([id, t, sub]) => `<button data-hz-preset="${id}" class="${pre === id ? 'on' : ''}"><b>${t}</b><small>${sub}</small></button>`).join('')}</div>
+        <p class="hz-hint">${pre === 'custom' ? 'طريقة مخصّصة: غيّرت الأعداد بنفسك.' : 'اختر طريقة جاهزة، أو غيّر أي عدد أدناه.'}</p>
+        <div class="hz-sec"><b>خطوات جلستك</b><small>اختر ما يناسبك، و«ابدأ الجلسة» يمرّ بها بالترتيب</small>
+          <div class="hz-tg">${STEPS.map(([k, t]) => `<button data-hz-stepon="${k}" class="${o.steps[k] ? 'on' : ''}" role="switch" aria-checked="${!!o.steps[k]}">${o.steps[k] ? IC.check : ''}<span>${t}</span></button>`).join('')}</div></div>
+        ${sec('listen', 'الاستماع', chips('each', 'كل آية', [[1, '١'], [3, '٣'], [5, '٥'], [7, '٧'], [10, '١٠'], [20, '٢٠']], o.each)
+          + chips('whole', 'ثم الدرس كله', [[1, '١'], [2, '٢'], [3, '٣'], [5, '٥'], [0, '∞']], o.whole === Infinity ? 0 : o.whole))}
+        ${sec('repeat', 'الترديد', chips('rEach', 'كل آية', [[1, '١'], [2, '٢'], [3, '٣'], [5, '٥'], [7, '٧']], o.rEach)
+          + chips('gap', 'مهلتك بعدها', [[0.5, 'نصفها'], [1, 'مثلها'], [1.5, 'مرة ونصف'], [2, 'ضعفها']], o.gap))}
+        ${sec('link', 'الربط', chips('lEach', 'كل آية قبل ربطها', [[1, '١'], [2, '٢'], [3, '٣'], [5, '٥']], o.lEach))}
+        <div class="hz-sec"><b>التلاوة</b>${chips('rate', 'السرعة', [[0.75, 'أبطأ'], [0.9, 'أبطأ قليلًا'], [1, 'عادية'], [1.25, 'أسرع']], o.rate)}
+          <button class="hz-sw hz-o" data-hz-reciter><span>القارئ</span><span class="hz-val">${esc(reciterFull(R.id))} ›</span></button></div>
+        <div class="hz-sec"><b>التسميع والمراجعة</b>
+          ${toggle('hide', 'إخفاء الكلمات عند التسميع', o.hide)}
+          ${toggle('review', 'إظهار مراجعة اليوم', o.review)}
+          ${o.review ? chips('days', 'تُراجَع محفوظاتك القديمة كلها كل', [[3, '٣ أيام'], [5, '٥'], [7, '٧'], [10, '١٠'], [14, '١٤'], [30, '٣٠']], o.days) : ''}</div>
+        <button class="hz-reset" data-hz-preset="mid">العودة إلى الطريقة الأصلية</button>
+      </div></div>`;
+  }
+  function toggle(k, label, on) {
+    return `<button class="hz-sw hz-o rc-set" data-hz-flag="${k}" role="switch" aria-checked="${on}"><span>${label}</span><span class="tog${on ? ' on' : ''}"><i></i></span></button>`;
   }
   function chips(k, label, list, cur) {
     return `<div class="hz-o"><span>${label}</span><div class="hz-chips">${list.map(([v, t]) =>
@@ -170,16 +219,27 @@ const Hifz = (() => {
     const v = t.closest('[data-hz-view]');
     if (v) { view = v.dataset.hzView; renderSheet(); $('#sheetBody').scrollTop = 0; haptic(5); return true; }
     const L = lesson(), o = opts(), list = listOf(L);
-    const go = t.closest('[data-hz-go]');
-    if (go) {
-      const k = go.dataset.hzGo;
-      if (k === 'listen') play(list, { each: o.each, whole: o.whole, rate: o.rate }, () => markStep(L, 'listen'));
-      else if (k === 'repeat') play(list, { each: Math.min(o.each, 3), whole: o.each > 1 ? 0 : 1, gap: o.gap, rate: o.rate }, () => markStep(L, 'repeat'));
-      else if (k === 'link') play(list, { link: true, each: Math.min(o.each, 3), rate: o.rate }, () => markStep(L, 'link'));
-      else if (k === 'recite') { stopAudio(); closeSheet(); Recite.start(null, list, { kind: 'new', hide: o.hide }); }
+    if (t.closest('[data-hz-all]')) {
+      const ks = STEPS.map(([k]) => k).filter(k => o.steps[k] && k !== 'recite');
+      play(list, { seq: ks.map(k => stepPlay(k, o)), rate: o.rate }, () => {
+        const s = { ...stepsDone(L) };
+        ks.forEach(k => { s[k] = 1; });
+        store.set('hifz.day', { d: today(), k: lessonKey(L), s });
+        toast(o.steps.recite ? 'انتهت الجلسة — سمّعه الآن من حفظك' : 'انتهت الجلسة، بارك الله فيك', 3000);
+        if (o.steps.recite) openSheet('hifz');
+      });
       haptic(8);
       return true;
     }
+    const go = t.closest('[data-hz-go]');
+    if (go) {
+      const k = go.dataset.hzGo;
+      if (k === 'recite') { stopAudio(); closeSheet(); Recite.start(null, list, { kind: 'new', hide: o.hide }); }
+      else play(list, { ...stepPlay(k, o), rate: o.rate }, () => markStep(L, k));
+      haptic(8);
+      return true;
+    }
+    if (t.closest('[data-hz-reciter]')) { openSheet('settings', 'reciter'); return true; }
     if (t.closest('[data-hz-show]')) { dismissSheet(); goTo(R.ayas[L.a][2]); setTimeout(() => flashAya(L.a), 250); return true; }
     if (t.closest('[data-hz-memo]')) {
       const l = log();
@@ -192,15 +252,23 @@ const Hifz = (() => {
       renderSheet();
       return true;
     }
+    const keepY = fn => { const b = $('#sheetBody'), y = b.scrollTop; fn(); renderSheet(); b.scrollTop = y; haptic(5); return true; };
     const op = t.closest('[data-hz-opt]');
     if (op) {
       let val = +op.dataset.v;
-      if (op.dataset.hzOpt === 'whole' && !val) val = Infinity;
-      setOpt(op.dataset.hzOpt, val === Infinity ? 1e9 : val);
-      renderSheet(); haptic(5);
-      return true;
+      if (op.dataset.hzOpt === 'whole' && !val) val = 1e9;
+      return keepY(() => setOpt(op.dataset.hzOpt, val));
     }
-    if (t.closest('[data-hz-hide]')) { setOpt('hide', !o.hide); renderSheet(); return true; }
+    const ps = t.closest('[data-hz-preset]');
+    if (ps) return keepY(() => { const p = PRESETS.find(x => x[0] === ps.dataset.hzPreset)[3]; store.set('hifz.o', { ...store.get('hifz.o', {}), ...p }); });
+    const so = t.closest('[data-hz-stepon]');
+    if (so) {
+      const k = so.dataset.hzStepon, st = { ...o.steps, [k]: !o.steps[k] };
+      if (!Object.values(st).some(Boolean)) { toast('أبقِ خطوة واحدة على الأقل'); return true; }
+      return keepY(() => setOpt('steps', st));
+    }
+    const fl = t.closest('[data-hz-flag]');
+    if (fl) return keepY(() => setOpt(fl.dataset.hzFlag, !o[fl.dataset.hzFlag]));
     const rv = t.closest('[data-hz-rev]');
     if (rv) {
       const r = review(L), l2 = rv.dataset.hzRev === 'near' ? r.near : r.part;
@@ -253,12 +321,8 @@ const Hifz = (() => {
     renderSheet();
     return true;
   }
-  // (the open/closed state of the options)
-  function mounted() {
-    const d = $('.hz-opts');
-    if (d) d.addEventListener('toggle', () => store.set('hifz.open', d.open));
-  }
+  function mounted() {}
   const reset = () => { view = ''; };
 
-  return { panelHTML, onClick, onChange, mounted, reset };
+  return { panelHTML, onClick, onChange, mounted, reset, view: view0, setView: v => { view = v; } };
 })();
