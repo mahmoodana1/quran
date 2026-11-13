@@ -52,7 +52,7 @@
 <div id="ayaBar" class="bar acts" hidden>
   <div class="acts-head">
     <div class="acts-title"><span class="dot"></span><b id="ayaBarTitle"></b></div>
-    <button data-act="rc-set" class="x-btn gear-btn" aria-label="إعدادات التسميع"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 3.2l1.6 1.9 2.4-.6.8 2.3 2.3.8-.6 2.4 1.9 1.6-1.9 1.6.6 2.4-2.3.8-.8 2.3-2.4-.6L12 20.8l-1.6-1.9-2.4.6-.8-2.3-2.3-.8.6-2.4L3.2 12l1.9-1.6-.6-2.4 2.3-.8.8-2.3 2.4.6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>
+    <button data-act="set" class="x-btn gear-btn" aria-label="الإعدادات"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 3.2l1.6 1.9 2.4-.6.8 2.3 2.3.8-.6 2.4 1.9 1.6-1.9 1.6.6 2.4-2.3.8-.8 2.3-2.4-.6L12 20.8l-1.6-1.9-2.4.6-.8-2.3-2.3-.8.6-2.4L3.2 12l1.9-1.6-.6-2.4 2.3-.8.8-2.3 2.4.6z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>
     <button data-act="close" class="x-btn" aria-label="إغلاق"><svg viewBox="0 0 24 24"><path d="M7 7l10 10M17 7L7 17" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round"/></svg></button>
   </div>
   <div id="ayaBarRc" hidden></div>
@@ -96,7 +96,7 @@
 <!-- audio player -->
 <div id="player" class="bar mini" hidden>
   <div class="pl-track"><i id="plProg"></i></div>
-  <div class="pl-info"><b id="plTitle"></b><small id="plReciter">الشيخ ياسر الدوسري</small></div>
+  <div class="pl-info"><b id="plTitle"></b><small id="plReciter" role="button" aria-label="تغيير القارئ">الشيخ ياسر الدوسري</small></div>
   <div class="pl-ctrl">
     <button id="plPrev" class="pl-btn" aria-label="الآية السابقة"><svg viewBox="0 0 24 24"><path d="M17 6v12M13.5 12L5 18V6z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg></button>
     <button id="plToggle" class="pl-main" aria-label="تشغيل/إيقاف"><svg viewBox="0 0 24 24" class="ic-pause"><rect x="7" y="5.5" width="3.6" height="13" rx="1.2"/><rect x="13.4" y="5.5" width="3.6" height="13" rx="1.2"/></svg><svg viewBox="0 0 24 24" class="ic-play"><path d="M8.5 5.5v13l10.5-6.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></button>

@@ -9,6 +9,7 @@ data/<riwaya>.json). Qunbul has no published timing: tools/align.py works it
 out from the recording itself (see there) and this script reads its output.
 
     python3 tools/recitations.py data [cache-dir] [qumbul-timing.json]
+    ONLY=extra python3 tools/recitations.py data   (just the EXTRA reciters)
 
 Output per riwaya:
     name   reciter (Arabic)
@@ -43,6 +44,22 @@ RECITERS = {
     'soosi': ('عبد الرشيد صوفي', 65, 'abdulrasheed-sufi/r2/'),
     'bazzi': ('عكاشة كميني', 296, 'okasha-kameny/r2/'),
     'qumbul': ('أحمد ديبان', None, 'ahmad-deeban/r3/'),
+}
+
+# more reciters of a riwaya, chosen in the settings: riwaya -> [(key, reciter,
+# read id, folder)], written to data/audio/<riwaya>.<key>.json. One whose
+# timing does not match the riwaya's count of ayat is left out (and said so).
+EXTRA = {
+    'warsh': [
+        ('husary', 'محمود خليل الحصري', 120, 'mahmoud-husary/r3/'),
+        ('kouchi', 'العيون الكوشي', 16, 'laayoun-kouchi/r1/'),
+        ('jazairi', 'ياسين الجزائري', 14, 'yassen-jazairi/r1/'),
+        ('saayed', 'محمد سايد', 134, 'muhammad-saayed/r1/'),
+    ],
+    'qaloon': [
+        ('hudhaifi', 'علي بن عبد الرحمن الحذيفي', 75, 'ali-hudhaifi/r2/'),
+        ('dokali', 'الدوكالي محمد العالم', 208, 'dokali-alim/r1/'),
+    ],
 }
 
 # where mp3quran's division differs from the riwaya's count: {surah: [rows
@@ -85,41 +102,51 @@ def timing(read, s, cache):
     return [(int(r['ayah']), int(r['start_time']), int(r['end_time'])) for r in rows]
 
 
-def build(data, cache, qumbul):
+def one(data, cache, qumbul, rid, name, read, folder, out):
+    n = counts(data, rid)
+    T = []
+    if read is None:
+        if not os.path.exists(qumbul):
+            print(rid, 'skipped: no timing yet (tools/align.py)')
+            return
+        T = json.load(open(qumbul))['t']
+        src = 'aligned with tools/align.py'
+    else:
+        src = f'mp3quran.net ayat_timing, read {read}'
+        for s in range(1, 115):
+            rows = [r for r in timing(read, s, cache) if r[0] >= 1]
+            assert [r[0] for r in rows] == list(range(1, len(rows) + 1)), (rid, s, 'rows out of order')
+            for a, b in reversed(MERGE.get(rid, {}).get(s, [])):
+                rows[a - 1:b] = [(a, rows[a - 1][1], rows[b - 1][2])]
+            assert len(rows) == n[s], (rid, s, len(rows), n[s])
+            starts = [r[1] for r in rows]
+            assert all(x < y for x, y in zip(starts, starts[1:])), (rid, s, 'times out of order')
+            T.append(starts + [rows[-1][2]])
+    for s in range(1, 115):
+        assert len(T[s - 1]) == n[s] + 1, (rid, s)
+    size = [file_size(f'{CDN}{folder}{s:03d}.mp3') for s in range(1, 115)]
+    res = {'name': name, 'url': CDN + folder, 'src': src, 'size': size, 't': T}
+    with open(out, 'w') as f:
+        json.dump(res, f, ensure_ascii=False, separators=(',', ':'))
+    print(os.path.basename(out), name, f'{sum(size) / 1e9:.2f} GB', os.path.getsize(out) // 1024, 'KB')
+
+
+def build(data, cache, qumbul, only=None):
     out_dir = os.path.join(data, 'audio')
     os.makedirs(out_dir, exist_ok=True)
-    for rid, (name, read, folder) in RECITERS.items():
-        n = counts(data, rid)
-        T = []
-        if read is None:
-            if not os.path.exists(qumbul):
-                print(rid, 'skipped: no timing yet (tools/align.py)')
-                continue
-            T = json.load(open(qumbul))['t']
-            src = 'aligned with tools/align.py'
-        else:
-            src = f'mp3quran.net ayat_timing, read {read}'
-            for s in range(1, 115):
-                rows = [r for r in timing(read, s, cache) if r[0] >= 1]
-                assert [r[0] for r in rows] == list(range(1, len(rows) + 1)), (rid, s, 'rows out of order')
-                for a, b in reversed(MERGE.get(rid, {}).get(s, [])):
-                    rows[a - 1:b] = [(a, rows[a - 1][1], rows[b - 1][2])]
-                assert len(rows) == n[s], (rid, s, len(rows), n[s])
-                starts = [r[1] for r in rows]
-                assert all(x < y for x, y in zip(starts, starts[1:])), (rid, s, 'times out of order')
-                T.append(starts + [rows[-1][2]])
-        for s in range(1, 115):
-            assert len(T[s - 1]) == n[s] + 1, (rid, s)
-        size = [file_size(f'{CDN}{folder}{s:03d}.mp3') for s in range(1, 115)]
-        out = {'name': name, 'url': CDN + folder, 'src': src, 'size': size, 't': T}
-        path = os.path.join(out_dir, rid + '.json')
-        with open(path, 'w') as f:
-            json.dump(out, f, ensure_ascii=False, separators=(',', ':'))
-        print(rid, name, f'{sum(size) / 1e9:.2f} GB', os.path.getsize(path) // 1024, 'KB')
+    if only != 'extra':
+        for rid, (name, read, folder) in RECITERS.items():
+            one(data, cache, qumbul, rid, name, read, folder, os.path.join(out_dir, rid + '.json'))
+    for rid, rows in EXTRA.items():
+        for key, name, read, folder in rows:
+            try:
+                one(data, cache, qumbul, rid, name, read, folder, os.path.join(out_dir, f'{rid}.{key}.json'))
+            except AssertionError as e:
+                print(rid, key, 'left out:', e)
 
 
 if __name__ == '__main__':
     data = sys.argv[1]
     cache = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(os.path.abspath(__file__)), 'dl', 'ayat_timing')
     qumbul = sys.argv[3] if len(sys.argv) > 3 else os.path.join(data, 'audio', 'qumbul.json')
-    build(data, cache, qumbul)
+    build(data, cache, qumbul, os.environ.get('ONLY'))

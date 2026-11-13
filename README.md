@@ -35,16 +35,18 @@ Static PWA: open it in Safari → Share → **Add to Home Screen**. It must be s
 
   | Riwaya | Reciter | Source |
   |---|---|---|
-  | Hafs | Yasser Al-Dosari | everyayah.com, one file per aya |
+  | Hafs | Yasser Al-Dosari (default) and 30 more (`HAFS_VOICES` in app.js) | everyayah.com, one file per aya |
   | Shu'bah | Ali Al-Hudhaifi | mp3quran.net, read 305 |
-  | Warsh | Omar Al-Qazabri | mp3quran.net, read 80 |
-  | Qalun | Mahmoud Khalil Al-Husary | mp3quran.net, read 270 |
+  | Warsh | Omar Al-Qazabri; also Al-Husary (120), Al-Uyun Al-Koushi (16), Yassin Al-Jazairi (14) | mp3quran.net, read 80 |
+  | Qalun | Mahmoud Khalil Al-Husary; also Ali Al-Hudhaifi (75), Al-Dokali Muhammad Al-Alim (208) | mp3quran.net, read 270 |
   | al-Duri | Mahmoud Khalil Al-Husary | mp3quran.net, read 269 |
   | al-Susi | Abdul Rashid Sufi | mp3quran.net, read 65 |
   | al-Bazzi | Okasha Kameny | mp3quran.net, read 296 |
   | Qunbul | Ahmad Deban | mp3quran.net (no published timing: aligned by `tools/align.py`) |
 
-  mp3quran.net has one file per surah. `data/audio/<riwaya>.json` gives, in the riwaya's own
+  The reciter is chosen in Settings → القارئ (with a sample of each), or by tapping the
+  reciter's name in the player. Further reciters of a riwaya are `data/audio/<riwaya>.<key>.json`
+  (`EXTRA` in `tools/recitations.py`). mp3quran.net has one file per surah. `data/audio/<riwaya>.json` gives, in the riwaya's own
   count, when each aya starts (mp3quran.net's `ayat_timing`). The files are constant bitrate,
   so the app reads each aya with an HTTP range and joins the frames. Settings → the recitation
   card saves the current riwaya's recitation for offline use (1.3–3.3 GB a riwaya).

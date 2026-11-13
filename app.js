@@ -2,12 +2,14 @@
 
 // bump when data/ or fonts/ change so phones fetch the new files
 const DATA_VERSION = 7;
-// Each riwaya is heard from a reciter who recites it. Hafs: Yasser Al-Dosari,
-// one file per aya (everyayah.com). The others: one file per surah
-// (mp3quran.net) and when each aya starts in it, data/audio/<riwaya>.json
-// (tools/recitations.py; bump AUDIO_DATA_VERSION when those files change).
-const AUDIO_BASE = 'https://everyayah.com/data/Yasser_Ad-Dussary_128kbps/';
-const AUDIO_DATA_VERSION = 1;
+// Each riwaya is heard from a reciter who recites it, chosen in the settings
+// (store 'voice.<riwaya>'). Hafs: one file per aya (everyayah.com), any of
+// HAFS_VOICES. The others: one file per surah (mp3quran.net) and when each aya
+// starts in it, data/audio/<riwaya>.json for the first reciter and
+// <riwaya>.<key>.json for the others in MORE_VOICES (tools/recitations.py;
+// bump AUDIO_DATA_VERSION when those files change).
+const EVERYAYAH = 'https://everyayah.com/data/';
+const AUDIO_DATA_VERSION = 2;
 const RECITERS = {
   hafs: 'ياسر الدوسري',
   shouba: 'علي بن عبد الرحمن الحذيفي',
@@ -18,6 +20,56 @@ const RECITERS = {
   bazzi: 'عكاشة كميني',
   qumbul: 'أحمد ديبان',
 };
+// [id, name, style, everyayah folder, kbps] (the first is the default)
+const HAFS_VOICES = [
+  ['yasser', 'ياسر الدوسري', '', 'Yasser_Ad-Dussary_128kbps', 128],
+  ['alafasy', 'مشاري راشد العفاسي', '', 'Alafasy_128kbps', 128],
+  ['sudais', 'عبد الرحمن السديس', '', 'Abdurrahmaan_As-Sudais_192kbps', 192],
+  ['shuraim', 'سعود الشريم', '', 'Saood_ash-Shuraym_128kbps', 128],
+  ['maher', 'ماهر المعيقلي', '', 'MaherAlMuaiqly128kbps', 128],
+  ['qatami', 'ناصر القطامي', '', 'Nasser_Alqatami_128kbps', 128],
+  ['ghamdi', 'سعد الغامدي', '', 'Ghamadi_40kbps', 40],
+  ['ajamy', 'أحمد بن علي العجمي', '', 'Ahmed_ibn_Ali_al-Ajamy_128kbps_ketaballah.net', 128],
+  ['shatri', 'أبو بكر الشاطري', '', 'Abu_Bakr_Ash-Shaatree_128kbps', 128],
+  ['abbad', 'فارس عباد', '', 'Fares_Abbad_64kbps', 64],
+  ['jibreel', 'محمد جبريل', '', 'Muhammad_Jibreel_128kbps', 128],
+  ['ayyoub', 'محمد أيوب', '', 'Muhammad_Ayyoub_128kbps', 128],
+  ['budair', 'صلاح البدير', '', 'Salah_Al_Budair_128kbps', 128],
+  ['juhany', 'عبد الله عواد الجهني', '', 'Abdullaah_3awwaad_Al-Juhaynee_128kbps', 128],
+  ['qahtani', 'خالد القحطاني', '', 'Khaalid_Abdullaah_al-Qahtaanee_192kbps', 192],
+  ['hudhaify', 'علي بن عبد الرحمن الحذيفي', '', 'Hudhaify_128kbps', 128],
+  ['jaber', 'علي جابر', '', 'Ali_Jaber_64kbps', 64],
+  ['basfar', 'عبد الله بصفر', '', 'Abdullah_Basfar_192kbps', 192],
+  ['matroud', 'عبد الله المطرود', '', 'Abdullah_Matroud_128kbps', 128],
+  ['qasim', 'عبد المحسن القاسم', '', 'Muhsin_Al_Qasim_192kbps', 192],
+  ['alaqimy', 'أكرم العلاقمي', '', 'Akram_AlAlaqimy_128kbps', 128],
+  ['bukhatir', 'صلاح بو خاطر', '', 'Salaah_AbdulRahman_Bukhatir_128kbps', 128],
+  ['rifai', 'هاني الرفاعي', '', 'Hani_Rifai_192kbps', 192],
+  ['husary', 'محمود خليل الحصري', '', 'Husary_128kbps', 128],
+  ['husary-mj', 'محمود خليل الحصري', 'مجوّد', 'Husary_128kbps_Mujawwad', 128],
+  ['husary-ml', 'محمود خليل الحصري', 'المعلّم', 'Husary_Muallim_128kbps', 128],
+  ['minshawi', 'محمد صديق المنشاوي', '', 'Minshawy_Murattal_128kbps', 128],
+  ['minshawi-mj', 'محمد صديق المنشاوي', 'مجوّد', 'Minshawy_Mujawwad_192kbps', 192],
+  ['basit', 'عبد الباسط عبد الصمد', '', 'Abdul_Basit_Murattal_192kbps', 192],
+  ['basit-mj', 'عبد الباسط عبد الصمد', 'مجوّد', 'Abdul_Basit_Mujawwad_128kbps', 128],
+  ['tablawi', 'محمد محمود الطبلاوي', '', 'Mohammad_al_Tablaway_128kbps', 128],
+].map(([id, name, style, folder, kbps]) => ({ id, name, style, base: EVERYAYAH + folder + '/', kbps }));
+// the other riwayat's further reciters: [key, name]
+const MORE_VOICES = {
+  warsh: [['husary', 'محمود خليل الحصري'], ['kouchi', 'العيون الكوشي'], ['jazairi', 'ياسين الجزائري']],
+  qaloon: [['hudhaifi', 'علي بن عبد الرحمن الحذيفي'], ['dokali', 'الدوكالي محمد العالم']],
+};
+const voiceList = {};
+function voices(rid) {
+  return voiceList[rid] ||= rid === 'hafs' ? HAFS_VOICES
+    : [{ id: '', name: RECITERS[rid] || '', style: '' }, ...(MORE_VOICES[rid] || []).map(([id, name]) => ({ id, name, style: '' }))];
+}
+function voice(rid) {
+  const v = voices(rid), id = store.get('voice.' + rid, null);
+  return v.find(x => x.id === id) || v[0];
+}
+const reciterName = rid => voice(rid).name;
+const reciterFull = rid => { const v = voice(rid); return v.name + (v.style ? ` (${v.style})` : ''); };
 const $ = (s, el = document) => el.querySelector(s);
 
 const store = {
@@ -1116,7 +1168,7 @@ $('#ayaBar').addEventListener('click', async e => {
   if (b.dataset.act === 'tafsir') openTafsir(i, 'tafsir');
   if (b.dataset.act === 'similar') openTafsir(i, 'similar');
   if (b.dataset.act === 'close') closeActions();
-  if (b.dataset.act === 'rc-set') openReciteSettings();
+  if (b.dataset.act === 'set') openSheet('settings');
 });
 
 // a short buzz: the Vibration API where there is one; iPhones have none, but
@@ -1208,8 +1260,7 @@ function refreshHeader() {
 
 const audio = $('#audio');
 const pad3 = n => String(n).padStart(3, '0');
-const hafsUrl = h => { const [s, a] = META.hafs[h]; return `${AUDIO_BASE}${pad3(s)}${pad3(a)}.mp3`; };
-const BASMALA_URL = `${AUDIO_BASE}001001.mp3`;
+const hafsUrl = (h, base = voice('hafs').base) => { const [s, a] = META.hafs[h]; return `${base}${pad3(s)}${pad3(a)}.mp3`; };
 // one joined file holds at most ~26 minutes (128 kbps); as much again is read ahead
 const CHUNK_MB = 24;
 // run: playback session (stale async work checks it); rec: the riwaya's
@@ -1220,8 +1271,12 @@ const P = { run: 0, ai: null, rec: null, list: [], gen: null, got: [], at: -1, c
 
 // the recitation of a riwaya other than Hafs: { url, size, t } (null for Hafs)
 const recs = {};
-const loadRec = id => id === 'hafs' ? Promise.resolve(null)
-  : (recs[id] ||= loadJSON(`data/audio/${id}.json?v=${AUDIO_DATA_VERSION}`).catch(e => { delete recs[id]; throw e; }));
+const recFile = (id, vid = voice(id).id) => vid ? `${id}.${vid}` : id;
+const loadRec = (id, vid) => {
+  if (id === 'hafs') return Promise.resolve(null);
+  const f = recFile(id, vid);
+  return (recs[f] ||= loadJSON(`data/audio/${f}.json?v=${AUDIO_DATA_VERSION}`).catch(e => { delete recs[f]; throw e; }));
+};
 const surahUrl = (rec, s) => `${rec.url}${pad3(s)}.mp3`;
 
 // what is played from aya `ai` on. Hafs: the aya files (a riwaya aya may
@@ -1240,12 +1295,13 @@ function* sequence(ai) {
     return;
   }
   let last = R.ayas[ai][5] - 1;
+  const base = voice('hafs').base, BASMALA_URL = `${base}001001.mp3`;
   for (; ai < R.ayas.length; ai++) {
     const a = R.ayas[ai];
     for (let h = Math.max(a[5], last + 1); h <= a[6]; h++) {
       const [s, n] = META.hafs[h];
       if (n === 1 && s !== 1 && s !== 9) yield { url: BASMALA_URL, ai, intro: true };
-      yield { url: hafsUrl(h), ai };
+      yield { url: hafsUrl(h, base), ai };
       last = h;
     }
   }
@@ -1497,12 +1553,12 @@ audio.addEventListener('error', () => { if (P.ai != null) toast('تعذر تحم
 
 function showPlayer() {
   $('#plTitle').textContent = ayaLabel(P.ai);
-  $('#plReciter').textContent = `الشيخ ${RECITERS[R.id]}`;
+  $('#plReciter').textContent = `الشيخ ${reciterFull(R.id)}`;
   show($('#player'));
   if (S.act == null) hide($('#ayaBar'));
   if ('mediaSession' in navigator) {
     navigator.mediaSession.metadata = new MediaMetadata({
-      title: `سورة ${ayaLabel(P.ai)}`, artist: RECITERS[R.id], album: `القرآن الكريم · ${META.riwayat.find(r => r.id === R.id)?.name || ''}`,
+      title: `سورة ${ayaLabel(P.ai)}`, artist: reciterFull(R.id), album: `القرآن الكريم · ${META.riwayat.find(r => r.id === R.id)?.name || ''}`,
       artwork: [{ src: 'icons/icon-512.png', sizes: '512x512', type: 'image/png' }],
     });
   }
@@ -1523,6 +1579,8 @@ function stopAudio(close = true) {
 }
 
 $('#plToggle').onclick = () => (audio.paused ? audio.play() : audio.pause());
+// the reciter's name: his page in the settings, to hear another
+$('#plReciter').onclick = () => openSheet('settings', 'reciter');
 $('#plStop').onclick = () => stopAudio();
 $('#plNext').onclick = () => P.ai != null && jump(P.ai + 1);
 $('#plPrev').onclick = () => P.ai != null && jump(P.ai - 1);
@@ -1842,13 +1900,13 @@ const AUDIO_TOTAL_MB = 1500;
 const AS = {};
 // the download running (one at a time): its riwaya and failures
 const DL = { running: false, rid: null, failed: 0, wake: null };
-const allAudioUrls = () => META.hafs.map((_, h) => hafsUrl(h));
+const allAudioUrls = () => { const b = voice('hafs').base; return META.hafs.map((_, h) => hafsUrl(h, b)); };
 
 // the files of a riwaya's recitation, with their sizes in MB (Hafs: by count)
 async function audioFiles(rid) {
   if (rid === 'hafs') {
     const urls = allAudioUrls();
-    return { cache: AUDIO_CACHE, urls, mb: urls.map(() => AUDIO_TOTAL_MB / urls.length) };
+    return { cache: AUDIO_CACHE, urls, mb: urls.map(() => AUDIO_TOTAL_MB * voice('hafs').kbps / 128 / urls.length) };
   }
   const rec = await loadRec(rid);
   return { cache: RIWAYA_AUDIO_CACHE, urls: rec.size.map((_, i) => surahUrl(rec, i + 1)), mb: rec.size.map(b => b / 1e6) };
@@ -1886,53 +1944,162 @@ const ICO = {
 };
 const ico = (name, c) => `<span class="ico" style="--c:var(--c-${c})"><svg viewBox="0 0 24 24">${ICO[name]}</svg></span>`;
 
+// a reciter's round mark: his initials on a colour of his own
+function voiceBadge(v) {
+  const w = v.name.replace(/^(ال|عبد ال)/, '').split(/\s+/);
+  let h = 0;
+  for (const c of v.name) h = (h * 31 + c.charCodeAt(0)) % 360;
+  return `<span class="vc-av" style="--h:${h}">${w[0][0]}${w[1] ? w[1].replace(/^ال/, '')[0] : ''}</span>`;
+}
+const BACK_ICO = '<svg viewBox="0 0 24 24"><path d="M9.5 6l6 6-6 6"/></svg>';
+const PLAY_ICO = '<svg viewBox="0 0 24 24"><path d="M8.5 5.5v13l10.5-6.5z" fill="currentColor"/></svg>';
+const STOP_ICO = '<svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor"/></svg>';
+
+// the settings' own pages over the main one: '' | 'reciter' (of the riwaya being read)
+let setView = '';
+const SET_VIEWS = { reciter: 'القارئ' };
+
 function settingsHTML() {
+  if (setView) return `<div class="pp pp-sub"><div class="pp-bar"><button class="pp-back" data-set-view="" aria-label="رجوع">${BACK_ICO}</button><b>${SET_VIEWS[setView]}</b></div>
+    <div class="pp-subb">${reciterPageHTML()}</div></div>`;
   const cur = store.get('theme', 'light');
-  const riwayaName = id => META.riwayat.find(r => r.id === id)?.name || id;
   const themes = THEMES.map(([id, label]) =>
     `<button class="theme${cur === id ? ' on' : ''}" data-theme-set="${id}"><i class="th th-${id}"><b>أ</b></i><span>${label}</span></button>`).join('');
-  const riwayat = META.riwayat.map((r, k) => {
-    const letter = r.name.replace(/^ال/, '')[0];
+  const riwayat = META.riwayat.map(r => {
+    const letter = r.name.replace(/^ال/, '')[0], n = voices(r.id).length;
     return `<button class="row" data-riwaya="${r.id}"><span class="num">${letter}</span>
-      <span class="main"><span class="t">${r.name}</span><span class="s">${ar(r.ayas)} آية · بصوت ${RECITERS[r.id]}</span></span>${r.id === R.id ? '<span class="check">✓</span>' : ''}
+      <span class="main"><span class="t">${r.name}</span><span class="s">${ar(r.ayas)} آية · بصوت ${reciterFull(r.id)}${n > 1 ? ` · ${ar(n)} ${n <= 10 ? 'قرّاء' : 'قارئًا'}` : ''}</span></span>${r.id === R.id ? '<span class="check">✓</span>' : ''}
       <span class="rw-dl" data-dl="rw" data-rid="${r.id}" role="button" hidden></span></button>`;
   }).join('');
+  const v = voice(R.id), n = voices(R.id).length, rname = META.riwayat.find(r => r.id === R.id)?.name || '';
+  const nav = [['set-audio', 'التلاوة'], ['set-look', 'المظهر'], ['set-off', 'دون اتصال'], ['set-data', 'بياناتك'], ['set-app', 'التطبيق'], ['set-rw', 'الرواية']]
+    .map(([id, t]) => `<button data-set-jump="${id}">${t}</button>`).join('');
   return `
     ${typeof Install !== 'undefined' ? Install.settingsHTML() : ''}
-    ${typeof Sync !== 'undefined' ? Sync.settingsHTML() : ''}
-    <div class="group-label">المظهر</div>
+    <nav class="set-nav" aria-label="أقسام الإعدادات">${nav}</nav>
+
+    <div class="group-label" id="set-audio">التلاوة</div>
+    <div class="group">
+      <button class="row vc-cur" data-set-view="reciter">${voiceBadge(v)}
+        <span class="main"><span class="s">القارئ</span><span class="t">${v.name}${v.style ? ` <em class="vc-style">${v.style}</em>` : ''}</span></span>
+        <span class="vc-n">${n > 1 ? `${ar(n)} ${n <= 10 ? 'قرّاء' : 'قارئًا'}` : ''}</span><svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button>
+      ${'wakeLock' in navigator ? switchRow('awake', 'إبقاء الشاشة مضاءة', 'لا تنطفئ الشاشة وأنت تقرأ أو تستمع أو تسمّع') : ''}
+    </div>
+    <p class="note">${n > 1 ? `اختر من تحب أن تستمع إليه في ${rname}، واستمع إلى نموذج من تلاوة كل قارئ قبل اختياره.` : `تلاوة ${rname} بصوت ${v.name}.`}</p>
+
+    <div class="group-label" id="set-look">المظهر</div>
     <div class="themes">${themes}</div>
     <div class="group">${switchRow('lite', 'مظهر خفيف', 'بلا ضبابية خلف الأشرطة ولا حركات مستمرة: أسلس على الهواتف المتوسطة والقديمة')}</div>
-
-    ${'wakeLock' in navigator ? `<div class="group-label">القراءة</div>
-    <div class="group">${switchRow('awake', 'إبقاء الشاشة مضاءة', 'لا تنطفئ الشاشة وأنت تقرأ أو تسمّع، والتطبيق مفتوح')}</div>` : ''}
 
     <div class="group-label">الختمة</div>
     <div class="group"><button class="row" data-open-lib><span class="mini-cover">${coverHTML(K, true)}</span>
       <span class="main"><span class="t">ختماتي</span><span class="s">${esc(K.name)} · ${ar(khatmaPct(K))}٪ · صفحة ${ar(K.page)}${KH.length > 1 ? ` · ${ar(KH.length)} ختمات` : ''}</span></span>
       <svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button></div>
 
-    <div class="group-label">دون اتصال</div>
+    <div class="group-label" id="set-off">دون اتصال</div>
     ${allCardHTML()}
     ${mushafCardHTML()}
     ${audioPanelHTML()}
 
+    <div id="set-data"></div>
+    ${typeof Sync !== 'undefined' ? Sync.settingsHTML() : ''}
     <div class="group-label">بياناتك</div>
     <div class="group">
-      <button class="row" data-backup="save"><span class="main"><span class="t">حفظ نسخة احتياطية</span><span class="s">العلامات والختمات وتقدّم التسميع والأذكار، في ملف واحد</span></span><svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button>
+      <button class="row" data-backup="save"><span class="main"><span class="t">حفظ نسخة احتياطية</span><span class="s">العلامات والختمات وتقدّم التسميع والأذكار والإعدادات، في ملف واحد</span></span><svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button>
       <button class="row" data-backup="load"><span class="main"><span class="t">استعادة من نسخة</span><span class="s">من ملف حفظته من قبل، على هذا الجهاز أو غيره</span></span><svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button>
     </div>
-    <p class="note">بيانات التطبيق محفوظة على جهازك وحده، وقد يمسحها المتصفح إن قلّت مساحته أو طال تركه. احفظ نسخة بين حين وآخر.</p>
+    <p class="note">بيانات التطبيق محفوظة على جهازك، وقد يمسحها المتصفح إن قلّت مساحته أو طال تركه. احفظ نسخة بين حين وآخر، أو فعّل المزامنة.</p>
 
-    <div class="group-label">التطبيق</div>
+    <div class="group-label" id="set-app">التطبيق</div>
     <div class="group">
       <div class="row"><span class="main"><span class="t">النسخة</span><span class="s" id="appVer">…</span></span><button class="rc-not" data-app-update>تحقق من التحديث</button></div>
       <div class="row"><span class="main"><span class="t">المساحة المستعملة</span><span class="s" id="appStore">…</span></span></div>
     </div>
 
-    <div class="group-label">الرواية</div>
+    <div class="group-label" id="set-rw">الرواية</div>
     <div class="group">${riwayat}</div>
-    <p class="note">لكل رواية رسمها وعلامات ضبطها ووقفها، وتلاوتها بصوت قارئ يقرأ بها: حفص آيةً آية من everyayah.com، والروايات الأخرى سورةً سورة من mp3quran.net مع مواضع آياتها.</p>`;
+    <p class="note">لكل رواية رسمها وعلامات ضبطها ووقفها، وتلاوتها بصوت من يقرأ بها: حفص آيةً آية من everyayah.com، والروايات الأخرى سورةً سورة من mp3quran.net مع مواضع آياتها. اختيار الرواية يغيّر المصحف كله.</p>`;
+}
+
+// the reciters of the riwaya being read: a tap chooses, the round button plays a sample
+function reciterPageHTML() {
+  const list = voices(R.id), cur = voice(R.id), rname = META.riwayat.find(r => r.id === R.id)?.name || '';
+  const rows = list.map(v => `<button class="row vc${v === cur ? ' on' : ''}" data-voice="${v.id}">${voiceBadge(v)}
+      <span class="main"><span class="t">${v.name}${v.style ? ` <em class="vc-style">${v.style}</em>` : ''}</span><span class="s" data-vc-saved="${v.id}">${v === cur ? 'تستمع إليه الآن' : R.id === 'hafs' ? `تحميله كاملًا قرابة ${gbText(AUDIO_TOTAL_MB * v.kbps / 128)}` : ''}</span></span>
+      <span class="vc-play" data-vc-play="${v.id}" role="button" aria-label="استمع إلى نموذج">${PLAY_ICO}</span>
+      ${v === cur ? '<span class="check">✓</span>' : '<span class="vc-pick"></span>'}</button>`).join('');
+  return `<p class="vc-intro">قرّاء <b>${rname}</b> · ${ar(list.length)} ${list.length <= 10 ? 'قرّاء' : 'قارئًا'}<small>اضغط ▶ لتسمع نموذجًا، واضغط الاسم لتختاره.${R.id === 'hafs' ? '' : ' لقرّاء حفص: اختر رواية حفص من آخر الإعدادات.'}</small></p>
+    <div class="group">${rows}</div>
+    <p class="note">${R.id === 'hafs' ? 'التلاوات من everyayah.com آيةً آية. الآيات التي تستمع إليها تُحفظ على جهازك، ولكل قارئ تحميله الكامل في «دون اتصال».' : 'التلاوات من mp3quran.net سورةً سورة مع مواضع آياتها.'}</p>`;
+}
+
+// how much of each reciter is on the device (the reciter page)
+async function paintVoiceSaved() {
+  if (!$('[data-vc-saved]') || !('caches' in window)) return;
+  const hafs = R.id === 'hafs', list = voices(R.id), cur = voice(R.id);
+  const set = await audioCachedSet(hafs ? AUDIO_CACHE : RIWAYA_AUDIO_CACHE);
+  for (const v of list) {
+    let n = 0, total;
+    if (hafs) { total = META.hafs.length; for (const u of set) if (u.startsWith(v.base)) n++; }
+    else {
+      let rec; try { rec = await loadRec(R.id, v.id); } catch { continue; }
+      total = 114; for (let s = 1; s <= 114; s++) if (set.has(surahUrl(rec, s))) n++;
+    }
+    const el = $(`[data-vc-saved="${v.id}"]`);
+    if (!el || !n) continue;
+    const pct = Math.floor(n / total * 100);
+    el.innerHTML = (v === cur ? 'تستمع إليه الآن · ' : '') + `<span class="vc-saved">${pct >= 100 ? 'محفوظ كاملًا ✓' : `${ar(Math.max(1, pct))}٪ محفوظ`}</span>`;
+  }
+}
+
+// a sample of a reciter: al-Fatiha's first aya after the basmala (Hafs), or
+// the first aya of al-Fatiha in the riwaya's count
+const preview = { audio: null, id: null, stop: 0 };
+function stopPreview() {
+  if (preview.audio) { preview.audio.pause(); preview.audio.removeAttribute('src'); }
+  preview.id = null;
+  document.querySelectorAll('[data-vc-play].on').forEach(b => { b.classList.remove('on'); b.innerHTML = PLAY_ICO; });
+}
+async function playPreview(btn) {
+  const id = btn.dataset.vcPlay;
+  if (preview.id === id) { stopPreview(); return; }
+  stopPreview();
+  if (!audio.paused) audio.pause();
+  const v = voices(R.id).find(x => x.id === id);
+  if (!v) return;
+  const a = preview.audio ||= Object.assign(new Audio(), { crossOrigin: 'anonymous' }); // (the service worker answers with a CORS response)
+  preview.id = id;
+  btn.classList.add('on'); btn.innerHTML = STOP_ICO;
+  let from = 0, to = 0;
+  if (R.id === 'hafs') a.src = `${v.base}001002.mp3`;
+  else {
+    a.src = 'data:audio/mpeg;base64,'; // (keeps the tap's permission to play while the timing loads)
+    a.play().catch(() => {});
+    let rec;
+    try { rec = await loadRec(R.id, v.id); } catch { if (preview.id === id) { stopPreview(); toast('تعذّر تحميل النموذج'); } return; }
+    if (preview.id !== id) return;
+    from = rec.t[0][0] / 1000; to = rec.t[0][1] / 1000;
+    a.src = surahUrl(rec, 1);
+  }
+  a.onloadedmetadata = () => { if (from) a.currentTime = from; };
+  a.ontimeupdate = () => { if (to && a.currentTime >= to) stopPreview(); };
+  a.onended = () => { if (preview.id === id) stopPreview(); };
+  a.onerror = () => { if (preview.id === id && a.getAttribute('src')) { stopPreview(); toast('تعذّر تحميل النموذج'); } };
+  a.play().catch(() => { if (preview.id === id) stopPreview(); });
+}
+
+// a reciter chosen for the riwaya being read: what is playing goes on in his voice
+function chooseVoice(id) {
+  const rid = R.id;
+  if (voice(rid).id === id) return;
+  if (DL.running && DL.rid === rid) { toast('يجري تحميل تلاوة القارئ الحالي — أوقفه أولًا'); return; }
+  stopPreview();
+  store.set('voice.' + rid, id);
+  delete AS[rid];
+  haptic(8);
+  toast(`القارئ: ${reciterFull(rid)}`);
+  if (P.ai != null) playFrom(P.ai);
+  renderSheet();
 }
 
 // a setting that is on or off
@@ -2011,7 +2178,7 @@ function audioPanelHTML() {
   return `<div class="group dl-card" id="dlCard">
     <div class="dl-top">
       ${ico('audio', 'settings')}
-      <div class="dl-txt"><div class="t" id="dlTitle">التلاوة · ${RECITERS[R.id]}</div><div class="s" id="dlText">جارٍ الفحص…</div></div>
+      <div class="dl-txt"><div class="t" id="dlTitle">التلاوة · ${reciterFull(R.id)}</div><div class="s" id="dlText">جارٍ الفحص…</div></div>
       <div class="dl-pct" id="dlPct"></div>
     </div>
     <div class="prog dl-prog"><i id="dlBar" style="width:0"></i></div>
@@ -2038,7 +2205,7 @@ function paintAudioPanel() {
   const pct = st.mb ? Math.min(1, st.doneMB / st.mb) : 0;
   $('#dlBar').style.width = (pct * 100).toFixed(1) + '%';
   $('#dlPct').textContent = ar(Math.floor(pct * 100)) + '٪';
-  $('#dlTitle').textContent = `التلاوة · ${RECITERS[rid]}`;
+  $('#dlTitle').textContent = `التلاوة · ${reciterFull(rid)}`;
   const complete = audioDone(st);
   $('#dlText').textContent = complete
     ? `التلاوة كاملة محفوظة على جهازك ✓`
@@ -2049,11 +2216,11 @@ function paintAudioPanel() {
     : `<button data-dl="start" class="primary">${st.done ? 'متابعة التحميل' : 'تحميل التلاوة كاملة'}</button>`)
     + (st.done && !running && !ALL.running ? `<button data-dl="clear" data-rid="${rid}" class="danger">حذف التحميلات</button>` : '');
   $('#dlNote').textContent = (hafs
-    ? `يُحفظ صوت كل آية (قرابة ${gbText(st.mb || AUDIO_TOTAL_MB)}) والتفسير على جهازك لتستعملهما دون إنترنت.`
-    : `تُحفظ تلاوة ${RECITERS[rid]} سورةً سورة (قرابة ${gbText(st.mb)}) والتفسير على جهازك لتستعملهما دون إنترنت.`)
+    ? `يُحفظ صوت كل آية بصوت ${reciterFull('hafs')} (قرابة ${gbText(st.mb || AUDIO_TOTAL_MB)}) والتفسير على جهازك لتستعملهما دون إنترنت.`
+    : `تُحفظ تلاوة ${reciterFull(rid)} سورةً سورة (قرابة ${gbText(st.mb)}) والتفسير على جهازك لتستعملهما دون إنترنت.`)
     + ' أبقِ التطبيق مفتوحًا أثناء التحميل، ويمكنك الإيقاف والمتابعة لاحقًا.'
     + (hafs ? ' الآيات التي تستمع إليها تُحفظ تلقائيًا.' : '')
-    + ' تلاوة كل رواية اختيارية: تُحمَّل من زرّها بجانب الرواية في قائمة الرواية أدناه.';
+    + ' لكل قارئ تحميله: غيّر القارئ من «القارئ» أعلاه، وتلاوات الروايات الأخرى من أزرارها في «الرواية» آخر الصفحة.';
   paintAllCard();
 }
 
@@ -2096,7 +2263,7 @@ async function riwayaDlTap(el) {
     delete el.dataset.armed;
     return clearRecitation(rid);
   }
-  if (DL.running || ALL.running) { toast(`يجري تحميل ${DL.rid ? 'تلاوة ' + RECITERS[DL.rid] : 'آخر'} — أوقفه أولًا`); return; }
+  if (DL.running || ALL.running) { toast(`يجري تحميل ${DL.rid ? 'تلاوة ' + reciterFull(DL.rid) : 'آخر'} — أوقفه أولًا`); return; }
   startAudioDownload(rid);
 }
 
@@ -2146,7 +2313,7 @@ async function startAudioDownload(rid = R.id) {
   await refreshAudioPanel();
   paintAudioPanel();
   if (ALL.running) return;
-  if (finished && !DL.failed) toast(`اكتمل تحميل تلاوة ${RECITERS[rid]}`);
+  if (finished && !DL.failed) toast(`اكتمل تحميل تلاوة ${reciterFull(rid)}`);
   else if (finished) toast(`تعذّر تحميل بعض ${rid === 'hafs' ? 'الآيات' : 'السور'} — اضغط متابعة`);
 }
 
@@ -2194,7 +2361,7 @@ function paintAllCard() {
     $('#allActions').innerHTML = '';
   } else if (textDone) {
     $('#allT').textContent = 'المصحف والتفسير والأذكار محفوظة ✓';
-    $('#allS').textContent = `بقيت تلاوة حفص (${RECITERS.hafs}) · قرابة ${gbText(h.mb - h.doneMB)}`;
+    $('#allS').textContent = `بقيت تلاوة حفص (${reciterFull('hafs')}) · قرابة ${gbText(h.mb - h.doneMB)}`;
     $('#allActions').innerHTML = '<button data-dl="all" class="all-btn">تحميل تلاوة حفص أيضًا</button>';
   } else {
     const started = store.get('dlAll', false);
@@ -2249,15 +2416,12 @@ async function clearAudioDownload(btn) {
 
 // one riwaya's saved recitation (the riwayat other than Hafs share a cache)
 async function clearRecitation(rid) {
-  if (rid === 'hafs') await caches.delete(AUDIO_CACHE);
-  else {
-    const f = await audioFiles(rid), c = await caches.open(f.cache);
-    await Promise.all(f.urls.map(u => c.delete(u)));
-  }
+  const f = await audioFiles(rid), c = await caches.open(f.cache);
+  await Promise.all(f.urls.map(u => c.delete(u)));
   delete AS[rid];
   await refreshAudioPanel();
   paintAudioPanel();
-  toast(`حُذفت تلاوة ${RECITERS[rid]}`);
+  toast(`حُذفت تلاوة ${reciterFull(rid)}`);
 }
 
 // ---------------------------------------------------------------- search
@@ -2441,7 +2605,8 @@ function openReciteSettings() { openSheet('recite', 'set'); }
 const dismissSheet = () => { if (!S.desk) closeSheet(); };
 function openSheet(t = tab, view = '', keepQuery = false) {
   tab = t;
-  store.set('recite.view', view); // (التسميع's own pages: its main one, unless asked)
+  store.set('recite.view', t === 'recite' ? view : ''); // (التسميع's own pages: its main one, unless asked)
+  setView = t === 'settings' ? view : '';
   railOpen(false);
   $('#sheetSub').textContent = `${K.name} · ${META.riwayat.find(r => r.id === R.id)?.name || ''} · صفحة ${ar(S.page)}`;
   if (!(S.desk && !$('#tafsir').hidden)) closeActions(); // (a computer: the tafsir stays at its own side)
@@ -2450,7 +2615,7 @@ function openSheet(t = tab, view = '', keepQuery = false) {
   if (!keepQuery) $('#q').value = '';
   renderSheet();
 }
-function closeSheet() { hide($('#sheet')); $('#q').blur(); if (S.desk && $('#q').value) { $('#q').value = ''; renderSheet(); } }
+function closeSheet() { stopPreview(); hide($('#sheet')); $('#q').blur(); if (S.desk && $('#q').value) { $('#q').value = ''; renderSheet(); } }
 $('#sheetClose').onclick = closeSheet;
 // the side rail of the panels: on a phone it comes over the panel from the button beside it, and
 // goes once a panel is chosen (or the panel is touched); on a wide screen it stays
@@ -2466,6 +2631,8 @@ $('#tabs').addEventListener('click', e => {
   const b = e.target.closest('[data-tab]');
   if (!b) return;
   tab = b.dataset.tab;
+  setView = '';
+  stopPreview();
   $('#q').value = '';
   if (!wide.matches) railOpen(false);
   renderSheet();
@@ -2526,6 +2693,7 @@ const PLACES = [
   ['adhkar', 'الأذكار', 'الصباح والمساء والنوم وغيرها', 'اذكار ذكر ادعيه دعاء صباح مساء نوم'],
   ['marks', 'العلامات', 'الآيات التي علّمتها', 'علامات علامه محفوظات مفضله'],
   ['lib', 'ختماتي', 'ختماتك وتقدّمك في كل منها', 'ختمه ختمات مكتبه'],
+  ['settings:reciter', 'القارئ', 'اختر صوت التلاوة واستمع إلى نماذج', 'قارئ قراء قاري شيخ مشايخ صوت تلاوه استماع عفاسي سديس شريم معيقلي دوسري منشاوي حصري عبدالباسط غامدي عجمي قطامي'],
   ['settings', 'الرواية', 'حفص، ورش، قالون، وغيرها', 'روايه روايات قراءه قراءات حفص شعبه ورش قالون دوري سوسي بزي قنبل'],
   ['settings', 'المظهر', 'فاتح، ورقي، داكن، أو تلقائي', 'مظهر داكن ليلي فاتح ورقي الوان لون'],
   ['settings', 'دون اتصال', 'تحميل المصحف والتلاوة والتفسير', 'تحميل تنزيل انترنت اتصال صوت تفسير تلاوه'],
@@ -2622,7 +2790,7 @@ function renderSheet() {
     const here = body.querySelector('.row.here');
     if (here) here.scrollIntoView({ block: 'center' }); else if (tab !== 'adhkar') body.scrollTop = 0;
   }
-  if (tab === 'settings' && !q.trim()) { refreshAudioPanel(); refreshMushafCard(); refreshAppInfo(); }
+  if (tab === 'settings' && !q.trim()) { if (setView) paintVoiceSaved(); else { refreshAudioPanel(); refreshMushafCard(); refreshAppInfo(); } }
   if (tab === 'prayer' && !q.trim()) Prayer.mount();
   if (tab === 'recite' && !q.trim()) Recite.mounted();
   if (tab === 'adhkar' && !q.trim()) Adhkar.mount($('#adhkarList'));
@@ -2659,7 +2827,15 @@ $('#sheetBody').addEventListener('click', async e => {
   const jz = e.target.closest('[data-go-juz]');
   if (jz) { dismissSheet(); goTo(+jz.dataset.goJuz); if (S.desk) renderSheet(); return; }
   const gt = e.target.closest('[data-go-tab]');
-  if (gt) { tab = gt.dataset.goTab; $('#q').value = ''; $('#q').blur(); renderSheet(); $('#sheetBody').scrollTop = 0; return; }
+  if (gt) { [tab, setView = ''] = gt.dataset.goTab.split(':'); $('#q').value = ''; $('#q').blur(); renderSheet(); $('#sheetBody').scrollTop = 0; return; }
+  const sv = e.target.closest('[data-set-view]');
+  if (sv) { stopPreview(); setView = sv.dataset.setView; renderSheet(); $('#sheetBody').scrollTop = 0; haptic(5); return; }
+  const jump = e.target.closest('[data-set-jump]');
+  if (jump) { const el = $('#' + jump.dataset.setJump), nav = $('.set-nav'); if (el) $('#sheetBody').scrollTo({ top: el.offsetTop - (nav?.offsetHeight || 0) - 14, behavior: 'smooth' }); return; }
+  const vp = e.target.closest('[data-vc-play]');
+  if (vp) { e.stopPropagation(); playPreview(vp); return; }
+  const vc = e.target.closest('[data-voice]');
+  if (vc) { chooseVoice(vc.dataset.voice); return; }
   const del = e.target.closest('[data-del-mark]');
   if (del) {
     e.stopPropagation();
