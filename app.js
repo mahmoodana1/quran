@@ -858,7 +858,10 @@ wordAudio.addEventListener('error', () => { sayEl?.classList.remove('say'); if (
     const far = Math.min(W * 0.18, 220);
     if (dx > far || v > 0.45) turn(1, dx);
     else if (dx < -far || v < -0.45) turn(-1, dx);
-    else placeSlots(0, true);
+    else {
+      placeSlots(0, true);
+      if (Math.abs(dx) < 24) return; // (a press that slid a little is still a press)
+    }
     vp.dataset.swiped = '1';
     setTimeout(() => delete vp.dataset.swiped, 60);
   };
@@ -876,7 +879,7 @@ wordAudio.addEventListener('error', () => { sayEl?.classList.remove('say'); if (
       else if (a === 'mic') Recite.mic();
       return;
     }
-    if (typeof Recite !== 'undefined' && Recite.onTap(e.target)) return;
+    if (typeof Recite !== 'undefined' && Recite.onTap(e.target, e)) return;
     // a surah's band: its card (not while reciting)
     const band = e.target.closest('.band[data-sura]');
     if (band && !Recite.active()) { ripple(band); openSura(+band.dataset.sura); return; }

@@ -1909,15 +1909,24 @@ const Recite = (() => {
 
   // ---- taps on the page while reciting
 
-  function onTap(target) {
+  function onTap(target, ev) {
     if (!G) return false;
     const el = target.closest('.w');
+    // without the microphone, a press anywhere that is not a word already shown asks for the aya:
+    // between the hidden words, on an aya's number, beside the pages (not among the lines above,
+    // where a word missed by a little would show the next aya instead of being marked)
+    if (G.manual && !G.done && !G.walk && (!el || el.classList.contains('end'))) {
+      const cur = wordEl(Math.min(G.pos, G.words.length - 1))?.getBoundingClientRect();
+      if (!cur?.height || !target.closest('.page') || !ev || ev.clientY >= cur.top - 3) step();
+      return true;
+    }
     if (!el || el.classList.contains('end')) return !!el; // aya numbers do nothing mid-session
     const pg = el.closest('.page');
     const n = [...pg.querySelectorAll('.w:not(.end)')].indexOf(el);
     const k = G.idx.get(pg.dataset.page + ':' + n);
-    // the hidden word you are on: a peek, counted as a hint
-    if (k === Math.max(G.pos, G.tent) && G.hide && !G.done && !G.peek) {
+    // the hidden word you are on: a peek, counted as a hint (without the microphone it is the aya
+    // that is asked for, like any press on what is hidden)
+    if (k === Math.max(G.pos, G.tent) && G.hide && !G.done && !G.peek && !G.manual) {
       G.peek = true; G.errs[k] = 'hint';
       G.lastAct = Date.now();
       paint(); paintBar();

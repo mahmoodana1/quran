@@ -439,6 +439,8 @@ const Desk = (() => {
     // (a card over everything: its buttons only)
     if (document.querySelector('.modal:not([hidden]), .rc-found:not([hidden])')) return;
     const btn = t.closest?.('button, a, [role=button], summary');
+    // (reciting, the space is the recitation's whatever button was pressed last)
+    if (btn && k === ' ' && Recite.active() && !$('#recBar').hidden && !e.repeat) { e.preventDefault(); btn.blur(); return play(); }
     if (btn && (k === ' ' || k === 'Enter')) return;
     const done = () => e.preventDefault();
     if (mod) {
@@ -458,7 +460,7 @@ const Desk = (() => {
       case 'ArrowDown': case 'j': if (!rec) { done(); step(1); } break;
       case 'ArrowUp': case 'k': if (!rec) { done(); step(-1); } break;
       case 'Enter': if (!rec && sel() != null) { done(); at.t = 0; $('#ayaBar')._key = null; openActions(sel()); } break;
-      case ' ': done(); play(); break;
+      case ' ': done(); if (!e.repeat) play(); break;
       case '/': done(); focusSearch(); break;
       case '?': case '؟': done(); show($('#deskHelp')); break;
       case '+': case '=': done(); setZoom(zoom() * 1.1); break;
