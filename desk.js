@@ -220,9 +220,19 @@ const Desk = (() => {
     if (panelOpen($('#sheet')) && tab === 'settings') renderSheet();
     toast(`المظهر: ${THEME_NAME[next]}`, 1100);
   }
+  // the whole screen: taken by itself as the reader comes in. A browser gives it only to a press
+  // or a key, so it is at the first of either; left by the reader's own hand (F, its button), it
+  // is not taken again until they ask (desk.full)
   function full() {
+    store.set('desk.full', !document.fullscreenElement);
     if (document.fullscreenElement) document.exitFullscreen?.();
     else document.documentElement.requestFullscreen?.().catch(() => {});
+  }
+  let fullAsked = false;
+  function fullFirst(e) {
+    if (fullAsked || !on || !document.fullscreenEnabled || document.fullscreenElement || !store.get('desk.full', true)) return;
+    if (e.type === 'keydown' && (e.code === 'KeyF' || e.key === 'Escape' || e.key === 'F11' || e.ctrlKey || e.metaKey || e.altKey)) return;
+    document.documentElement.requestFullscreen?.().then(() => { fullAsked = true; }, () => {});
   }
 
   // ---- the panels
@@ -397,7 +407,13 @@ const Desk = (() => {
     size.addEventListener('pointerup', szEnd);
     size.addEventListener('pointercancel', szEnd);
 
-    document.addEventListener('fullscreenchange', () => document.body.classList.toggle('dk-full', !!document.fullscreenElement));
+    document.addEventListener('fullscreenchange', () => {
+      const f = !!document.fullscreenElement;
+      document.body.classList.toggle('dk-full', f);
+      // (Esc closes what is open in the app, as ever, and does not leave the whole screen: held, it does)
+      try { f ? navigator.keyboard?.lock?.(['Escape'])?.catch?.(() => {}) : navigator.keyboard?.unlock?.(); } catch {}
+    });
+    for (const ev of ['mousedown', 'keydown', 'touchend']) addEventListener(ev, fullFirst, true);
     deskMQ.addEventListener?.('change', () => { if (R) renderAll(); });
     document.addEventListener('keydown', keys);
   }

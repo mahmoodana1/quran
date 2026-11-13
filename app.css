@@ -276,6 +276,10 @@ svg { fill: currentColor; }
 .gear-btn svg { width: 17px; height: 17px; }
 .acts-head .gear-btn { margin-inline-start: auto; margin-inline-end: 8px; }
 #recBar .gear-btn { width: 34px; height: 34px; }
+/* the microphone, on or put away (recite.js: muteMic): struck through and lit while away */
+.rec-mute .slash { display: none; }
+.rec-mute.on .slash { display: block; }
+.rec-mute.on { background: var(--accent); color: var(--on-accent); }
 @media (max-width: 380px) { #recBar .gear-btn { width: 30px; height: 30px; } #recBar .rec-stop span { display: none; } #recBar .rec-stop { padding: 0 10px; } }
 
 /* aya actions */

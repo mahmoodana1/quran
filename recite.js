@@ -406,8 +406,7 @@ const Recite = (() => {
     // Muaalem: c = the aya being said (in G.ayas), w0 = its first word still to
     // match, cut = how much of the reading belongs to ayas already done
     if (MU() && !manual) {
-      const starts = [];
-      words.forEach((w, k) => { if (w.wi === 0) starts.push(k); });
+      const starts = muStarts(words);
       G.mu = { c: 0, w0: opts.w0 || 0, cut: opts.cut || 0, final: '', tent: '', starts, lead: true, open: true, stream: !!opts.stream, late: !!opts.stream, letPairs: {} };
       G.pos = G.tent = G.mu.w0; // found by reciting from inside the aya: from that word
       G.heard = {}; // k -> { got, want }: what was heard for a word marked, and how it should sound
@@ -479,6 +478,38 @@ const Recite = (() => {
     follow(); paintBar(); keep(true);
   }
   const MANUAL_IDLE = 90;
+  const muStarts = words => { const starts = []; words.forEach((w, k) => { if (w.wi === 0) starts.push(k); }); return starts; };
+  // the microphone put away or taken up again in the middle of a session (the bar's button), from
+  // the word it had got to; remembered, so the next session begins the same way
+  function muteMic(off = !G?.manual) {
+    const g = G;
+    if (!g || g.done || !!g.manual === off) return;
+    if (off) {
+      if (g.run) pause(); // (what was heard so far is settled as it is)
+      g.manual = true; g.hide = true; g.peek = false; g.tent = g.pos;
+      store.set('recite.manual', true);
+      paint(); resume();
+      toast(`بلا ميكروفون: اقرأ الآية ثم ${S.desk ? 'اضغط المسافة' : 'المس الزر'} لتظهر، والمس ما أخطأت فيه`, 3600);
+      return;
+    }
+    // back to the microphone: its model and its permission seen to first, as at any start
+    withModel(() => {
+      if (G !== g || g.done || !g.manual || !ready()) return; // (no model after all: as it was)
+      pause();
+      g.manual = false; g.peek = false; g.tent = g.pos;
+      g.hide = store.get('recite.hide', false) || g.test;
+      if (MU()) {
+        const m = g.mu ||= { cut: 0, final: '', tent: '', starts: muStarts(g.words), stream: false, late: false, letPairs: {} };
+        g.heard ||= {};
+        m.c = Math.max(0, m.starts.findLastIndex(k => k <= Math.min(g.pos, g.words.length - 1)));
+        m.w0 = Math.max(0, g.pos - m.starts[m.c]);
+        Object.assign(m, { cut: 0, final: '', tent: '', conf: null, alts: null, lead: true, open: true });
+      }
+      store.set('recite.manual', false);
+      paint(); resume();
+      toast('عاد الميكروفون — اقرأ، أنا أستمع', 2200);
+    }, {});
+  }
 
   // ---- the session, kept as it goes: if the page reloads (an update, or the
   // phone short of memory), it comes back where it was
@@ -1681,6 +1712,9 @@ const Recite = (() => {
     const n = mistakes().length;
     $('#recBar').classList.toggle('manual', !!G.manual);
     $('#recHide').hidden = !!G.manual;
+    $('#recMute').classList.toggle('on', !!G.manual);
+    $('#recMute').setAttribute('aria-pressed', !!G.manual);
+    $('#recMute').setAttribute('aria-label', G.manual ? 'عُد إلى الميكروفون' : 'بلا ميكروفون');
     $('#recTitle').textContent = G.manual ? (G.peek ? 'هذه الكلمة التالية' : 'اقرأ الآية ثم أظهرها')
       : !G.run ? (G.pos ? 'متوقف مؤقتًا' : 'اضغط وابدأ القراءة')
       : G.busy ? 'يتعرّف على ما قرأت…' : G.voice ? 'يستمع…' : G.peek ? 'هذه الكلمة التالية' : 'اقرأ، أنا أستمع';
@@ -3082,8 +3116,8 @@ const Recite = (() => {
     setFast(!fast(), !fast() ? 'القراءة السريعة: بلا فحص للمدّ والغنّة' : 'عاد الفحص الكامل');
   };
   $('#recStop').onclick = () => { if (!G) return; if (G.pos) finish(); else cancel(); };
-  // the settings, the session paused while they are changed (resumed from the bar)
-  $('#recSet').onclick = () => { if (G?.run) pause(); openReciteSettings(); };
+  // the microphone put away, or taken up again
+  $('#recMute').onclick = () => muteMic();
 
   $('#recWord').addEventListener('click', e => {
     const b = e.target.closest('[data-rw]');
