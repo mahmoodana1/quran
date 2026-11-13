@@ -2778,17 +2778,45 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
   font: 600 17px var(--ui); color: var(--ink); padding: 11px 12px; border-radius: 12px; border: 1px solid var(--p-rule); background: var(--surface);
   -webkit-appearance: none; appearance: none;
 }
-.hz-stps { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.hz-stp { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700; color: var(--muted); }
-.hz-stp > div { display: flex; align-items: center; justify-content: space-between; padding: 4px; border-radius: 12px; border: 1px solid var(--p-rule); background: var(--surface); }
-.hz-stp b { font-size: 20px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
-.hz-stp button { width: 40px; height: 40px; border-radius: 9px; font-size: 22px; font-weight: 600; color: var(--p-ink); background: color-mix(in srgb, var(--p-green) 9%, transparent); }
+.hz-ed { container-type: inline-size; }
+.hz-top { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 10px; }
+.hz-top .hz-sel { grid-column: 1 / -1; }
+.hz-top .hz-sel select { min-height: 54px; }
+.hz-stp { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 13px; font-weight: 700; color: var(--muted); }
+.hz-stp > div { display: flex; align-items: center; gap: 4px; padding: 4px; border-radius: 12px; border: 1px solid var(--p-rule); background: var(--surface); }
+.hz-num { flex: 1; min-width: 0; width: 100%; text-align: center; font: 800 20px var(--ui); color: var(--ink); font-variant-numeric: tabular-nums;
+  background: none; border: 0; border-radius: 8px; padding: 6px 0; outline: none; -webkit-user-select: text; user-select: text; }
+.hz-num:focus { background: var(--tint); }
+.hz-stp button { flex: none; width: 44px; height: 44px; border-radius: 9px; font-size: 22px; font-weight: 600; color: var(--p-ink);
+  background: color-mix(in srgb, var(--p-green) 9%, transparent); touch-action: manipulation; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 :root[data-theme="dark"] .hz-stp button { color: #8fd3a8; }
-.hz-stp button:active { transform: scale(.92); }
+.hz-stp button:active { transform: scale(.92); background: color-mix(in srgb, var(--p-green) 18%, transparent); }
 .hz-ed .hz-o { border-top: 0; padding: 0; }
-.hz-text {
-  max-height: 260px; overflow-y: auto; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--p-rule);
-  background: var(--p-bg); font-size: 22px; line-height: 2; color: var(--ink); text-align: justify;
+.pp-bar .hz-of { margin-inline-start: auto; font-size: 13px; font-weight: 700; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* the ayas: the first and the last (the rest counted between them), never a box of its own to scroll */
+.hz-text { padding: 12px 14px; border-radius: 12px; border: 1px solid var(--p-rule); background: var(--p-bg); font-size: clamp(19px, 5.2cqi, 24px); line-height: 2; color: var(--ink); text-align: justify; }
+.hz-gap { display: block; text-align: center; font: 700 13px var(--ui); color: var(--muted); margin: 4px 0; }
+/* what the lesson comes to, and «تم», kept in view above the panel's bottom bar */
+.hz-foot { position: sticky; bottom: calc(80px + env(safe-area-inset-bottom)); z-index: 2; display: flex; align-items: center; gap: 12px;
+  margin: 4px -16px 0; padding: 10px 16px; background: color-mix(in srgb, var(--sheet) 92%, transparent);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); border-top: 1px solid var(--line); }
+.hz-sum { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; color: var(--muted); line-height: 1.5; }
+.hz-sum b { color: var(--ink); font-size: 15px; font-weight: 800; }
+.hz-foot .hz-done { width: auto; flex: none; min-width: 112px; margin: 0; padding: 11px 22px; }
+body.desk .hz-foot { bottom: 0; }
+/* room enough (a tablet, a phone on its side): the surah and both ayas on one line */
+@container (min-width: 520px) {
+  .hz-top { grid-template-columns: 1.4fr 1fr 1fr; align-items: end; }
+  .hz-top .hz-sel { grid-column: auto; }
+}
+/* a low screen (a phone on its side): less around everything */
+@media (max-height: 500px) {
+  .hz-ed { gap: 10px; }
+  .hz-text { line-height: 1.8; padding: 8px 12px; }
+  .hz-foot { padding: 6px 16px; }
+  .hz-foot .hz-done { padding: 8px 18px; }
+  .hz-sum { font-size: 12px; }
+  .hz-sum b { font-size: 14px; }
 }
 
 /* الحفظ: the session in one tap, the way of memorizing on its own page */
@@ -2996,9 +3024,9 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 .row.hz-rr.ok .hz-rk { color: var(--ok); }
 .hz-late { margin: -2px 6px 10px; font-size: 12.5px; color: var(--muted); line-height: 1.7; }
 .hz-days { padding: 14px 14px 12px; }
-.hz-strip { display: grid; grid-template-columns: repeat(14, 1fr); gap: 5px; }
+.hz-strip { display: grid; grid-template-columns: repeat(14, minmax(0, 1fr)); gap: clamp(2px, 1.2vw, 5px); }
 .hz-strip i { aspect-ratio: 1; border-radius: 6px; background: var(--tint); display: grid; place-items: center; }
-.hz-strip i span { font-style: normal; font-size: 9px; font-weight: 700; color: var(--faint); }
+.hz-strip i span { font-style: normal; font-size: clamp(7.5px, 2.4vw, 9px); font-weight: 700; color: var(--faint); }
 .hz-strip i.on { background: color-mix(in srgb, var(--ok) 32%, transparent); }
 .hz-strip i.full { background: var(--ok); }
 .hz-strip i.full span { color: #fff; }
@@ -3022,7 +3050,9 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 .xs-line { margin-top: -4px; }
 
 /* reminders */
-.xs-rem input[type="time"] { font: inherit; font-size: 16px; font-weight: 700; padding: 6px 8px; border-radius: 10px; border: 1px solid var(--line); background: var(--paper-hi); color: var(--ink); }
+.xs-rem label.row { flex-wrap: wrap; row-gap: 8px; }
+.xs-rem label.row .main { flex: 1 1 170px; }
+.xs-rem input[type="time"] { flex: none; margin-inline-start: auto;  font: inherit; font-size: 16px; font-weight: 700; padding: 6px 8px; border-radius: 10px; border: 1px solid var(--line); background: var(--paper-hi); color: var(--ink); }
 .xs-rem .xs-go .t, .xs-rem [data-xs="cal-pray"] .t { color: var(--accent); font-weight: 700; }
 .xs-ch { gap: 6px; flex-wrap: wrap; }
 
@@ -3056,13 +3086,14 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 .xs-ms { position: fixed; inset: 0; z-index: 60; background: var(--paper); display: flex; flex-direction: column; align-items: center; gap: 14px;
   padding: calc(10px + env(safe-area-inset-top)) 16px calc(16px + env(safe-area-inset-bottom)); animation: fade .2s ease; }
 .xs-ms[hidden] { display: none; }
+.xs-ms-top, .xs-dk, .xs-tg, .xs-today { flex: none; }
 .xs-ms-top { width: 100%; max-width: 480px; display: flex; align-items: center; justify-content: space-between; }
 .xs-ms-top b { font-size: 18px; font-weight: 900; }
 .xs-ms-top button { font-size: 15px; font-weight: 700; color: var(--accent); padding: 8px 10px; min-width: 44px; }
 .xs-dk { display: flex; gap: 6px; overflow-x: auto; max-width: 100%; padding: 2px 2px 6px; scrollbar-width: none; }
 .xs-dk button, .xs-tg button { flex: none; padding: 8px 13px; border-radius: 999px; font-size: 14px; font-weight: 700; background: var(--tint); color: var(--ink); }
 .xs-dk button.on, .xs-tg button.on { background: var(--accent); color: var(--on-accent); }
-.xs-tap { position: relative; width: min(78vw, 340px); aspect-ratio: 1; border-radius: 50%; margin: auto 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+.xs-tap { position: relative; width: min(78vw, 340px, 56vh); flex: none; aspect-ratio: 1; border-radius: 50%; margin: auto 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
   background: radial-gradient(circle at 50% 40%, var(--paper-hi), var(--surface)); box-shadow: var(--shadow-float); touch-action: manipulation; user-select: none; -webkit-user-select: none; }
 .xs-tap:active { transform: scale(.985); }
 .xs-ring { position: absolute; inset: 0; width: 100%; height: 100%; transform: rotate(-90deg); }
@@ -3083,3 +3114,11 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 .xs-dots i.on { background: var(--accent); width: 20px; border-radius: 4px; }
 .xs-skip { align-self: center; font-size: 13px; color: var(--muted); padding: 6px; }
 .card > * { flex-shrink: 0; } /* (a card taller than the screen scrolls; its parts are not squeezed) */
+
+/* the misbaha on a phone on its side: less around the count */
+@media (max-height: 500px) {
+  .xs-ms { gap: 8px; }
+  .xs-n { font-size: 44px; }
+  .xs-tap { width: min(42vh, 340px); }
+  .xs-word { font-size: 20px; }
+}

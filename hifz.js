@@ -246,26 +246,92 @@ const Hifz = (() => {
       ${list.length ? `<button class="hz-rb" data-hz-rev="${k}" data-how="play" aria-label="استمع">${IC.play}</button><button class="hz-rb" data-hz-rev="${k}" data-how="recite" aria-label="سمّع">${IC.mic}</button>` : ''}</div>`;
   }
 
-  // ---- changing the lesson: its surah, first and last aya, or a quick pick
+  // ---- changing the lesson: its surah, first and last aya (typed, or + and − held to run), or a quick pick;
+  // what it comes to stays in view at the bottom, and the ayas are shown first and last, not all of them
+  const sumText = L => {
+    const list = listOf(L), words = list.reduce((t, a) => t + R.text[a].split(' ').length - 1, 0), p0 = R.ayas[L.a][2], p1 = R.ayas[L.b][2];
+    return `<b>${ayaN(list.length)}</b> · ${ar(words)} كلمة · ${p1 > p0 ? `الصفحات ${ar(p0)}–${ar(p1)}` : `صفحة ${ar(p0)}`}`;
+  };
+  function previewHTML(L) {
+    const list = listOf(L), aya = a => `<span>${esc(R.text[a])}</span>`;
+    if (list.length <= 4) return list.map(aya).join(' ');
+    return `${aya(list[0])}<i class="hz-gap">… ${list.length - 2 === 2 ? 'وآيتان' : `و${ayaN(list.length - 2)}`} بينهما …</i>${aya(list.at(-1))}`;
+  }
   function editHTML() {
     const L = lesson(), s = R.ayas[L.a][0], a0 = R.suraStart[s], n = sizeOf(s), list = listOf(L);
     const opt = META.suras.map((x, i) => `<option value="${i + 1}"${i + 1 === s ? ' selected' : ''}>${ar(i + 1)}. ${x[0]}</option>`).join('');
-    const stepper = (k, v, lab) => `<div class="hz-stp"><span>${lab}</span><div><button data-hz-step="${k}" data-d="1" aria-label="زد">+</button><b>${ar(v)}</b><button data-hz-step="${k}" data-d="-1" aria-label="أنقص">−</button></div></div>`;
-    return `<div class="pp pp-sub"><div class="pp-bar"><button class="pp-back" data-hz-view="" aria-label="رجوع">${IC.back}</button><b>الدرس</b></div>
+    const stepper = (k, v, lab) => `<div class="hz-stp"><span>${lab}</span><div><button data-hz-step="${k}" data-d="1" aria-label="زد">+</button>
+      <input class="hz-num" data-hz-num="${k}" inputmode="numeric" enterkeyhint="done" autocomplete="off" value="${ar(v)}" aria-label="${lab}"><button data-hz-step="${k}" data-d="-1" aria-label="أنقص">−</button></div></div>`;
+    return `<div class="pp pp-sub"><div class="pp-bar"><button class="pp-back" data-hz-view="" aria-label="رجوع">${IC.back}</button><b>الدرس</b><small class="hz-of">${suraName(s)} · ${ayaN(n)}</small></div>
       <div class="pp-subb hz-ed">
-        <label class="hz-sel"><span>السورة</span><select data-hz-sura>${opt}</select></label>
-        <div class="hz-stps">${stepper('a', L.a - a0 + 1, 'من الآية')}${stepper('b', L.b - a0 + 1, 'إلى الآية')}</div>
+        <div class="hz-top">
+          <label class="hz-sel"><span>السورة</span><select data-hz-sura>${opt}</select></label>
+          ${stepper('a', L.a - a0 + 1, 'من الآية')}${stepper('b', L.b - a0 + 1, 'إلى الآية')}
+        </div>
         <div class="hz-o"><span>أو اختر سريعًا</span><div class="hz-chips">
           <button data-hz-quick="page">الصفحة التي تقرؤها</button>
           <button data-hz-quick="wpage" class="${L.pg ? 'on' : ''}">صفحة صفحة</button>
           <button data-hz-quick="next">الآيات التالية</button>
-          ${[3, 5, 7, 10].map(k => `<button data-hz-len="${k}" class="${list.length === k ? 'on' : ''}">${ayaN(k)}</button>`).join('')}
+          ${[3, 5, 7, 10, 15, 20].filter(k => k < n).map(k => `<button data-hz-len="${k}" class="${list.length === k ? 'on' : ''}">${ayaN(k)}</button>`).join('')}
           <button data-hz-len="${n}" class="${list.length === n ? 'on' : ''}">السورة كلها</button>
         </div></div>
-        <div class="hz-text" style="font-family:${R.font}">${list.slice(0, 40).map(a => esc(R.text[a])).join(' ')}${list.length > 40 ? ' …' : ''}</div>
-        <button class="hz-done" data-hz-view="">تم</button>
+        <div class="hz-text" style="font-family:${R.font}">${previewHTML(L)}</div>
+        <div class="hz-foot"><span class="hz-sum">${sumText(L)}</span><button class="hz-done" data-hz-view="">تم</button></div>
       </div></div>`;
   }
+  // a step of the first or last aya, kept in its surah and in order
+  function stepTo(k, v) {
+    const L = lesson(), s = R.ayas[L.a][0], a0 = R.suraStart[s], end = a0 + sizeOf(s) - 1, N = { a: L.a, b: L.b };
+    if (k === 'a') { N.a = Math.max(a0, Math.min(end, v)); N.b = Math.max(N.a, N.b); }
+    else { N.b = Math.max(a0, Math.min(end, v)); N.a = Math.min(N.a, N.b); }
+    setLesson(N);
+    return N;
+  }
+  // painted in place while a button is held (a render would lose the press)
+  function paintEdit(N) {
+    const ed = document.querySelector('.hz-ed');
+    if (!ed) return;
+    const a0 = R.suraStart[R.ayas[N.a][0]];
+    ed.querySelector('[data-hz-num="a"]').value = ar(N.a - a0 + 1);
+    ed.querySelector('[data-hz-num="b"]').value = ar(N.b - a0 + 1);
+    ed.querySelector('.hz-sum').innerHTML = sumText(N);
+    ed.querySelector('.hz-text').innerHTML = previewHTML(N);
+  }
+  // «تم» and the sum kept just above the dock, wherever the panel's bottom is (the dock's height, the
+  // panel running under it, the safe area: measured, not guessed)
+  function footAt() {
+    const f = document.querySelector('.hz-foot'), body = document.getElementById('sheetBody'), dock = document.getElementById('dock');
+    if (!f || !body) return;
+    // (sticky counts from inside the panel's bottom padding; the dock's top read from the screen's bottom,
+    // as the panel may still be sliding in)
+    const shown = dock && dock.getClientRects().length && getComputedStyle(dock).visibility !== 'hidden';
+    const over = shown ? Math.max(0, innerHeight - dock.getBoundingClientRect().top) : 0;
+    f.style.bottom = Math.round(over - parseFloat(getComputedStyle(body).paddingBottom || 0)) + 'px';
+  }
+  addEventListener('resize', () => requestAnimationFrame(footAt));
+  let holdT = 0;
+  function onPointerDown(e) {
+    const btn = e.target.closest('[data-hz-step]');
+    if (!btn || e.button > 0) return;
+    e.preventDefault();
+    let reps = 0;
+    const go = () => {
+      const L = lesson(), k = btn.dataset.hzStep, d = +btn.dataset.d * (reps >= 40 ? 10 : reps >= 15 ? 3 : 1);
+      const before = k === 'a' ? L.a : L.b, N = stepTo(k, before + d);
+      if ((k === 'a' ? N.a : N.b) !== before) { paintEdit(N); haptic(3); }
+      reps++;
+    };
+    go();
+    clearTimeout(holdT);
+    holdT = setTimeout(function loop() { go(); holdT = setTimeout(loop, reps > 12 ? 45 : 90); }, 380);
+    const stop = () => {
+      clearTimeout(holdT);
+      removeEventListener('pointerup', stop); removeEventListener('pointercancel', stop);
+      renderSheet();
+    };
+    addEventListener('pointerup', stop); addEventListener('pointercancel', stop);
+  }
+  const digits = v => +String(v).replace(/[٠-٩]/g, c => '٠١٢٣٤٥٦٧٨٩'.indexOf(c)).replace(/[۰-۹]/g, c => '۰۱۲۳۴۵۶۷۸۹'.indexOf(c)).replace(/\D/g, '');
 
   function play(list, o, then) { dismissSheet(); playDrill(list, o, then); }
 
@@ -337,13 +403,11 @@ const Hifz = (() => {
     // the lesson's page
     const st = t.closest('[data-hz-step]');
     if (st) {
-      const s = R.ayas[L.a][0], a0 = R.suraStart[s], end = a0 + sizeOf(s) - 1, d = +st.dataset.d;
-      const N = { a: L.a, b: L.b };
-      if (st.dataset.hzStep === 'a') { N.a = Math.max(a0, Math.min(end, L.a + d)); N.b = Math.max(N.a, N.b); }
-      else { N.b = Math.max(a0, Math.min(end, L.b + d)); N.a = Math.min(N.a, N.b); }
-      setLesson(N); renderSheet(); haptic(4);
+      // (stepped on the press, onPointerDown; a click from the keyboard steps here)
+      if (e.detail === 0) { stepTo(st.dataset.hzStep, (st.dataset.hzStep === 'a' ? L.a : L.b) + +st.dataset.d); renderSheet(); }
       return true;
     }
+    if (t.closest('[data-hz-num]')) { const i = t.closest('[data-hz-num]'); i.select?.(); return true; }
     const q = t.closest('[data-hz-quick]');
     if (q) {
       if (q.dataset.hzQuick === 'page') setLesson(pageSpan(pageInfo(S.page).first));
@@ -373,6 +437,13 @@ const Hifz = (() => {
     return s < 114 ? span(R.suraStart[s + 1], n) : L;
   }
   function onChange(e) {
+    const num = e.target.closest('[data-hz-num]');
+    if (num) {
+      const L = lesson(), a0 = R.suraStart[R.ayas[L.a][0]], v = digits(num.value);
+      // painted in place: a render now would swallow a tap on «تم» that took the focus away
+      paintEdit(v ? stepTo(num.dataset.hzNum, a0 + v - 1) : L);
+      return true;
+    }
     const sel = e.target.closest('[data-hz-sura]');
     if (!sel) return false;
     const L = lesson(), n = Math.min(L.b - L.a + 1, 10);
@@ -380,7 +451,16 @@ const Hifz = (() => {
     renderSheet();
     return true;
   }
-  function mounted() { check(); }
+  function mounted() {
+    check();
+    const ed = document.querySelector('.hz-ed');
+    if (ed) {
+      footAt();
+      ed.addEventListener('pointerdown', onPointerDown);
+      // Enter (or «تم» on the keyboard) sets the number typed
+      ed.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches('[data-hz-num]')) e.target.blur(); });
+    }
+  }
   const reset = () => { view = ''; };
   // a surah to memorize (its card on the page): from its first aya not yet memorized, as many as the
   // lesson had, and the panel opened on it
