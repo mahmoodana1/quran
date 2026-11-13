@@ -3108,6 +3108,7 @@ $('#sheetBody').addEventListener('change', e => {
   const sel = e.target.closest('[data-pr]');
   if (sel) Prayer.onChange(sel);
   if (Extras.onChange(e)) return;
+  if (typeof Recite !== 'undefined' && Recite.onChange(e)) return;
   Hifz.onChange(e);
 });
 $('#sheetBody').addEventListener('click', async e => {

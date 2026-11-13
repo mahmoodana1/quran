@@ -32,7 +32,7 @@ const Recite = (() => {
   const HINT_AFTER = 7000; // ms of silence on a hidden word before it shows
   const CLS = ['rc-weak', 'rc-here', 'rc-done', 'rc-now', 'rc-hid', 'rc-blind', 'rc-peek', 'rc-wrong', 'rc-haraka', 'rc-skip', 'rc-hint', 'rc-madd', 'rc-ghunna', 'rc-order', 'rc-heavy', 'rc-near', 'rc-maddlong', 'rc-maddnone'];
   // hidden, and blind (a setting): no trace of the words ahead, their number or their ayas'
-  const blind = () => !!G?.hide && !G.done && store.get('recite.blind', false);
+  const blind = () => !!G?.hide && !G.done && (G.test || store.get('recite.blind', false));
   // Muaalem listens in Hafs (its phonetic script is Hafs's)
   const MU = () => R.id === 'hafs' && typeof Mu !== 'undefined';
   const MU_NAMES = { 's8-cpu': 'المتدفّق · ٨ بت · المعالج', 'q8-cpu': '٨ بت · المعالج', 'q8-gpu': '٨ بت · المعالج الرسومي', 'fp16-gpu': '١٦ بت · المعالج الرسومي', 'q4-cpu': '٤ بت · المعالج', 'q4-gpu': '٤ بت · المعالج الرسومي' };
@@ -1476,7 +1476,7 @@ const Recite = (() => {
     keep();
     if (G.manual) return;
     alive();
-    if (G.hide && !G.peek && !G.voice && !G.busy && Date.now() - G.lastAct > HINT_AFTER) {
+    if (G.hide && !G.test && !G.peek && !G.voice && !G.busy && Date.now() - G.lastAct > HINT_AFTER) {
       G.peek = true;
       G.errs[Math.max(G.pos, G.tent)] ||= 'hint';
       paint(); paintBar();
@@ -1769,8 +1769,12 @@ const Recite = (() => {
     if (!G && root === document) dirty = !!weak;
     const pages = root.classList?.contains('page') ? [root] : root.querySelectorAll('.page');
     const bl = blind(), ahead = bl ? new Set(G.words.slice(G.pos).map(w => w.ai)) : null;
+    // a test: the page veiled but the aya before the stretch, and the stretch as it is said
+    const veil = G?.test && !G.done ? new Set([G.ayas[0] - 1, ...G.ayas]) : null;
     for (const pg of pages) {
       const p = +pg.dataset.page;
+      pg.querySelectorAll('.w').forEach(el => el.classList.toggle('rc-veil', !!veil && !veil.has(+el.dataset.a)));
+      pg.classList.toggle('rc-veiled', !!veil);
       pg.querySelectorAll('.w.end').forEach(el => el.classList.toggle('rc-blind', !!ahead?.has(+el.dataset.a)));
       pg.querySelectorAll('.w:not(.end)').forEach((el, n) => {
         el.classList.remove(...CLS);
@@ -1794,7 +1798,7 @@ const Recite = (() => {
     const w = G.words[Math.min(G.pos, G.words.length - 1)];
     const n = mistakes().length;
     $('#recBar').classList.toggle('manual', !!G.manual);
-    $('#recHide').hidden = !!G.manual;
+    $('#recHide').hidden = !!G.manual || !!G.test;
     $('#recMute').classList.toggle('on', !!G.manual);
     $('#recMute').setAttribute('aria-pressed', !!G.manual);
     $('#recMute').setAttribute('aria-label', G.manual ? 'عُد إلى الميكروفون' : 'بلا ميكروفون');
@@ -1802,7 +1806,7 @@ const Recite = (() => {
       : !G.run ? (G.pos ? 'متوقف مؤقتًا' : 'اضغط وابدأ القراءة')
       : G.busy ? 'يتعرّف على ما قرأت…' : G.voice ? 'يستمع…' : G.peek ? 'هذه الكلمة التالية' : 'اقرأ، أنا أستمع';
     const bl = blind();
-    $('#recSub').textContent = bl ? (n ? errs(n) : 'تسميع أعمى') : `${ayaLabel(w.ai)}${n ? ' · ' + errs(n) : ''}`;
+    $('#recSub').textContent = bl ? (G.test ? `اختبار · ${ayaCount(G.ayas.length)}${n ? ' · ' + errs(n) : ''}` : n ? errs(n) : 'تسميع أعمى') : `${ayaLabel(w.ai)}${n ? ' · ' + errs(n) : ''}`;
     $('#recToggle').classList.toggle('voice', !!G.voice);
     $('#recBar').classList.toggle('paused', !G.run);
     $('#recToggle').classList.toggle('live', G.run && !G.manual);
@@ -1845,7 +1849,8 @@ const Recite = (() => {
     const said = G.words.slice(0, G.pos), list = mistakes();
     const first = G.words[0].ai, last = said[said.length - 1].ai;
     const sura = suraName(R.ayas[G.words[G.words.length - 1].ai][0]);
-    $('#rdTitle').textContent = G.next != null ? (list.length ? `تمّت سورة ${sura}` : `تمّت سورة ${sura}، بلا أخطاء`)
+    const score = G.test && said.length ? Math.max(0, Math.round((1 - list.length / said.length) * 100)) : null;
+    $('#rdTitle').textContent = score != null ? `نتيجتك ${ar(score)}٪ — ${score >= 95 ? 'ممتاز، ما شاء الله' : score >= 85 ? 'جيد جدًا' : score >= 70 ? 'جيد، راجعه' : 'يحتاج مراجعة'}` : G.next != null ? (list.length ? `تمّت سورة ${sura}` : `تمّت سورة ${sura}، بلا أخطاء`)
       : list.length ? 'انتهت الجلسة' : 'ما شاء الله، بلا أخطاء';
     $('#rdRange').textContent = G.kind ? `${G.kind === 'new' ? 'حفظ جديد' : 'مراجعة'} · ${ayaLabel(first)}${said.length > 1 ? ` – ${ar(R.ayas[said[said.length - 1].ai][1])}` : ''}` : G.test ? `اختبار · ${ayaLabel(first)}` : G.review ? `مراجعة مواضع الضعف · ${ayaCount(new Set(said.map(w => w.ai)).size)}`
       : first === last ? ayaLabel(first) : `${ayaLabel(first)} – ${ar(R.ayas[last][1])}`;
@@ -1868,7 +1873,8 @@ const Recite = (() => {
     if (G.next != null) $('#rdNext').textContent = `تابع: سورة ${suraName(R.ayas[G.next][0])}`;
     $('#rdAgain').hidden = G.next != null && !list.length;
     $('#rdAgain').classList.toggle('primary', G.next == null);
-    $('#rdAgain').textContent = list.length ? 'أعد الآيات المخطوءة' : 'تابع من الآية التالية';
+    $('#rdAgain').textContent = G.test ? 'اختبار آخر' : list.length ? 'أعد الآيات المخطوءة' : 'تابع من الآية التالية';
+    if (G.test) { $('#rdAgain').hidden = false; $('#rdAgain').classList.add('primary'); }
   }
 
   // keep what was said: mistakes by aya, a clean full aya towards «mastered»
@@ -1932,7 +1938,7 @@ const Recite = (() => {
     if (whole.length || mistakes().length) l.sessions.unshift({ t: Date.now(), from: said[0].ai, to: said[said.length - 1].ai, ayas: whole.length,
       words: said.length, errs: mistakes().length, secs: Math.round(G.secs), review: G.review, kind: G.kind, test: G.test,
       list: mistakes().slice(0, 30).map(({ k, e, aya }) => aya != null ? [aya, -1, e] : [G.words[k].ai, G.words[k].wi, e]) });
-    l.sessions.length = Math.min(l.sessions.length, 60);
+    l.sessions.length = Math.min(l.sessions.length, 200);
     store.set(key(), l);
     weakMap = null;
     if (typeof Hifz !== 'undefined') setTimeout(() => Hifz.check(), 0); // (today's revision done? the day kept)
@@ -1967,6 +1973,7 @@ const Recite = (() => {
     // the hidden word you are on: a peek, counted as a hint (without the microphone it is the aya
     // that is asked for, like any press on what is hidden)
     if (k === Math.max(G.pos, G.tent) && G.hide && !G.done && !G.peek && !G.manual) {
+      if (G.test) return true; // (a test: nothing shown before it is said)
       G.peek = true; G.errs[k] = 'hint';
       G.lastAct = Date.now();
       paint(); paintBar();
@@ -2337,6 +2344,116 @@ const Recite = (() => {
     return n;
   }
 
+  // ---- the calendar: a week, a month or a year of التسميع; a day tapped shows what was recited on it
+  const cal = { v: 'month', off: 0, at: null };
+  const MONTHS_G = ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر'];
+  const WD = ['أحد', 'إثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت'];
+  const lvl = n => !n ? 0 : n < 5 ? 1 : n < 15 ? 2 : n < 40 ? 3 : 4;
+  function calHTML(l) {
+    const now = new Date(), today = day(), sel = cal.at || today, per = new Map();
+    for (const x of l.sessions) { const k = day(x.t); per.set(k, [...(per.get(k) || []), x]); }
+    const n = k => Math.max(l.days?.[k] || 0, (per.get(k) || []).reduce((t, x) => t + (x.ayas || 0), 0));
+    const tested = k => (per.get(k) || []).some(x => x.test);
+    const cell = (d, extra = '') => {
+      const k = day(d), c = n(k);
+      return `<button class="tc-d l${lvl(c)}${k === sel ? ' sel' : ''}${k === today ? ' now' : ''}${d > now ? ' fut' : ''}" data-rc-day="${k}" aria-label="${d.getDate()} ${MONTHS_G[d.getMonth()]}: ${c ? ayaCount(c) : 'لا تسميع'}"${extra}>
+        <b>${ar(d.getDate())}</b>${tested(k) ? '<i class="tc-t"></i>' : ''}</button>`;
+    };
+    let title = '', body = '';
+    if (cal.v === 'week') {
+      const s0 = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + cal.off * 7);
+      const ds = Array.from({ length: 7 }, (_, i) => new Date(s0.getFullYear(), s0.getMonth(), s0.getDate() + i));
+      const max = Math.max(1, ...ds.map(d => n(day(d))));
+      title = `${ar(ds[0].getDate())} ${MONTHS_G[ds[0].getMonth()]} – ${ar(ds[6].getDate())} ${MONTHS_G[ds[6].getMonth()]}`;
+      body = `<div class="tc-week">${ds.map(d => { const k = day(d), c = n(k);
+        return `<button class="tc-wd${k === sel ? ' sel' : ''}${k === today ? ' now' : ''}" data-rc-day="${k}"><span class="tc-bar"><i style="height:${Math.round(c / max * 100)}%"></i></span>
+          <small>${c ? ar(c) : ''}</small><b>${WD[d.getDay()]}</b><em>${ar(d.getDate())}</em></button>`; }).join('')}</div>`;
+    } else if (cal.v === 'month') {
+      const m0 = new Date(now.getFullYear(), now.getMonth() + cal.off, 1), dim = new Date(m0.getFullYear(), m0.getMonth() + 1, 0).getDate();
+      title = `${MONTHS_G[m0.getMonth()]} ${ar(m0.getFullYear())}`;
+      body = `<div class="tc-grid">${['ح', 'ن', 'ث', 'ر', 'خ', 'ج', 'س'].map(w => `<span>${w}</span>`).join('')}${'<i></i>'.repeat(m0.getDay())}${Array.from({ length: dim }, (_, i) => cell(new Date(m0.getFullYear(), m0.getMonth(), i + 1))).join('')}</div>`;
+    } else {
+      const y = now.getFullYear() + cal.off;
+      title = ar(y);
+      body = `<div class="tc-year">${MONTHS_G.map((mn, m) => {
+        const dim = new Date(y, m + 1, 0).getDate();
+        let ayas = 0, act = 0, cells = '';
+        const lead = new Date(y, m, 1).getDay();
+        cells += '<i></i>'.repeat(lead);
+        for (let d = 1; d <= dim; d++) { const c = n(day(new Date(y, m, d))); ayas += c; if (c) act++; cells += `<i class="l${lvl(c)}"></i>`; }
+        return `<button class="tc-m${y === now.getFullYear() && m === now.getMonth() ? ' now' : ''}" data-rc-mon="${y}-${m}"><b>${mn}</b><span class="tc-mini">${cells}</span>
+          <small>${act ? `${ar(act)} ${act <= 10 && act > 2 ? 'أيام' : 'يومًا'} · ${ayaCount(ayas)}` : '—'}</small></button>`;
+      }).join('')}</div>`;
+    }
+    const tabs = [['week', 'أسبوع'], ['month', 'شهر'], ['year', 'سنة']].map(([k, t]) => `<button data-rc-cal="${k}" class="${cal.v === k ? 'on' : ''}">${t}</button>`).join('');
+    return `<div class="group tc">
+      <div class="tc-top"><div class="tc-tabs">${tabs}</div></div>
+      <div class="tc-nav"><button data-rc-calnav="-1" aria-label="السابق">${ICONS.back}</button><b>${title}</b><button data-rc-calnav="1" aria-label="التالي"${cal.off >= 0 ? ' disabled' : ''}>${ICONS.go}</button></div>
+      ${body}
+      ${cal.v === 'year' ? '' : `<div class="tc-key"><span>أقل</span>${[0, 1, 2, 3, 4].map(i => `<i class="l${i}"></i>`).join('')}<span>أكثر</span><span class="tc-kt"><i class="tc-t"></i>اختبار</span></div>`}
+    </div>${cal.v === 'year' ? '' : dayHTML(l, sel, per.get(sel) || [], n(sel))}`;
+  }
+  // a day: its numbers and its sessions
+  function dayHTML(l, k, list, ayas) {
+    const [y, m, d] = k.split('-').map(Number), dt = new Date(y, m - 1, d);
+    const name = new Intl.DateTimeFormat('ar-u-nu-arab', { weekday: 'long', day: 'numeric', month: 'long' }).format(dt);
+    const secs = list.reduce((t, x) => t + (x.secs || 0), 0), e = list.reduce((t, x) => t + (x.errs || 0), 0);
+    let h = `<div class="tc-day"><div class="tc-day-h"><b>${name}</b>${ayas ? `<small>${ayaCount(ayas)}${list.length ? ` · ${ar(Math.max(1, Math.round(secs / 60)))} د · ${e ? errs(e) : 'بلا أخطاء'}` : ''}</small>` : ''}</div>`;
+    if (list.length) h += `<div class="group">${list.slice().sort((a, b) => a.t - b.t).map(sessHTML).join('')}</div>`;
+    else h += `<p class="tc-none">${ayas ? `سمّعت ${ayaCount(ayas)} في هذا اليوم (تفاصيل الجلسات تُحفظ لآخر ٢٠٠ جلسة).` : dt > new Date() ? 'لم يأتِ بعد.' : 'لا تسميع في هذا اليوم.'}</p>`;
+    return h + '</div>';
+  }
+  // a session, folded: what, when, how it went; opened: its mistakes, and doing it again
+  function sessHTML(x) {
+    const items = (x.list || []).filter(([ai]) => R.ayas[ai]).map(([ai, wi, e]) => wi < 0
+      ? `<div class="rc-sess-i"><span class="rc-mk rc-skip"></span><b>${ayaLabel(ai)}</b><small>تجاوزت الآية كلها</small></div>`
+      : `<div class="rc-sess-i"><span class="rc-mk rc-${e}"></span><b style="font-family:${R.font}">${esc(ayaTokens(ai)[wi] || '')}</b><small>${ayaLabel(ai)} · ${TYPES[e]}</small></div>`).join('');
+    const again = !x.review && R.ayas[x.from] ? `<button class="rc-not" data-rc-from="${x.from}">أعد هذه الجلسة</button>` : '';
+    const score = x.test && x.words ? Math.max(0, Math.round((1 - (x.errs || 0) / x.words) * 100)) : null;
+    const time = new Intl.DateTimeFormat('ar-u-nu-arab', { hour: 'numeric', minute: '2-digit' }).format(new Date(x.t));
+    return `<details class="rc-sess"><summary class="row"><span class="main"><span class="t">${x.test ? '<em class="tc-badge">اختبار</em>' : ''}${sessionLabel(x)}</span>
+      <span class="s">${time} · ${ayaCount(x.ayas || 1)} · ${x.errs ? errs(x.errs) : 'بلا أخطاء'}${score != null ? ` · ${ar(score)}٪` : ''}</span></span>
+      <svg viewBox="0 0 24 24" class="go"><path d="M14.5 6l-6 6 6 6"/></svg></summary>
+      <div class="rc-sess-list">${items || '<p class="note">بلا أخطاء، ما شاء الله.</p>'}${again}</div></details>`;
+  }
+
+  // ---- اختبرني: a stretch hidden (the whole page but the aya before it), each word shown only once said,
+  // no hint and no peeking; at the end, a score. testO (recite.testo): { from: 'all' | 'sura', s, n }
+  const testO = () => ({ from: 'all', s: 0, n: 3, ...store.get('recite.testo', {}) });
+  function testPick(o = testO()) {
+    const said = log().said || {}, n = Math.max(1, o.n);
+    let pool = Object.keys(said).map(Number).filter(ai => R.ayas[ai] && (o.from !== 'sura' || R.ayas[ai][0] === o.s));
+    if (o.from === 'sura' && !pool.length && suraSizes()[o.s]) pool = suraAyas(o.s);
+    if (!pool.length) return null;
+    const a = pool[Math.floor(Math.random() * pool.length)], su = R.ayas[a][0], s0 = R.suraStart[su], s1 = s0 + suraSizes()[su] - 1;
+    const b = Math.max(s0, Math.min(a, s1 - n + 1));
+    return Array.from({ length: Math.min(n, s1 - s0 + 1) }, (_, i) => b + i);
+  }
+  function testHTML() {
+    const o = testO(), said = log().said || {}, sizes = suraSizes();
+    const mine = new Set(Object.keys(said).map(k => R.ayas[+k]?.[0]).filter(Boolean));
+    const opts = Array.from({ length: 114 }, (_, i) => i + 1).filter(x => sizes[x]).map(x => `<option value="${x}"${x === o.s ? ' selected' : ''}>${ar(x)}. ${suraName(x)}${mine.has(x) ? ' ✓' : ''}</option>`).join('');
+    const chip = (k, v, t) => `<button data-rc-to="${k}" data-v="${v}" class="${String(o[k]) === String(v) ? 'on' : ''}">${t}</button>`;
+    return `<div class="tt">
+      <div class="tt-rules"><b>اختبار حقيقي</b>
+        <p>تُخفى الصفحة كلها إلا الآية التي قبل موضع الاختبار، لتبدأ منها. لا تظهر الكلمة إلا بعد أن تقرأها، ولا تلميح ولا إظهار. وفي آخره نتيجتك.</p></div>
+      <div class="hz-o"><span>من أين؟</span><div class="hz-chips">${chip('from', 'all', `موضع عشوائي من محفوظك${mine.size ? '' : ' (لا محفوظ بعد)'}`)}${chip('from', 'sura', 'من سورة أختارها')}</div></div>
+      ${o.from === 'sura' ? `<label class="hz-sel"><span>السورة (✓ ما حفظت منها)</span><select data-rc-tsura>${opts}</select></label>` : ''}
+      <div class="hz-o"><span>كم آية؟</span><div class="hz-chips">${[1, 3, 5, 10, 20].map(k => chip('n', k, ayaCount(k))).join('')}</div></div>
+      <button class="tq-go tt-go" data-rc-test-go><span class="tq-go-i">${ICONS.test}</span><span class="tq-go-t"><b>ابدأ الاختبار</b><small>${o.from === 'sura' && o.s ? `من سورة ${suraName(o.s)}` : 'موضع لا تعرفه حتى يبدأ'} · ${ayaCount(o.n)}</small></span>${ICONS.go}</button>
+    </div>`;
+  }
+  // the reader's place moved to a surah: its first aya not yet recited (or its start)
+  function goSura(su, fromStart) {
+    const sizes = suraSizes();
+    if (!sizes[su]) return;
+    const a0 = R.suraStart[su], said = log().said || {};
+    let a = a0;
+    if (!fromStart) while (a < a0 + sizes[su] - 1 && said[a]) a++;
+    if (!fromStart && said[a]) a = a0;
+    store.set('recite.last.' + R.id, a);
+  }
+
   // «اختبرني»: three ayas from a random place already recited, words hidden
   function testAyas() {
     const said = Object.keys(log().said || {}).map(Number).filter(ai => R.ayas[ai]);
@@ -2423,7 +2540,7 @@ const Recite = (() => {
     plus: '<svg viewBox="0 0 24 24"><path d="M12 6v12M6 12h12"/></svg>',
     flame: '<svg viewBox="0 0 24 24"><path d="M12 21c-3.6 0-6-2.4-6-5.6 0-3.4 2.6-5 3.4-8.4 1.9 1.3 2.6 3 2.6 4.6 1-.6 1.6-1.7 1.8-2.9 1.6 1.4 4.2 3.6 4.2 6.7 0 3.2-2.4 5.6-6 5.6z"/></svg>',
   };
-  const VIEWS = { log: 'السجل', set: 'إعدادات التسميع', pick: 'اختر سورة تحفظها', revs: 'جدول المراجعة', weak: 'مواضع الضعف', suras: 'سوري', sura: '' };
+  const VIEWS = { test: 'اختبر حفظك', log: 'السجل', set: 'إعدادات التسميع', pick: 'اختر سورة تحفظها', revs: 'جدول المراجعة', weak: 'مواضع الضعف', suras: 'سوري', sura: '' };
   const PER = [3, 5, 10, 15, 20]; // ayas a day the plan may take
 
   // ---- the plan: one surah memorized at a time, so many new ayas a day (store recite.plan.<riwaya>
@@ -2485,7 +2602,7 @@ const Recite = (() => {
     const es = store.get('recite.editS', 0);
     if (view === 'sura' && !sizes[es]) { store.set('recite.view', ''); return panelHTML(); }
     if (view) return `<div class="pp pp-sub"><div class="pp-bar"><button class="pp-back" data-rc-view="${view === 'sura' ? store.get('recite.editFrom', '') : ''}" aria-label="رجوع">${ICONS.back}</button><b>${view === 'sura' ? `سورة ${suraName(es)}` : VIEWS[view] || ''}</b></div>
-      <div class="pp-subb">${view === 'log' ? logHTML() : view === 'set' ? setHTML() : view === 'pick' ? pickHTML() : view === 'revs' ? revsHTML() : view === 'weak' ? weakHTML(weak) : view === 'suras' ? memoHTML() : view === 'sura' ? suraHTML(es) : ''}</div></div>`;
+      <div class="pp-subb">${view === 'test' ? testHTML() : view === 'log' ? logHTML() : view === 'set' ? setHTML() : view === 'pick' ? pickHTML() : view === 'revs' ? revsHTML() : view === 'weak' ? weakHTML(weak) : view === 'suras' ? memoHTML() : view === 'sura' ? suraHTML(es) : ''}</div></div>`;
 
     const hr = new Date().getHours(), hi = hr < 5 ? 'ليلة مباركة' : hr < 12 ? 'صباح الخير' : hr < 18 ? 'طاب يومك' : 'مساء النور';
     // ---- one column, the most wanted first: what to do now (one big button, three small ones), today's
@@ -2501,8 +2618,14 @@ const Recite = (() => {
       <button class="tq-go" data-rc-resume><span class="tq-go-i">${MIC}</span>
         <span class="tq-go-t"><b>${fresh ? 'ابدأ التسميع' : 'سمّع الآن'}</b><small>${fresh ? 'اقرأ من حفظك والتطبيق يتابعك' : `تابع من ${ayaLabel(at)}`}</small>
         <span class="tq-go-v" style="font-family:${R.font}">${esc(ayaTokens(at).slice(0, 5).join(' '))} …</span></span>${ICONS.go}</button>
+      <div class="tq-sw" role="group" aria-label="السورة">
+        <button data-rc-sw="${R.ayas[at][0] - 1}" aria-label="السورة السابقة"${R.ayas[at][0] <= 1 ? ' disabled' : ''}>${ICONS.go.replace('M15 6l-6 6 6 6', 'M9 6l6 6-6 6')}</button>
+        <select data-rc-sws aria-label="اختر سورة">${META.suras.map((x, i) => sizes[i + 1] ? `<option value="${i + 1}"${i + 1 === R.ayas[at][0] ? ' selected' : ''}>${ar(i + 1)}. ${x[0]}${got[i + 1] ? (got[i + 1] >= sizes[i + 1] ? ' ✓' : ` · ${ar(got[i + 1])}/${ar(sizes[i + 1])}`) : ''}</option>` : '').join('')}</select>
+        <button data-rc-sw="${R.ayas[at][0] + 1}" aria-label="السورة التالية"${R.ayas[at][0] >= 114 ? ' disabled' : ''}>${ICONS.go}</button>
+        <button class="tq-sw0" data-rc-sw0="${R.ayas[at][0]}">من أولها</button>
+      </div>
       <div class="tq-quick">
-        ${testAyas() ? `<button data-rc-test>${ICONS.test}<span>اختبرني</span></button>` : ''}
+        <button data-rc-view="test">${ICONS.test}<span>اختبرني</span></button>
         <button data-rc-find>${ICONS.find}<span>ابحث بصوتك</span></button>
         <button data-rc-manual class="${manual ? 'on' : ''}" aria-pressed="${manual}"><svg viewBox="0 0 24 24"><path d="M12 3.5a3 3 0 00-3 3v5a3 3 0 006 0v-5a3 3 0 00-3-3zM6.5 11a5.5 5.5 0 0011 0M12 16.5v4"/><path d="M4.5 4.5l15 15"/></svg><span>${manual ? 'بلا ميكروفون ✓' : 'بلا ميكروفون'}</span></button>
       </div>`;
@@ -2568,7 +2691,7 @@ const Recite = (() => {
           ${tile(ar(mastered), 'آية أتقنتها')}
           ${tile(ar(Math.max(tot.sessions || 0, l.sessions.length)), 'جلسة')}
         </div>
-        <div class="tq-heat">${heatHTML()}</div>`;
+        <div class="pp-h"><b>تقويمك</b><small>اضغط يومًا لترى تسميعه</small></div>${calHTML(l)}`;
       h += mistakesHTML();
     } else h += helpHTML();
     h += `<div class="group tq-links">
@@ -2592,20 +2715,31 @@ const Recite = (() => {
     }
     // the mistakes: their kinds as chips, the words most often wrong, the weak spots a tap away
     function mistakesHTML() {
-      const ss = l.sessions.filter(x => x.t >= Date.now() - 30 * 864e5), kinds = {}, words = new Map();
+      const now = Date.now(), ss = l.sessions.filter(x => x.t >= now - 30 * 864e5), prev = l.sessions.filter(x => x.t < now - 30 * 864e5 && x.t >= now - 60 * 864e5);
+      const kinds = {}, words = new Map();
+      let total = 0;
       for (const x of ss) for (const [ai, wi, e] of x.list || []) {
-        kinds[e] = (kinds[e] || 0) + 1;
+        kinds[e] = (kinds[e] || 0) + 1; total++;
         if (wi >= 0 && R.ayas[ai]) { const k = ai + ':' + wi; words.set(k, (words.get(k) || 0) + 1); }
       }
-      if (!Object.keys(kinds).length && !weak.length) return '';
-      const often = [...words].filter(([, c]) => c >= 2).sort((a, b) => b[1] - a[1]).slice(0, 8);
-      return `<div class="pp-h"><b>أخطاؤك</b><small>آخر ٣٠ يومًا</small></div>
-        <div class="pp-kinds">${Object.entries(kinds).sort((a, b) => b[1] - a[1]).map(([e, c], i) => `<span class="pp-k k${i % 5}"><b>${ar(c)}</b>${KIND_SHORT[e] || TYPES[e] || e}</span>`).join('')}</div>
-        ${often.length ? `<div class="pp-sub-h">كلمات تتكرر أخطاؤك فيها</div><div class="pp-words">${often.map(([k, c]) => {
-          const [ai, wi] = k.split(':').map(Number);
-          return `<button data-rc-aya="${ai}"><b style="font-family:${R.font}">${esc(ayaTokens(ai)[wi] || '')}</b><small>${ayaLabel(ai)}</small><i>${ar(c)}</i></button>`;
-        }).join('')}</div>` : ''}
-        ${weak.length ? `<button class="pp-wide-b" data-rc-view="weak">${ICONS.fix}<span>كل مواضع الضعف <b>${ar(weak.length)}</b></span>${ICONS.go}</button>` : ''}`;
+      if (!total && !weak.length) return '';
+      const rate = list => { const w = list.reduce((t, x) => t + (x.words || 0), 0); return w ? list.reduce((t, x) => t + (x.errs || 0), 0) / w * 100 : null; };
+      const r1 = rate(ss), r0 = rate(prev);
+      const trend = r1 != null && r0 != null && r0 > 0 ? (r1 <= r0 ? `<span class="up">↓ أقل من الشهر الذي قبله</span>` : `<span class="down">↑ أكثر من الشهر الذي قبله</span>`) : '';
+      const ks = Object.entries(kinds).sort((a, b) => b[1] - a[1]);
+      const often = [...words].sort((a, b) => b[1] - a[1]).slice(0, 5);
+      let h = `<div class="pp-h"><b>أخطاؤك</b><small>آخر ٣٠ يومًا</small></div>`;
+      if (total) h += `<div class="group te">
+        <div class="te-top"><b>${ar(total)}</b><span><small>${total === 1 ? 'خطأ' : 'خطأ'} في ${ar(ss.length)} ${ss.length === 1 ? 'جلسة' : 'جلسات'}${r1 != null ? ` · ${ar(r1 < 1 ? r1.toFixed(1).replace('.', '٫') : Math.round(r1))}٪ من الكلمات` : ''}</small>${trend}</span></div>
+        <div class="te-bar">${ks.map(([e, c], i) => `<i class="k${i % 6}" style="flex:${c}" title="${KIND_SHORT[e] || e}"></i>`).join('')}</div>
+        <ul class="te-kinds">${ks.map(([e, c], i) => `<li><i class="k${i % 6}"></i><span>${KIND_SHORT[e] || TYPES[e] || e}</span><b>${ar(c)}</b></li>`).join('')}</ul>
+      </div>`;
+      if (often.length) h += `<div class="pp-sub-h">أكثر الكلمات خطأً</div><div class="group te-words">${often.map(([k, c]) => {
+        const [ai, wi] = k.split(':').map(Number);
+        return `<button class="row" data-rc-aya="${ai}"><b class="te-w" style="font-family:${R.font}">${esc(ayaTokens(ai)[wi] || '')}</b><span class="main"><span class="s">${ayaLabel(ai)}</span></span><span class="te-c">${c === 1 ? 'مرة' : c === 2 ? 'مرتان' : `${ar(c)} مرات`}</span></button>`;
+      }).join('')}</div>`;
+      if (weak.length) h += `<button class="pp-wide-b" data-rc-view="weak">${ICONS.fix}<span>كل مواضع الضعف <b>${ar(weak.length)}</b></span>${ICONS.go}</button>`;
+      return h;
     }
     // 16 weeks, a cell a day, oldest on the right
     function heatHTML() {
@@ -2858,16 +2992,7 @@ const Recite = (() => {
       const trend = e0 ? (e1 <= e0 ? `الأخطاء أقل بـ ${ar(Math.round((1 - e1 / e0) * 100))}٪ من الأسبوع الماضي` : 'الأخطاء أكثر من الأسبوع الماضي') : '';
       let h = `<div class="group-label">هذا الأسبوع</div><div class="rc-sum"><div><b>${ar(thisW.length)}</b><small>جلسة</small></div><div><b>${ar(sum(thisW, 'ayas'))}</b><small>آية</small></div>
         <div><b>${ar(mins)}</b><small>دقيقة</small></div><div><b>${ar(e1)}</b><small>خطأ</small></div></div>${trend ? `<p class="rc-hint c">${trend}</p>` : ''}`;
-      h += '<div class="group-label">الجلسات</div><div class="group">' + l.sessions.slice(0, 20).map(s => {
-        const items = (s.list || []).filter(([ai]) => R.ayas[ai]).map(([ai, wi, e]) => wi < 0
-          ? `<div class="rc-sess-i"><span class="rc-mk rc-skip"></span><b>${ayaLabel(ai)}</b><small>تجاوزت الآية كلها</small></div>`
-          : `<div class="rc-sess-i"><span class="rc-mk rc-${e}"></span><b style="font-family:${R.font}">${esc(ayaTokens(ai)[wi] || '')}</b><small>${ayaLabel(ai)} · ${TYPES[e]}</small></div>`).join('');
-        const again = !s.review && R.ayas[s.from] ? `<button class="rc-not" data-rc-from="${s.from}">أعد هذه الجلسة</button>` : '';
-        return `<details class="rc-sess"><summary class="row"><span class="main"><span class="t">${sessionLabel(s)}</span>
-          <span class="s">${ago(s.t)} · ${ayaCount(s.ayas || 1)} · ${s.errs ? errs(s.errs) : 'بلا أخطاء'}</span></span>
-          <svg viewBox="0 0 24 24" class="go"><path d="M14.5 6l-6 6 6 6"/></svg></summary>
-          <div class="rc-sess-list">${items || '<p class="note">بلا أخطاء، ما شاء الله.</p>'}${again}</div></details>`;
-      }).join('') + '</div>';
+      h += '<div class="group-label">الجلسات</div><div class="group">' + l.sessions.slice(0, 30).map(sessHTML).join('') + '</div>';
       return h;
     }
 
@@ -3124,6 +3249,29 @@ const Recite = (() => {
     const vw = e.target.closest('[data-rc-view]');
     if (vw) { suraEdit = null; store.set('recite.view', vw.dataset.rcView); renderSheet(); $('#sheetBody').scrollTop = 0; haptic(5); return true; }
     if (e.target.closest('[data-rc-review]')) { closeSheet(); start(null, weakAyas()); return true; }
+    const cv = e.target.closest('[data-rc-cal]');
+    if (cv) { cal.v = cv.dataset.rcCal; cal.off = 0; rerender(); haptic(4); return true; }
+    const cn = e.target.closest('[data-rc-calnav]');
+    if (cn) { cal.off = Math.min(0, cal.off + +cn.dataset.rcCalnav); rerender(); haptic(4); return true; }
+    const cd = e.target.closest('[data-rc-day]');
+    if (cd) { cal.at = cd.dataset.rcDay; rerender(); haptic(4); return true; }
+    const cm = e.target.closest('[data-rc-mon]');
+    if (cm) { const [y, m] = cm.dataset.rcMon.split('-').map(Number), now = new Date(); cal.v = 'month'; cal.off = (y - now.getFullYear()) * 12 + m - now.getMonth(); rerender(); return true; }
+    const to = e.target.closest('[data-rc-to]');
+    if (to) {
+      const o = testO(), k = to.dataset.rcTo, v = k === 'n' ? +to.dataset.v : to.dataset.v;
+      if (k === 'from' && v === 'sura' && !o.s) o.s = R.ayas[resumeAya()][0];
+      store.set('recite.testo', { ...o, [k]: v }); rerender(); haptic(4); return true;
+    }
+    if (e.target.closest('[data-rc-test-go]')) {
+      const t = testPick();
+      if (!t) { toast('اختر سورة، أو احفظ آيات أولًا'); return true; }
+      store.set('recite.view', ''); closeSheet(); start(null, t, { test: true }); return true;
+    }
+    const sw = e.target.closest('[data-rc-sw]');
+    if (sw) { goSura(+sw.dataset.rcSw); rerender(); haptic(5); return true; }
+    const sw0 = e.target.closest('[data-rc-sw0]');
+    if (sw0) { goSura(+sw0.dataset.rcSw0, true); rerender(); haptic(5); toast('من أول السورة'); return true; }
     if (e.target.closest('[data-rc-test]')) { const t = testAyas(); if (t) { closeSheet(); start(null, t, { test: true }); } return true; }
     const pick = e.target.closest('[data-rc-pick]');
     if (pick) {
@@ -3329,11 +3477,21 @@ const Recite = (() => {
     if (!g) return;
     const bad = [...new Set(liveErrs().map(k => g.words[k].ai))];
     closeDone();
+    if (g.test) { const t = testPick(); if (t) start(null, t, { test: true }); return; }
     if (bad.length) start(null, bad);
     else start(Math.min(g.words[g.pos - 1].ai + 1, R.ayas.length - 1));
   };
 
+  // the panel's selects: the surah to recite, the surah to be tested in
+  function onChange(e) {
+    const sw = e.target.closest('[data-rc-sws]');
+    if (sw) { goSura(+sw.value); rerender(); return true; }
+    const ts = e.target.closest('[data-rc-tsura]');
+    if (ts) { store.set('recite.testo', { ...testO(), s: +ts.value }); rerender(); return true; }
+    return false;
+  }
+
   syncBubble();
 
-  return { holdStart, holdEnd, manual: () => !!G?.manual && !G.done, start, cancel, paint, onTap, card, suraCard, showWord, prepResume, wordStats, resetWord, ago, restore, syncBubble, mic, panelHTML, mounted, onSheetClick, active: () => !!G, _g: () => G };
+  return { onChange, holdStart, holdEnd, manual: () => !!G?.manual && !G.done, start, cancel, paint, onTap, card, suraCard, showWord, prepResume, wordStats, resetWord, ago, restore, syncBubble, mic, panelHTML, mounted, onSheetClick, active: () => !!G, _g: () => G };
 })();

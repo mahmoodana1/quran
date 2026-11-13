@@ -184,7 +184,7 @@ const Plan = (() => {
   // recited on either is lost. `a` is the copy changed less recently (its plain fields give way to b's).
   // said: the latest time of each aya, unless taken out later (gone.said); first: the earliest; days: the
   // larger count; an aya's weak spot (ayas), its numbers (stats), a surah's revisions (rev): the copy
-  // changed last, unless taken out later; the sessions: both, once each, the newest 60; totals: the larger.
+  // changed last, unless taken out later; the sessions: both, once each, the newest 200; totals: the larger.
   function mergeRecite(a, b) {
     a ||= {}; b ||= {};
     const out = { ...a, ...b }, g = {};
@@ -227,7 +227,7 @@ const Plan = (() => {
       // (the same session on both: the one with fewer mistakes listed, some since forgiven)
       if (!was || (s.list || []).length < (was.list || []).length) ss.set(k, s);
     }
-    out.sessions = [...ss.values()].sort((x, y) => y.t - x.t).slice(0, 60);
+    out.sessions = [...ss.values()].sort((x, y) => y.t - x.t).slice(0, 200);
     if (a.total || b.total) out.total = { secs: Math.max(a.total?.secs || 0, b.total?.secs || 0), sessions: Math.max(a.total?.sessions || 0, b.total?.sessions || 0) };
     return out;
   }
