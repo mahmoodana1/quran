@@ -440,7 +440,7 @@ const Recite = (() => {
     const words = ayas.flatMap(ayaWords);
     if (!words.length) return;
     G = { ayas, words, idx: new Map(words.map((w, k) => [w.p + ':' + w.n, k])), pos: 0, errs: {}, gone: new Set(),
-      manual, hide: manual || !!opts.test || (!opts.seed && store.get('recite.hide', false)), fast: setting('fastOn'), light: MU() && !manual && !!store.get('recite.light', false), run: false, secs: 0, busy: 0,
+      manual, hide: manual || !!opts.test || !!opts.hide || (!opts.seed && store.get('recite.hide', false)), fast: setting('fastOn'), light: MU() && !manual && !!store.get('recite.light', false), run: false, secs: 0, busy: 0,
       review: !!review && !opts.test && !opts.kind, kind: opts.kind || null, test: !!opts.test, lastP: null, miss: 0, tent: 0, found: !!opts.stream };
     // Muaalem: c = the aya being said (in G.ayas), w0 = its first word still to
     // match, cut = how much of the reading belongs to ayas already done

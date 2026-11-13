@@ -32,7 +32,7 @@ const Desk = (() => {
     down: '<path d="M7 10l5 5 5-5"/>',
   };
   const THEME_NAME = { light: 'فاتح', sepia: 'ورقي', dark: 'داكن', auto: 'تلقائي' };
-  const RAIL = [['read', 'المصحف'], ['suras', 'الفهرس'], ['recite', 'التسميع'], ['adhkar', 'الأذكار'], ['marks', 'العلامات'], ['prayer', 'الصلاة'], ['settings', 'الإعدادات']];
+  const RAIL = [['read', 'المصحف'], ['suras', 'الفهرس'], ['hifz', 'الحفظ'], ['recite', 'التسميع'], ['adhkar', 'الأذكار'], ['marks', 'العلامات'], ['prayer', 'الصلاة'], ['settings', 'الإعدادات']];
   const KEYS = [
     ['التنقل', [
       ['←', 'الصفحة التالية'], ['→', 'الصفحة السابقة'], ['Home / End', 'أول المصحف وآخره'],

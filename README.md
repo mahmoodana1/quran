@@ -29,6 +29,10 @@ Static PWA: open it in Safari → Share → **Add to Home Screen**. It must be s
   settings and the theme follow the reader from device to device. `sync.js`, no SDK: Firebase's
   REST endpoints (project `quran-app-sync`: Auth, and Firestore at `users/<uid>/…`, readable and
   writable by that user alone). Nothing is sent before signing in.
+- **الحفظ** (hifz.js): a lesson of a few ayas (changed at will) learned in four steps: listen on repeat,
+  repeat after the reciter in silent pauses as long as each aya, link the ayas cumulatively, then recite with
+  the words hidden (التسميع). «حفظتُ» marks it memorized (the same record التسميع keeps) and moves on;
+  today's revision: the last week's ayas (السبقي) and a share of the older ones (المنزل, all of it every N days).
 - **Offline**: Settings → «تحميل الكل» saves the mushaf, tafsir, adhkar and (optionally) the recitation.
 - **Audio**: every riwaya is recited by a reciter of that riwaya, played continuously with
   page follow and the aya highlighted:

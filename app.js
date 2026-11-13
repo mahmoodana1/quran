@@ -1404,16 +1404,87 @@ async function surahPart(it) {
   return frameSet(parts, x);
 }
 
+// n seconds of silence in the format of frame f: its header, and nothing after it
+// (no bits for the samples decode to silence), repeated
+function silence(f, secs) {
+  const h = mp3Header(f, 0);
+  if (!h) return frameSet([]);
+  const z = new Uint8Array(f.length);
+  z.set(f.subarray(0, 4));
+  return frameSet(new Array(Math.max(1, Math.round(secs * h.hz / h.samples))).fill(z), h);
+}
+
+// the files (or parts of files) of one riwaya aya; intro: what is recited before a surah's first aya
+function* ayaItems(ai, rec, base, intro, extra) {
+  if (rec) {
+    const [s, n] = R.ayas[ai], t = rec.t[s - 1], url = surahUrl(rec, s);
+    if (intro && n === 1 && t[0] > 300) yield { url, ai, from: 0, to: t[0], intro: true, ...extra };
+    yield { url, ai, from: t[n - 1], to: t[n], ...extra };
+    return;
+  }
+  const a = R.ayas[ai];
+  for (let h = a[5]; h <= a[6]; h++) {
+    const [s, n] = META.hafs[h];
+    if (intro && n === 1 && s !== 1 && s !== 9) yield { url: `${base}001001.mp3`, ai, intro: true, ...extra };
+    yield { url: hafsUrl(h, base), ai, ...extra };
+  }
+}
+// memorizing: the ayas of `list` played over and over (o.each times each, then
+// all of them o.whole times; o.link: aya by aya, each followed by all of them
+// from the first so far), with a pause after each to repeat it (o.gap: times
+// its length)
+function* drill(list, o) {
+  const rec = P.rec, base = voice('hafs').base;
+  function* one(ai, lab, intro) {
+    yield* ayaItems(ai, rec, base, intro, { lab });
+    if (o.gap) yield { gap: o.gap, ai, lab };
+  }
+  const n = list.length, each = Math.max(1, o.each || 1), whole = o.whole ?? 1;
+  if (o.link) {
+    for (let i = 0; i < n; i++) {
+      for (let r = 0; r < each; r++) yield* one(list[i], `الآية ${ar(i + 1)} · ${ar(r + 1)}/${ar(each)}`, r === 0 && i === 0);
+      if (i) for (let j = 0; j <= i; j++) yield* one(list[j], `الربط ${ar(1)}–${ar(i + 1)}`, false);
+    }
+    return;
+  }
+  if (each > 1) for (const ai of list) for (let r = 0; r < each; r++) yield* one(ai, `${ar(r + 1)}/${ar(each)}`, r === 0);
+  for (let w = 0; whole === Infinity || w < whole; w++) for (const ai of list) yield* one(ai, n > 1 || each > 1 || whole > 1 ? `الدرس ${ar(w + 1)}${whole === Infinity ? '' : '/' + ar(whole)}` : '', w === 0 && each <= 1);
+}
+async function playDrill(list, o = {}, done) {
+  if (!list.length) return;
+  if (typeof Recite !== 'undefined') Recite.cancel();
+  stopAudio(false);
+  const run = ++P.run, ai = list[0];
+  P.ai = S.play = ai;
+  const page = R.ayas[ai][2];
+  if (page !== S.page) goTo(page, { animate: Math.abs(page - S.page) === 1 });
+  paintMarks();
+  showPlayer();
+  try { P.rec = await loadRec(R.id); } catch { if (run === P.run) { toast('تعذر تحميل الصوت'); stopAudio(); } return; }
+  if (run !== P.run) return;
+  Object.assign(P, { memo: new Map(), rate: o.rate || 1, done, gen: drill(list, o) });
+  playChunk(0, 1500);
+}
+
 function fetchItem(k, tries = 3) {
   const run = P.run, it = item(k);
   if (!it || P.got[k]) return P.got[k]?.p;
   const g = P.got[k] = { v: undefined };
   g.p = (async () => {
+    // a pause to repeat in: silence as long as the aya before it (times it.gap)
+    if (it.gap) {
+      const prev = P.list[k - 1];
+      if (prev.f0 == null) await fetchItem(k - 1);
+      return (g.v = prev.f0 ? silence(prev.f0, prev.dur * it.gap) : frameSet([]));
+    }
+    const mk = `${it.url}|${it.from}|${it.to}`, kept = P.memo?.get(mk);
+    const keep = v => { if (v.parts.length) { it.f0 = v.parts[0]; it.dur = v.dur; P.memo?.set(mk, v); } return v; };
+    if (kept) return (g.v = keep(kept));
     for (let t = 0; t < tries && run === P.run; t++) {
       try {
-        if (it.from != null) return (g.v = await surahPart(it));
+        if (it.from != null) return (g.v = keep(await surahPart(it)));
         const r = await fetch(it.url, { mode: 'cors' });
-        if (r.ok) return (g.v = mp3Frames(await r.arrayBuffer()));
+        if (r.ok) return (g.v = keep(mp3Frames(await r.arrayBuffer())));
       } catch {}
       await new Promise(r => setTimeout(r, 600 * (t + 1)));
     }
@@ -1480,6 +1551,7 @@ async function playChunk(from, wait = 0) {
   P.at = -1;
   audio.src = URL.createObjectURL(new Blob(parts, { type: 'audio/mpeg' }));
   if (old.startsWith('blob:')) URL.revokeObjectURL(old);
+  audio.defaultPlaybackRate = audio.playbackRate = P.rate || 1;
   audio.play().catch(() => $('#player').classList.add('paused'));
   sync();
   pump();
@@ -1496,6 +1568,7 @@ function sync() {
   if (k !== P.at) {
     P.at = k;
     const ai = P.list[k].ai;
+    if ((P.list[k].lab || '') !== P.lab) { P.lab = P.list[k].lab || ''; if (ai === P.ai) showPlayer(); }
     if (ai !== P.ai) {
       P.ai = S.play = ai;
       const page = R.ayas[ai][2];
@@ -1507,8 +1580,9 @@ function sync() {
   }
   // this aya's share of the bar
   let a = k, b = k + 1;
-  while (a > c.from && P.list[a - 1].ai === P.ai) a--;
-  while (b < c.to && P.list[b].ai === P.ai) b++;
+  const same = x => x.ai === P.ai && x.lab === P.list[k].lab;
+  while (a > c.from && same(P.list[a - 1])) a--;
+  while (b < c.to && same(P.list[b])) b++;
   const s = c.starts[a - c.from], e = c.starts[b - c.from];
   $('#plProg').style.transform = `scaleX(${Math.min(1, Math.max(0, (t - s) / (e - s || 1)))})`;
   // wake up right at the next file (timeupdate alone is only ~4 times a second)
@@ -1543,7 +1617,7 @@ function jump(ai) {
 audio.addEventListener('ended', () => {
   const c = P.chunk;
   if (c && item(c.to)) playChunk(c.to);
-  else stopAudio();
+  else { const done = P.done; stopAudio(); done?.(); }
 });
 audio.addEventListener('timeupdate', sync);
 audio.addEventListener('seeked', sync);
@@ -1552,7 +1626,7 @@ audio.addEventListener('pause', () => { $('#player').classList.add('paused'); cl
 audio.addEventListener('error', () => { if (P.ai != null) toast('تعذر تحميل الصوت'); });
 
 function showPlayer() {
-  $('#plTitle').textContent = ayaLabel(P.ai);
+  $('#plTitle').textContent = ayaLabel(P.ai) + (P.lab ? ` · ${P.lab}` : '');
   $('#plReciter').textContent = `الشيخ ${reciterFull(R.id)}`;
   show($('#player'));
   if (S.act == null) hide($('#ayaBar'));
@@ -1571,7 +1645,7 @@ function stopAudio(close = true) {
   const old = audio.src;
   audio.removeAttribute('src');
   if (old.startsWith('blob:')) URL.revokeObjectURL(old);
-  Object.assign(P, { list: [], gen: null, got: [], at: -1, chunk: null });
+  Object.assign(P, { list: [], gen: null, got: [], at: -1, chunk: null, memo: null, rate: 1, done: null, lab: '' });
   if (!close) return;
   P.ai = null; S.play = null;
   hide($('#player'));
@@ -2607,6 +2681,7 @@ function openSheet(t = tab, view = '', keepQuery = false) {
   tab = t;
   store.set('recite.view', t === 'recite' ? view : ''); // (التسميع's own pages: its main one, unless asked)
   setView = t === 'settings' ? view : '';
+  if (typeof Hifz !== 'undefined') Hifz.reset();
   railOpen(false);
   $('#sheetSub').textContent = `${K.name} · ${META.riwayat.find(r => r.id === R.id)?.name || ''} · صفحة ${ar(S.page)}`;
   if (!(S.desk && !$('#tafsir').hidden)) closeActions(); // (a computer: the tafsir stays at its own side)
@@ -2626,7 +2701,7 @@ function railOpen(on) {
 }
 $('#railBtn').onclick = () => { railOpen(!$('#sheet').classList.contains('rail-open')); haptic(6); };
 $('#railVeil').onclick = () => railOpen(false);
-const TAB_NAMES = { suras: 'السور', recite: 'التسميع', adhkar: 'الأذكار', marks: 'العلامات', prayer: 'الصلاة', settings: 'الإعدادات' };
+const TAB_NAMES = { suras: 'السور', hifz: 'الحفظ', recite: 'التسميع', adhkar: 'الأذكار', marks: 'العلامات', prayer: 'الصلاة', settings: 'الإعدادات' };
 $('#tabs').addEventListener('click', e => {
   const b = e.target.closest('[data-tab]');
   if (!b) return;
@@ -2689,6 +2764,7 @@ function juzHit(raw) {
 const PLACES = [
   ['prayer', 'مواقيت الصلاة', 'الأوقات والتنبيه بالوقت القادم', 'صلاه صلوات مواقيت اوقات اذان فجر ظهر عصر مغرب عشاء'],
   ['prayer', 'اتجاه القبلة', 'البوصلة نحو الكعبة', 'قبله بوصله اتجاه كعبه'],
+  ['hifz', 'الحفظ', 'احفظ آيات جديدة: استمع، ردّد، اربط، سمّع', 'حفظ احفظ تحفيظ تكرار ترديد ربط درس منزل سبق سبقي مراجعه'],
   ['recite', 'التسميع', 'سمّع من حفظك ونتابعك ونصحح', 'تسميع حفظ محفوظ مراجعه اختبار اخطاء تلاوه'],
   ['adhkar', 'الأذكار', 'الصباح والمساء والنوم وغيرها', 'اذكار ذكر ادعيه دعاء صباح مساء نوم'],
   ['marks', 'العلامات', 'الآيات التي علّمتها', 'علامات علامه محفوظات مفضله'],
@@ -2760,6 +2836,8 @@ function renderSheet() {
     html = '<div id="adhkarList"></div>';
   } else if (tab === 'recite') {
     html = Recite.panelHTML();
+  } else if (tab === 'hifz') {
+    html = Hifz.panelHTML();
   } else if (tab === 'marks') {
     const list = bookmarks();
     html = khatmaRowHTML();
@@ -2783,6 +2861,7 @@ function renderSheet() {
     html = settingsHTML();
   }
   body.innerHTML = html;
+  if (q.trim()) body.scrollTop = 0; // (results from the top, wherever the list was)
   if (!q.trim()) {
     // open the surah list at the surah being read
     const jz = body.querySelector('.jz.on');
@@ -2793,6 +2872,7 @@ function renderSheet() {
   if (tab === 'settings' && !q.trim()) { if (setView) paintVoiceSaved(); else { refreshAudioPanel(); refreshMushafCard(); refreshAppInfo(); } }
   if (tab === 'prayer' && !q.trim()) Prayer.mount();
   if (tab === 'recite' && !q.trim()) Recite.mounted();
+  if (tab === 'hifz' && !q.trim()) Hifz.mounted();
   if (tab === 'adhkar' && !q.trim()) Adhkar.mount($('#adhkarList'));
   if (typeof Desk !== 'undefined') Desk.sync();
 }
@@ -2800,6 +2880,7 @@ function renderSheet() {
 $('#sheetBody').addEventListener('change', e => {
   const sel = e.target.closest('[data-pr]');
   if (sel) Prayer.onChange(sel);
+  Hifz.onChange(e);
 });
 $('#sheetBody').addEventListener('click', async e => {
   if (typeof Sync !== 'undefined' && e.target.closest('#syncCard') && Sync.onClick(e)) return;
@@ -2824,6 +2905,7 @@ $('#sheetBody').addEventListener('click', async e => {
   const dk = e.target.closest('[data-dk]');
   if (dk) { $('#q').blur(); Adhkar.open(dk.dataset.dk, dk.dataset.dkI != null ? +dk.dataset.dkI : undefined); return; }
   if (typeof Recite !== 'undefined' && Recite.onSheetClick(e)) return;
+  if (tab === 'hifz' && !$('#q').value.trim() && Hifz.onClick(e)) return;
   const jz = e.target.closest('[data-go-juz]');
   if (jz) { dismissSheet(); goTo(+jz.dataset.goJuz); if (S.desk) renderSheet(); return; }
   const gt = e.target.closest('[data-go-tab]');

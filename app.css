@@ -2682,3 +2682,111 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 .vc-intro small { display: block; font-size: 12.5px; color: var(--muted); }
 #plReciter { cursor: pointer; text-decoration: underline dotted color-mix(in srgb, currentColor 45%, transparent); text-underline-offset: 3px; }
 @media (prefers-reduced-motion: reduce) { .vc-play.on { animation: none; } }
+
+/* ---------- الحفظ: the lesson as an emerald plate, its four steps, how to repeat, today's revision ---------- */
+.hz { padding-top: 4px; }
+.hz-lesson {
+  position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 4px;
+  margin: 4px 0 18px; padding: 16px 16px 14px; border-radius: 6px; color: var(--p-on);
+  background: var(--p-pattern) 0 0 / 26px 26px, linear-gradient(160deg, var(--p-green), var(--p-green-2));
+  border: 1px solid var(--p-gold);
+  box-shadow: inset 0 0 0 5px var(--p-green-2), inset 0 0 0 6px color-mix(in srgb, var(--p-gold) 70%, transparent), 0 10px 22px rgba(30, 20, 5, .22);
+}
+.hz-l-top { align-self: stretch; display: flex; align-items: center; justify-content: space-between; }
+.hz-l-top small { font-size: 12.5px; font-weight: 700; opacity: .75; letter-spacing: .3px; }
+.hz-edit, .hz-show {
+  display: inline-flex; align-items: center; gap: 5px; padding: 5px 11px; border-radius: 999px; font-size: 12.5px; font-weight: 700;
+  color: var(--p-on); border: 1px solid color-mix(in srgb, var(--p-gold) 70%, transparent); background: rgba(255, 255, 255, .06);
+}
+.hz-edit svg, .hz-show svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.hz-l-name { font-size: 25px; font-weight: 900; line-height: 1.35; color: #f3e1b0; margin-top: 2px; }
+.hz-l-sub { font-size: 13px; opacity: .8; }
+.hz-show { margin-top: 8px; }
+.hz-edit:active, .hz-show:active { transform: scale(.96); }
+
+.hz-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; position: relative; }
+.hz-steps::before { content: ""; position: absolute; top: 24px; bottom: 24px; inset-inline-start: 22px; border-inline-start: 1.5px dashed var(--p-rule); }
+.hz-step {
+  position: relative; width: 100%; display: flex; align-items: center; gap: 14px; text-align: start; padding: 10px 12px 10px 14px;
+  border-radius: 14px; background: var(--surface); border: 1px solid var(--p-rule); transition: transform .15s ease, background-color .2s ease;
+}
+.hz-step:active { transform: scale(.985); background: color-mix(in srgb, var(--p-gold) 12%, var(--surface)); }
+.hz-n {
+  flex: none; width: 30px; height: 30px; margin-inline-start: -4px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 14px; font-weight: 800; color: var(--gold-ink); background: var(--sheet); border: 1.5px solid var(--p-gold);
+}
+.hz-n svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.hz-step.ok .hz-n { color: var(--p-on); background: var(--p-green); border-color: var(--p-green); }
+.hz-st { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.hz-st b { font-size: 17px; font-weight: 800; color: var(--ink); }
+.hz-st small { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+.hz-ic { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; color: var(--p-ink); background: color-mix(in srgb, var(--p-green) 9%, transparent); }
+.hz-ic svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+:root[data-theme="dark"] .hz-ic { color: #8fd3a8; }
+
+.hz-done {
+  display: block; width: 100%; margin: 14px 0 6px; padding: 13px 16px; border-radius: 14px; font-size: 15.5px; font-weight: 800;
+  color: var(--p-on); background: linear-gradient(160deg, var(--p-green), var(--p-green-2)); border: 1px solid var(--p-gold);
+  box-shadow: inset 0 0 0 2px var(--p-green), inset 0 0 0 3px color-mix(in srgb, var(--p-gold) 60%, transparent);
+}
+.hz-done:active { transform: scale(.98); }
+.hz-done.ok { color: #2a2008; background: linear-gradient(160deg, #ecd398, #c9a55c); border-color: #b48e45; box-shadow: none; }
+
+.hz-opts { margin: 14px 0 4px; border-radius: 14px; border: 1px solid var(--p-rule); background: color-mix(in srgb, var(--surface) 60%, transparent); }
+.hz-opts summary { list-style: none; display: flex; align-items: center; gap: 12px; padding: 12px 14px; cursor: pointer; }
+.hz-opts summary::-webkit-details-marker { display: none; }
+.hz-opts summary::after { content: ""; flex: none; width: 8px; height: 8px; border: solid var(--p-gold); border-width: 0 2px 2px 0; transform: rotate(45deg); transition: transform .2s ease; margin-inline-end: 4px; }
+.hz-opts[open] summary::after { transform: rotate(-135deg); }
+.hz-opts summary > svg { flex: none; width: 22px; height: 22px; fill: none; stroke: var(--gold-ink); stroke-width: 1.7; stroke-linecap: round; }
+.hz-opts summary > span { flex: 1; display: flex; flex-direction: column; gap: 1px; }
+.hz-opts summary b { font-size: 15px; font-weight: 800; }
+.hz-opts summary small { font-size: 12.5px; color: var(--muted); }
+.hz-opts > .hz-o, .hz-opts > .hz-sw { margin: 0 14px; }
+.hz-opts > :last-child { margin-bottom: 12px; }
+.hz-o { padding: 10px 0; border-top: 1px dotted var(--p-rule); }
+.hz-o > span { display: block; font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 8px; }
+.hz-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.hz-chips button {
+  min-width: 42px; padding: 7px 12px; border-radius: 999px; font-size: 14px; font-weight: 700; color: var(--ink);
+  border: 1px solid var(--p-rule); background: var(--surface);
+}
+.hz-chips button.on { color: var(--p-on); background: var(--p-green); border-color: var(--p-green); box-shadow: 0 0 0 1.5px var(--sheet), 0 0 0 2.5px var(--p-gold); }
+.hz-chips button:active { transform: scale(.94); }
+.hz-sw { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0 0; border-top: 1px dotted var(--p-rule); font-size: 14.5px; font-weight: 600; text-align: start; }
+
+.hz-h { margin-top: 22px; }
+.hz-rev { margin-bottom: 10px; }
+.row.hz-rr { gap: 10px; min-height: 60px; }
+.hz-rk { flex: none; min-width: 58px; text-align: center; padding: 5px 8px; border-radius: 8px; font-size: 13px; font-weight: 800; }
+.hz-rk.near { color: #7a4d06; background: color-mix(in srgb, #e3a63b 22%, transparent); }
+.hz-rk.far { color: var(--p-ink); background: color-mix(in srgb, var(--p-green) 13%, transparent); }
+:root[data-theme="dark"] .hz-rk.near { color: #f0c06a; }
+:root[data-theme="dark"] .hz-rk.far { color: #8fd3a8; }
+.hz-rr .s { font-size: 13.5px; color: var(--ink); }
+.hz-rb { flex: none; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; color: var(--p-ink); border: 1px solid var(--p-rule); background: var(--surface); }
+.hz-rb svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
+:root[data-theme="dark"] .hz-rb { color: #8fd3a8; }
+.hz-rb:active { transform: scale(.9); }
+.hz-empty { margin: 4px 6px 12px; font-size: 13.5px; color: var(--muted); line-height: 1.8; text-align: center; }
+.hz-more { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 12px; font-size: 13.5px; font-weight: 700; color: var(--gold-ink); }
+.hz-more svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+
+/* the lesson changed */
+.hz-ed { display: flex; flex-direction: column; gap: 14px; }
+.hz-sel { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.hz-sel select {
+  font: 600 17px var(--ui); color: var(--ink); padding: 11px 12px; border-radius: 12px; border: 1px solid var(--p-rule); background: var(--surface);
+  -webkit-appearance: none; appearance: none;
+}
+.hz-stps { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.hz-stp { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 700; color: var(--muted); }
+.hz-stp > div { display: flex; align-items: center; justify-content: space-between; padding: 4px; border-radius: 12px; border: 1px solid var(--p-rule); background: var(--surface); }
+.hz-stp b { font-size: 20px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; }
+.hz-stp button { width: 40px; height: 40px; border-radius: 9px; font-size: 22px; font-weight: 600; color: var(--p-ink); background: color-mix(in srgb, var(--p-green) 9%, transparent); }
+:root[data-theme="dark"] .hz-stp button { color: #8fd3a8; }
+.hz-stp button:active { transform: scale(.92); }
+.hz-ed .hz-o { border-top: 0; padding: 0; }
+.hz-text {
+  max-height: 260px; overflow-y: auto; padding: 14px 16px; border-radius: 12px; border: 1px solid var(--p-rule);
+  background: var(--p-bg); font-size: 22px; line-height: 2; color: var(--ink); text-align: justify;
+}
