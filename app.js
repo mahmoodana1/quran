@@ -1015,8 +1015,9 @@ function openSura(su) {
   const n = (R.suraStart[su + 1] ?? R.ayas.length) - R.suraStart[su];
   $('#sbSub').textContent = n === 1 ? 'آية' : n === 2 ? 'آيتان' : n <= 10 ? `${ar(n)} آيات` : `${ar(n)} آية`;
   $('#sbBody').innerHTML = c.html;
-  $('#suraBar [data-sb=go]').hidden = c.from == null;
-  if (c.from != null) $('#sbGo').textContent = `تابع من ${ar(R.ayas[c.from][1])}`;
+  // (the main button: on from where it was left, if it was; from the start is a link by the progress)
+  $('#sbMain').dataset.sb = c.from == null ? 'start' : 'go';
+  $('#sbMainT').textContent = c.from == null ? 'سمّع السورة' : `تابع من ${ar(R.ayas[c.from][1])}`;
   if (P.ai == null) hide($('#player'));
   const bar = $('#suraBar');
   if (!bar.hidden && !bar.classList.contains('leaving')) { bar.classList.remove('swap'); void bar.offsetWidth; bar.classList.add('swap'); }

@@ -218,7 +218,7 @@ svg { fill: currentColor; }
 }
 .band .orn::after { content: ""; position: absolute; inset: 25%; background: var(--frame); }
 .band .orn:first-child { right: calc(var(--lh) * .3); }
-.band .orn:last-child { left: calc(var(--lh) * .3); }
+.band .orn:last-of-type, .band .sname + .orn { left: calc(var(--lh) * .3); } /* (a tap's ripple comes after it) */
 .sname {
   font-family: qbsml; font-size: calc(var(--lh) * .6); line-height: 1;
   direction: rtl; unicode-bidi: bidi-override; color: var(--ink);
@@ -1863,11 +1863,11 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 #suraBar .acts-title small { color: var(--muted); font-size: 12.5px; }
 #sbBody:empty { display: none; }
 #sbBody { animation: swapIn .3s ease; }
-.sb-row { grid-template-columns: repeat(3, 1fr); }
+.sb-row { grid-template-columns: repeat(4, 1fr); }
 .sb-row button.main i { background: var(--accent); color: var(--on-accent); }
 .sb-row button.main:active i { background: var(--accent); filter: brightness(1.08); }
 .sb-row button[hidden] { display: none; }
-.sb-row:has(button[hidden]) { grid-template-columns: repeat(2, 1fr); }
+
 .rc-sb-p { display: flex; align-items: center; gap: 10px; }
 .rc-sb-p small { flex: none; font-size: 12px; color: var(--muted); }
 .rc-sb-l { font-size: 11.5px; color: var(--muted); margin-bottom: -3px; }
@@ -2977,3 +2977,14 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 .si-src span { font-weight: 700; }
 .si-src span::before { content: "◆"; color: var(--p-gold); font-size: 8px; margin-inline-end: 8px; vertical-align: 2px; }
 .si-src a { color: var(--gold-ink); font-weight: 700; }
+
+/* the surah card: lighter, a line of progress and a row of four */
+#suraBar .rc-sb { padding-bottom: 2px; }
+.rc-sb-p { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.rc-sb-p small { font-size: 12.5px; color: var(--muted); }
+.rc-sb-again { margin-inline-start: auto; font-size: 12.5px; font-weight: 700; color: var(--accent); padding: 2px 4px; }
+.rc-sb-w { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+.rc-sb-w .rc-sb-l { margin: 0 0 0 4px; font-size: 12px; font-weight: 700; color: var(--muted); }
+.sb-row button span { font-size: 12.5px; white-space: nowrap; }
+.rc-sb-p { row-gap: 6px; }
+.rc-sb-p .rc-bar { flex: 1 1 100%; }

@@ -2144,18 +2144,16 @@ const Recite = (() => {
     const inSura = ai => R.ayas[ai]?.[0] === su;
     const sess = l.sessions.filter(x => !x.review && (inSura(x.from) || inSura(x.to) || (x.list || []).some(([ai]) => inSura(ai)))).slice(0, 4);
     const full = got >= n, nx = nextIn(su, said);
+    // (one line: how far, how it went, when last; then the weak spots, if any: the sessions are in التسميع)
+    const from = got && !full && nx !== a0 ? nx : null, when = sess[0]?.t || last;
+    const bits = [full ? 'سمّعتها كاملة' : got ? `${ar(got)} من ${ar(n)} آية` : 'لم تسمّع منها بعد',
+      r + w ? `${ar(r)} صحيحة${w ? ` · ${ar(w)} بأخطاء` : ''}` : '', done ? `${ayaCount(done)} متقنة` : '', when ? ago(when) : ''].filter(Boolean);
     let h = `<div class="rc-ab rc-sb">
       <div class="rc-sb-p"><span class="rc-bar${full ? ' full' : ''}"><i style="width:${got ? Math.max(3, Math.round(got / n * 100)) : 0}%"></i></span>
-        <small>${full ? 'سمّعتها كاملة' : got ? `${ar(got)} من ${ar(n)} آية` : `لم تسمّع منها بعد · ${ayaCount(n)}`}</small></div>`;
-    if (r + w || done) h += `<div class="rc-ab-top">
-        <span class="rc-ab-n ok"><b>${ar(r)}</b>قراءة صحيحة</span><span class="rc-ab-n bad"><b>${ar(w)}</b>بأخطاء</span>
-        ${done ? `<span class="rc-ab-done">${ayaCount(done)} متقنة</span>` : ''}</div>`;
-    if (weak.length) h += `<div class="rc-sb-l">مواضع الضعف</div><div class="rc-ab-w rc-sb-w">${weak.slice(0, 16).map(ai =>
-      `<button data-sb-aya="${ai}">${ar(R.ayas[ai][1])}</button>`).join('')}${weak.length > 16 ? `<small>و${ar(weak.length - 16)} أخرى</small>` : ''}</div>`;
-    if (sess.length) h += `<div class="rc-sb-l">آخر الجلسات</div><div class="rc-sb-s">${sess.map(x =>
-      `<div><span>${sessionLabel(x)}</span><small>${ago(x.t)} · ${x.errs ? errs(x.errs) : 'بلا أخطاء'}</small></div>`).join('')}</div>`;
-    else if (last) h += `<small class="rc-ab-last">آخر تسميع ${ago(last)}</small>`;
-    return { html: h + '</div>', from: got && !full && nx !== a0 ? nx : null };
+        <small>${bits.join(' · ')}</small>${from != null ? '<button class="rc-sb-again" data-sb="start">من أولها</button>' : ''}</div>`;
+    if (weak.length) h += `<div class="rc-ab-w rc-sb-w"><span class="rc-sb-l">مواضع الضعف</span>${weak.slice(0, 12).map(ai =>
+      `<button data-sb-aya="${ai}">${ar(R.ayas[ai][1])}</button>`).join('')}${weak.length > 12 ? `<small>و${ar(weak.length - 12)} أخرى</small>` : ''}</div>`;
+    return { html: h + '</div>', from };
   }
 
   // a word's record: { read: readings of its aya, wrong, right, now: its mark
