@@ -1,8 +1,8 @@
 'use strict';
 
 // Sync, for who wants it: signed in (a Google account, or an email and a password), what the reader
-// keeps (khatmas and their bookmarks, the recitation's record, the adhkar counted, the prayer
-// settings, the theme) is kept in their own place in a Firebase project too, and brought to every
+// keeps (khatmas and their bookmarks, the recitation's record, the reciter chosen for each riwaya,
+// the memorizing lesson and how it is repeated, the adhkar counted, the prayer settings, the theme) is kept in their own place in a Firebase project too, and brought to every
 // device they sign in on. Nothing is sent before signing in, and signing out leaves the device as it is.
 //
 // No Firebase SDK: its REST endpoints with fetch. The app's pages are served cross-origin isolated
@@ -26,7 +26,7 @@ const Sync = (() => {
   const BIG_AT = 60e3, TOO_BIG = 900e3, PUSH_MS = 4000, AGAIN_MS = 20e3;
   // what goes with the reader from device to device (not what belongs to the device: the model
   // chosen, the look of this screen, what was open)
-  const SYNCED = /^(khatmas|kh\.current|kh\.gone|theme|adhkar|adhkar\.size|adhkar\.more|pray|mu\.pace|mu\.paceT|recite\.(?!view$|barUp$|model$|light$|editS$|editFrom$|live\.).+)$/;
+  const SYNCED = /^(khatmas|kh\.current|kh\.gone|theme|adhkar|adhkar\.size|adhkar\.more|pray|mu\.pace|mu\.paceT|voice\..+|hifz\.(?!open$).+|recite\.(?!view$|barUp$|model$|light$|editS$|editFrom$|live\.).+)$/;
   const ls = { get: (k, d) => { try { const v = localStorage.getItem('q.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set: (k, v) => { try { localStorage.setItem('q.' + k, JSON.stringify(v)); } catch {} } };
   let auth = ls.get('sync.auth', null);   // { uid, email, refresh, id, exp }
   let mt = ls.get('sync.mt', {});         // key -> when it last changed here
@@ -207,6 +207,8 @@ const Sync = (() => {
         }
       }
       if (keys.includes('theme')) applyTheme();
+      // another reciter chosen there: what is saved of him counted again, his name in the player
+      for (const k of keys) if (k.startsWith('voice.')) { delete AS[k.slice(6)]; if (P.ai != null && k === 'voice.' + R.id) showPlayer(); }
       if (panelOpen($('#sheet')) && !$('#q').value.trim() && !$('#syncForm')) { const b = $('#sheetBody'), y = b.scrollTop; renderSheet(); b.scrollTop = y; }
     } finally { applying = false; }
   }
