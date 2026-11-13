@@ -43,7 +43,7 @@ Static PWA: open it in Safari → Share → **Add to Home Screen**. It must be s
 
   | Riwaya | Reciter | Source |
   |---|---|---|
-  | Hafs | Yasser Al-Dosari (default) and 30 more (`HAFS_VOICES` in app.js) | everyayah.com, one file per aya |
+  | Hafs | Yasser Al-Dosari (default) and 30 more (`HAFS_VOICES` in app.js) | everyayah.com, one file per aya; 18 of them (`HAFS_CONT`) from mp3quran.net, one continuous recording per surah, so the ayat run on as recited |
   | Shu'bah | Ali Al-Hudhaifi | mp3quran.net, read 305 |
   | Warsh | Omar Al-Qazabri; also Al-Husary (120), Al-Uyun Al-Koushi (16), Yassin Al-Jazairi (14) | mp3quran.net, read 80 |
   | Qalun | Mahmoud Khalil Al-Husary; also Ali Al-Hudhaifi (75), Al-Dokali Muhammad Al-Alim (208) | mp3quran.net, read 270 |

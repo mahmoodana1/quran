@@ -21,6 +21,11 @@ const RECITERS = {
   qumbul: 'أحمد ديبان',
 };
 // [id, name, style, everyayah folder, kbps] (the first is the default)
+// Hafs reciters heard from one continuous recording of each surah (mp3quran.net,
+// data/audio/hafs.<id>.json: each aya a stretch of it, so one runs into the
+// next as recited) rather than everyayah's aya files, each cut apart with its
+// own silence: id -> MB of the whole recitation
+const HAFS_CONT = { alafasy: 1718, sudais: 1223, qatami: 1181, ghamdi: 1071, ajamy: 1846, shatri: 1501, abbad: 1669, ayyoub: 1403, budair: 3113, qahtani: 1590, jaber: 2232, matroud: 1416, alaqimy: 1619, bukhatir: 1362, rifai: 1482, 'husary-mj': 2689, basit: 449, tablawi: 1771 };
 const HAFS_VOICES = [
   ['yasser', 'ياسر الدوسري', '', 'Yasser_Ad-Dussary_128kbps', 128],
   ['alafasy', 'مشاري راشد العفاسي', '', 'Alafasy_128kbps', 128],
@@ -53,7 +58,7 @@ const HAFS_VOICES = [
   ['basit', 'عبد الباسط عبد الصمد', '', 'Abdul_Basit_Murattal_192kbps', 192],
   ['basit-mj', 'عبد الباسط عبد الصمد', 'مجوّد', 'Abdul_Basit_Mujawwad_128kbps', 128],
   ['tablawi', 'محمد محمود الطبلاوي', '', 'Mohammad_al_Tablaway_128kbps', 128],
-].map(([id, name, style, folder, kbps]) => ({ id, name, style, base: EVERYAYAH + folder + '/', kbps }));
+].map(([id, name, style, folder, kbps]) => ({ id, name, style, base: EVERYAYAH + folder + '/', kbps, mb: HAFS_CONT[id] }));
 // the other riwayat's further reciters: [key, name]
 const MORE_VOICES = {
   warsh: [['husary', 'محمود خليل الحصري'], ['kouchi', 'العيون الكوشي'], ['jazairi', 'ياسين الجزائري']],
@@ -68,6 +73,8 @@ function voice(rid) {
   const v = voices(rid), id = store.get('voice.' + rid, null);
   return v.find(x => x.id === id) || v[0];
 }
+// a riwaya's recitation is everyayah's aya files (Hafs, a reciter not in HAFS_CONT)
+const ayaFiles = (rid, v = voice(rid)) => rid === 'hafs' && !v.mb;
 const reciterName = rid => voice(rid).name;
 const reciterFull = rid => { const v = voice(rid); return v.name + (v.style ? ` (${v.style})` : ''); };
 const $ = (s, el = document) => el.querySelector(s);
@@ -1412,7 +1419,7 @@ const P = { run: 0, ai: null, rec: null, list: [], gen: null, got: [], at: -1, c
 const recs = {};
 const recFile = (id, vid = voice(id).id) => vid ? `${id}.${vid}` : id;
 const loadRec = (id, vid) => {
-  if (id === 'hafs') return Promise.resolve(null);
+  if (id === 'hafs' && ayaFiles(id, vid == null ? voice(id) : voices(id).find(v => v.id === vid))) return Promise.resolve(null);
   const f = recFile(id, vid);
   return (recs[f] ||= loadJSON(`data/audio/${f}.json?v=${AUDIO_DATA_VERSION}`).catch(e => { delete recs[f]; throw e; }));
 };
@@ -2057,8 +2064,9 @@ const mushafTasks = () => [
   ...META.riwayat.map(r => ({ cache: MUSHAF_CACHE, url: new URL(`data/${r.id}.json?v=${DATA_VERSION}`, location.href).href })),
   // when each aya starts in the recitations (the audio itself is saved apart)
   ...META.riwayat.filter(r => r.id !== 'hafs').map(r => ({ cache: MUSHAF_CACHE, url: new URL(`data/audio/${r.id}.json?v=${AUDIO_DATA_VERSION}`, location.href).href })),
-  // (and of the further reciters of a riwaya)
+  // (and of the further reciters of a riwaya, and Hafs's continuous ones)
   ...Object.entries(MORE_VOICES).flatMap(([rid, l]) => l.map(([k]) => ({ cache: MUSHAF_CACHE, url: new URL(`data/audio/${rid}.${k}.json?v=${AUDIO_DATA_VERSION}`, location.href).href }))),
+  ...Object.keys(HAFS_CONT).map(k => ({ cache: MUSHAF_CACHE, url: new URL(`data/audio/hafs.${k}.json?v=${AUDIO_DATA_VERSION}`, location.href).href })),
   // what is said about each surah, and the causes of revelation
   { cache: MUSHAF_CACHE, url: new URL(`data/surah-info.json?v=${SI_V}`, location.href).href },
   { cache: MUSHAF_CACHE, url: new URL('data/asbab.json?v=1', location.href).href },
@@ -2145,9 +2153,9 @@ const AS = {};
 const DL = { running: false, rid: null, failed: 0, wake: null };
 const allAudioUrls = () => { const b = voice('hafs').base; return META.hafs.map((_, h) => hafsUrl(h, b)); };
 
-// the files of a riwaya's recitation, with their sizes in MB (Hafs: by count)
+// the files of a riwaya's recitation, with their sizes in MB (aya files: by count)
 async function audioFiles(rid) {
-  if (rid === 'hafs') {
+  if (ayaFiles(rid)) {
     const urls = allAudioUrls();
     return { cache: AUDIO_CACHE, urls, mb: urls.map(() => AUDIO_TOTAL_MB * voice('hafs').kbps / 128 / urls.length) };
   }
@@ -2261,29 +2269,29 @@ function settingsHTML() {
 
     <div class="group-label" id="set-rw">الرواية</div>
     <div class="group">${riwayat}</div>
-    <p class="note">لكل رواية رسمها وعلامات ضبطها ووقفها، وتلاوتها بصوت من يقرأ بها: حفص آيةً آية من everyayah.com، والروايات الأخرى سورةً سورة من mp3quran.net مع مواضع آياتها. اختيار الرواية يغيّر المصحف كله.</p>`;
+    <p class="note">لكل رواية رسمها وعلامات ضبطها ووقفها، وتلاوتها بصوت من يقرأ بها، سورةً سورة من mp3quran.net مع مواضع آياتها (وبعض قرّاء حفص آيةً آية من everyayah.com). اختيار الرواية يغيّر المصحف كله.</p>`;
 }
 
 // the reciters of the riwaya being read: a tap chooses, the round button plays a sample
 function reciterPageHTML() {
   const list = voices(R.id), cur = voice(R.id), rname = META.riwayat.find(r => r.id === R.id)?.name || '';
   const rows = list.map(v => `<button class="row vc${v === cur ? ' on' : ''}" data-voice="${v.id}">${voiceBadge(v)}
-      <span class="main"><span class="t">${v.name}${v.style ? ` <em class="vc-style">${v.style}</em>` : ''}</span><span class="s" data-vc-saved="${v.id}">${v === cur ? 'تستمع إليه الآن' : R.id === 'hafs' ? `تحميله كاملًا قرابة ${gbText(AUDIO_TOTAL_MB * v.kbps / 128)}` : ''}</span></span>
+      <span class="main"><span class="t">${v.name}${v.style ? ` <em class="vc-style">${v.style}</em>` : ''}</span><span class="s" data-vc-saved="${v.id}">${v === cur ? 'تستمع إليه الآن' : R.id === 'hafs' ? `تحميله كاملًا قرابة ${gbText(v.mb || AUDIO_TOTAL_MB * v.kbps / 128)}` : ''}</span></span>
       <span class="vc-play" data-vc-play="${v.id}" role="button" aria-label="استمع إلى نموذج">${PLAY_ICO}</span>
       ${v === cur ? '<span class="check">✓</span>' : '<span class="vc-pick"></span>'}</button>`).join('');
   return `<p class="vc-intro">قرّاء <b>${rname}</b> · ${ar(list.length)} ${list.length <= 10 ? 'قرّاء' : 'قارئًا'}<small>اضغط ▶ لتسمع نموذجًا، واضغط الاسم لتختاره.${R.id === 'hafs' ? '' : ' لقرّاء حفص: اختر رواية حفص من آخر الإعدادات.'}</small></p>
     <div class="group">${rows}</div>
-    <p class="note">${R.id === 'hafs' ? 'التلاوات من everyayah.com آيةً آية. الآيات التي تستمع إليها تُحفظ على جهازك، ولكل قارئ تحميله الكامل في «دون اتصال».' : 'التلاوات من mp3quran.net سورةً سورة مع مواضع آياتها.'}</p>`;
+    <p class="note">${R.id === 'hafs' ? 'أكثر التلاوات تسجيل متصل للسورة من mp3quran.net مع مواضع آياتها، فتتصل الآيات كما تُليت؛ والباقية (ومنها تلاوة ياسر الدوسري) من everyayah.com آيةً آية، تُحفظ الآيات التي تستمع إليها على جهازك. ولكل قارئ تحميله الكامل في «دون اتصال».' : 'التلاوات من mp3quran.net سورةً سورة مع مواضع آياتها.'}</p>`;
 }
 
 // how much of each reciter is on the device (the reciter page)
 async function paintVoiceSaved() {
   if (!$('[data-vc-saved]') || !('caches' in window)) return;
-  const hafs = R.id === 'hafs', list = voices(R.id), cur = voice(R.id);
-  const set = await audioCachedSet(hafs ? AUDIO_CACHE : RIWAYA_AUDIO_CACHE);
+  const list = voices(R.id), cur = voice(R.id);
+  const ayaSet = R.id === 'hafs' ? await audioCachedSet(AUDIO_CACHE) : null, set = await audioCachedSet(RIWAYA_AUDIO_CACHE);
   for (const v of list) {
     let n = 0, total;
-    if (hafs) { total = META.hafs.length; for (const u of set) if (u.startsWith(v.base)) n++; }
+    if (ayaFiles(R.id, v)) { total = META.hafs.length; for (const u of ayaSet) if (u.startsWith(v.base)) n++; }
     else {
       let rec; try { rec = await loadRec(R.id, v.id); } catch { continue; }
       total = 114; for (let s = 1; s <= 114; s++) if (set.has(surahUrl(rec, s))) n++;
@@ -2314,14 +2322,15 @@ async function playPreview(btn) {
   preview.id = id;
   btn.classList.add('on'); btn.innerHTML = STOP_ICO;
   let from = 0, to = 0;
-  if (R.id === 'hafs') a.src = `${v.base}001002.mp3`;
+  if (ayaFiles(R.id, v)) a.src = `${v.base}001002.mp3`;
   else {
     a.src = 'data:audio/mpeg;base64,'; // (keeps the tap's permission to play while the timing loads)
     a.play().catch(() => {});
     let rec;
     try { rec = await loadRec(R.id, v.id); } catch { if (preview.id === id) { stopPreview(); toast('تعذّر تحميل النموذج'); } return; }
     if (preview.id !== id) return;
-    from = rec.t[0][0] / 1000; to = rec.t[0][1] / 1000;
+    const k = R.id === 'hafs' ? 1 : 0; // (Hafs: after the basmala, al-Fatiha's first aya)
+    from = rec.t[0][k] / 1000; to = rec.t[0][k + 1] / 1000;
     a.src = surahUrl(rec, 1);
   }
   a.onloadedmetadata = () => { if (from) a.currentTime = from; };
@@ -2443,7 +2452,7 @@ async function refreshAudioPanel() {
 function paintAudioPanel() {
   paintRiwayaDl();
   if (!$('#dlCard')) return;
-  const rid = DL.running ? DL.rid : R.id, st = AS[rid] || { total: 0, done: 0, mb: 0, doneMB: 0 }, hafs = rid === 'hafs';
+  const rid = DL.running ? DL.rid : R.id, st = AS[rid] || { total: 0, done: 0, mb: 0, doneMB: 0 }, hafs = ayaFiles(rid);
   const running = DL.running && DL.rid === rid;
   const pct = st.mb ? Math.min(1, st.doneMB / st.mb) : 0;
   $('#dlBar').style.width = (pct * 100).toFixed(1) + '%';
@@ -2548,7 +2557,7 @@ async function startAudioDownload(rid = R.id) {
       paint();
     }
   };
-  await Promise.all(Array.from({ length: rid === 'hafs' ? 6 : 3 }, worker));
+  await Promise.all(Array.from({ length: ayaFiles(rid) ? 6 : 3 }, worker));
   const finished = DL.running;
   DL.running = false;
   try { await DL.wake?.release(); } catch {}
@@ -2557,7 +2566,7 @@ async function startAudioDownload(rid = R.id) {
   paintAudioPanel();
   if (ALL.running) return;
   if (finished && !DL.failed) toast(`اكتمل تحميل تلاوة ${reciterFull(rid)}`);
-  else if (finished) toast(`تعذّر تحميل بعض ${rid === 'hafs' ? 'الآيات' : 'السور'} — اضغط متابعة`);
+  else if (finished) toast(`تعذّر تحميل بعض ${ayaFiles(rid) ? 'الآيات' : 'السور'} — اضغط متابعة`);
 }
 
 // ---------------------------------------------------------------- everything offline
@@ -2661,6 +2670,11 @@ async function clearAudioDownload(btn) {
 async function clearRecitation(rid) {
   const f = await audioFiles(rid), c = await caches.open(f.cache);
   await Promise.all(f.urls.map(u => c.delete(u)));
+  // (and the aya files a reciter now heard continuously was saved as before)
+  if (!ayaFiles(rid) && rid === 'hafs') {
+    const a = await caches.open(AUDIO_CACHE), base = voice(rid).base;
+    await Promise.all((await a.keys()).filter(r => r.url.startsWith(base)).map(r => a.delete(r)));
+  }
   delete AS[rid];
   await refreshAudioPanel();
   paintAudioPanel();
