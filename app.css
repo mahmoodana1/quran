@@ -2893,3 +2893,87 @@ body.rc-blind .ln .hl { display: none; } /* the aya's band would show how far it
 .tf-why summary small { font-size: 12px; color: var(--muted); }
 .tf-why > :not(summary) { margin-inline: 14px; }
 .tf-why > p:last-child { padding-bottom: 10px; }
+
+/* ---------- about a surah, as a page of the mushaf: its printed title in the band, the facts ruled
+   as an index, the tabs underlined in gold, topics in the index's stars; pulled down or tapped
+   outside, it goes ---------- */
+.si-veil { position: fixed; inset: 0; z-index: 25; background: rgba(15, 10, 4, .32); animation: fadeIn .25s ease both; }
+.si-veil.leaving { animation: fadeOut .25s ease forwards; }
+#suraInfo {
+  height: min(82vh, 760px); padding-bottom: 0; overflow: hidden;
+  background: radial-gradient(130% 70% at 50% 0%, var(--paper-hi) 0%, var(--paper) 55%, var(--paper-lo) 100%);
+  border: 1px solid color-mix(in srgb, var(--p-gold) 45%, transparent); border-bottom: 0;
+  transition: transform .26s cubic-bezier(.2,.9,.3,1);
+}
+#suraInfo .tf-grip { position: absolute; top: 0; left: 50%; margin: 8px 0 0 -19px; z-index: 3; cursor: grab; }
+#suraInfo .tf-grip::before { inset: -10px -90px -12px; }
+.si-close { position: absolute; top: 10px; inset-inline-end: 10px; z-index: 3; color: var(--muted); background: color-mix(in srgb, var(--paper) 80%, transparent); }
+.si-body {
+  flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+  padding: 0 18px calc(80px + env(safe-area-inset-bottom)); color: var(--ink);
+}
+.si-top { padding: 52px 0 6px; text-align: center; }
+.si-band { --lh: 58px; height: 58px; margin: 0 6px; }
+.si-band .band { height: 100%; margin: 0; }
+.si-band .sname { font-size: 38px; }
+.si-en { display: block; margin-top: 10px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.si-en bdi { letter-spacing: .3px; }
+.si-facts { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; overflow: visible; padding: 0; margin: 14px 0 4px; border-top: 1px solid var(--p-rule); }
+.si-facts span {
+  min-width: 0; padding: 10px 4px 9px; border-radius: 0; background: none; border: 0;
+  border-bottom: 1px solid var(--p-rule);
+}
+.si-facts span:not(:nth-child(3n)) { border-inline-end: 1px dotted var(--p-rule); }
+.si-facts b { font-size: 17px; font-weight: 800; color: var(--ink); }
+.si-facts small { font-size: 11.5px; color: var(--gold-ink); font-weight: 600; }
+
+.si-seg {
+  position: sticky; top: 0; z-index: 2; display: flex; gap: 2px; margin: 0 -18px; padding: 8px 18px 0; padding-inline-end: 56px;
+  background: linear-gradient(var(--paper) 80%, transparent); border-bottom: 1px solid var(--p-rule);
+}
+.si-seg button {
+  position: relative; flex: 1; padding: 10px 2px 11px; font-size: 14.5px; font-weight: 700; color: var(--muted); border-radius: 0; background: none; box-shadow: none; white-space: nowrap;
+}
+.si-seg button.on { color: var(--ink); font-weight: 900; background: none; box-shadow: none; }
+.si-seg button.on::after {
+  content: ""; position: absolute; left: 22%; right: 22%; bottom: -1px; height: 3px; border-radius: 3px 3px 0 0;
+  background: linear-gradient(90deg, transparent, var(--p-gold) 20%, var(--p-gold) 80%, transparent);
+}
+.si-seg button.on::before { content: ""; position: absolute; left: 50%; bottom: -5px; width: 7px; height: 7px; margin-left: -3.5px; background: var(--p-gold); transform: rotate(45deg); }
+
+.si-text { padding-top: 16px; font-size: 17px; line-height: 2.05; animation: fadeIn .3s ease both; }
+.si-text p { margin: 0 0 .85em; text-align: justify; }
+.si-text .q { font-family: rw-hafs; color: var(--gold-ink); font-size: 1.12em; }
+.si-text h4 { display: flex; gap: 8px; align-items: baseline; margin: 16px 0 4px; font-size: 15.5px; font-weight: 800; color: var(--p-ink, var(--ink)); line-height: 1.75; }
+.si-text h4::before { content: ""; flex: none; width: 7px; height: 7px; background: var(--p-gold); transform: translateY(-2px) rotate(45deg); }
+.si-text h4:first-child { margin-top: 0; }
+.si-text .si-h {
+  display: flex; align-items: center; gap: 12px; margin: 26px 0 10px; font-size: 14.5px; font-weight: 900; color: var(--gold-ink); padding: 0; border: 0;
+}
+.si-text .si-h::before, .si-text .si-h::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, transparent, var(--p-gold)); }
+.si-text .si-h::after { background: linear-gradient(270deg, transparent, var(--p-gold)); }
+:root[data-theme="dark"] .si-text h4 { color: #8fd3a8; }
+
+/* topics: a row each, numbered in the index's star, its ayas a tap away */
+.si-topics > p:first-child { color: var(--muted); font-size: 14.5px; }
+.si-topic {
+  width: 100%; display: flex; align-items: center; gap: 12px; text-align: start; padding: 9px 2px; line-height: 1.6;
+  border-bottom: 1px dotted var(--p-rule);
+}
+.si-topic:last-of-type { border-bottom: 0; }
+.si-topic .num {
+  flex: none; width: 32px; height: 32px; display: grid; place-items: center; font-size: 12.5px; font-weight: 800; color: var(--gold-ink);
+  background: var(--star) center / contain no-repeat;
+}
+.si-topic .t { flex: 1; font-size: 15.5px; font-weight: 600; }
+.si-topic small { flex: none; font-size: 12px; font-weight: 700; color: var(--gold-ink); padding: 3px 9px; border-radius: 999px; border: 1px solid var(--p-rule); }
+.si-topic[data-ia]:active { background: color-mix(in srgb, var(--p-gold) 14%, transparent); }
+
+.si-counts { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 0; border-top: 1px solid var(--p-rule); }
+.si-counts span { padding: 8px 4px; border-radius: 0; background: none; border: 0; border-bottom: 1px dotted var(--p-rule); }
+.si-counts b { font-size: 16px; }
+.si-counts small { color: var(--gold-ink); }
+.si-src { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 26px 0 0 !important; font-size: 12px; color: var(--muted); }
+.si-src span { font-weight: 700; }
+.si-src span::before { content: "◆"; color: var(--p-gold); font-size: 8px; margin-inline-end: 8px; vertical-align: 2px; }
+.si-src a { color: var(--gold-ink); font-weight: 700; }

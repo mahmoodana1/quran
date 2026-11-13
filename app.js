@@ -834,7 +834,7 @@ wordAudio.addEventListener('error', () => { sayEl?.classList.remove('say'); if (
   const CLOSE = { khEdit: '#khCancel', done: '#doneLater', recIntro: '#riLater', micIntro: '#miLater', recPrep: '#rpCancel', recHow: '#rhOk', recDone: '#rdOk', install: '#inLater' };
   const closer = m => { const b = $(CLOSE[m.id]); return b && !b.hidden && !b.disabled && b.offsetParent !== null ? b : null; };
   // (Escape on a computer: the card on top closed as by its own button; true if there was one)
-  window.closeTopCard = () => { const m = [...document.querySelectorAll('.modal:not([hidden]):not(.leaving)')].filter(x => CLOSE[x.id]).pop(); const b = m && closer(m); if (b) b.click(); return !!m; };
+  window.closeTopCard = () => { if (panelOpen($('#suraInfo'))) { closeSuraInfo(); return true; } const m = [...document.querySelectorAll('.modal:not([hidden]):not(.leaving)')].filter(x => CLOSE[x.id]).pop(); const b = m && closer(m); if (b) b.click(); return !!m; };
   for (const id of Object.keys(CLOSE)) {
     const m = $('#' + id), card = m?.querySelector('.card');
     if (!card) continue;
@@ -1064,63 +1064,76 @@ async function openSuraInfo(su) {
   closeSura();
   if (!$('#tafsir').hidden) closeTafsir();
   siSura = su; siTab = 'intro';
-  const [nm, , , , place] = META.suras[su - 1], a0 = R.suraStart[su], n = (R.suraStart[su + 1] ?? R.ayas.length) - a0;
-  $('#siTitle').textContent = `سورة ${nm}`;
-  $('#siSub').textContent = 'الموسوعة القرآنية';
-  $('#siFacts').innerHTML = '';
-  $('#siSeg').innerHTML = '';
-  $('#siBody').innerHTML = '<div class="tf-wait">جارٍ التحميل…</div>';
+  const body = $('#siBody');
+  body.innerHTML = siHead(su, null) + '<div class="tf-wait">جارٍ التحميل…</div>';
+  body.scrollTop = 0;
+  $('#suraInfo').style.transform = '';
+  show($('#siVeil'));
   show($('#suraInfo'));
   haptic(6);
   let d;
-  try { d = (await loadSuraInfo()).surahs[su - 1]; } catch { if (siSura === su) $('#siBody').innerHTML = '<div class="tf-wait">تعذّر التحميل — تحقق من الاتصال</div>'; return; }
+  try { d = (await loadSuraInfo()).surahs[su - 1]; SI_VER = (await siData).version || ''; }
+  catch { if (siSura === su) body.innerHTML = siHead(su, null) + '<div class="tf-wait">تعذّر التحميل — تحقق من الاتصال</div>'; return; }
   if (siSura !== su) return;
-  const p0 = R.ayas[a0][2], p1 = R.ayas[a0 + n - 1][2], j0 = R.ayas[a0][3], j1 = R.ayas[a0 + n - 1][3];
-  const fact = (b, t) => `<span><b>${b}</b><small>${t}</small></span>`;
-  $('#siFacts').innerHTML = [
-    fact(d.type || (place === 'makkah' ? 'مكية' : 'مدنية'), 'نزولها'),
-    d.order && fact(ar(d.order), 'ترتيب نزولها'),
-    fact(ar(n), 'آياتها'),
-    d.words && fact(ar(d.words), 'كلماتها'),
-    fact(p0 === p1 ? ar(p0) : `${ar(p0)}–${ar(p1)}`, p0 === p1 ? 'صفحتها' : 'صفحاتها'),
-    fact(j0 === j1 ? ar(j0) : `${ar(j0)}–${ar(j1)}`, 'الجزء'),
-  ].filter(Boolean).join('');
-  SI_VER = siData && (await siData).version || '';
-  const tabs = SI_TABS.filter(([k]) => d[k] || (k === 'grace' && d.prophet));
-  $('#siSeg').innerHTML = tabs.map(([k, t]) => `<button data-si="${k}"${k === siTab ? ' class="on"' : ''}>${t}</button>`).join('');
   paintSuraInfo(d);
 }
-function paintSuraInfo(d) {
+// its title as printed in the mushaf, in a band, and a few facts under it, ruled as an index page
+function siHead(su, d) {
+  const [, en, , , place] = META.suras[su - 1], a0 = R.suraStart[su], n = (R.suraStart[su + 1] ?? R.ayas.length) - a0;
+  const p0 = R.ayas[a0][2], p1 = R.ayas[a0 + n - 1][2], j0 = R.ayas[a0][3], j1 = R.ayas[a0 + n - 1][3];
+  const facts = [
+    [d?.type || (place === 'makkah' ? 'مكية' : 'مدنية'), 'نزولها'],
+    d?.order && [ar(d.order), 'ترتيب نزولها'],
+    [ar(n), 'آياتها'],
+    d?.words && [ar(d.words), 'كلماتها'],
+    [p0 === p1 ? ar(p0) : `${ar(p0)}–${ar(p1)}`, p0 === p1 ? 'صفحتها' : 'صفحاتها'],
+    [j0 === j1 ? ar(j0) : `${ar(j0)}–${ar(j1)}`, 'جزؤها'],
+  ].filter(Boolean);
+  return `<header class="si-top">
+      <div class="si-band"><div class="band"><i class="orn"></i><span class="sname">${SURA_GLYPH(su)}</span><i class="orn"></i></div></div>
+      <small class="si-en">السورة ${ar(su)} في المصحف · <bdi>${esc(en)}</bdi></small>
+      <div class="si-facts">${facts.map(([b, t]) => `<span><b>${b}</b><small>${t}</small></span>`).join('')}</div>
+    </header>`;
+}
+function paintSuraInfo(d, keepTop) {
   const body = $('#siBody');
   // a heading (a paragraph begun with "* "), Quran in its font, ayas named a tap away; topics' ranges too
   const para = t => {
     let h = t.replace(/<q>/g, '<span class="q">').replace(/<\/q>/g, '</span>')
       .replace(/<a data-ia="(\d+):(\d+)">/g, '<a class="si-ia" data-ia="$1:$2" role="button">');
-    if (siTab === 'topics') h = h.replace(/\(([٠-٩\d]+)\s*[-–]\s*([٠-٩\d]+)\)/, (m, x) => `<a class="si-ia" data-ia="${siSura}:${toLatinDigits(x)}" role="button">${m}</a>`);
     const head = /^\*\s*/.test(t);
-    return head ? `<h4>${h.replace(/^\*\s*/, '')}</h4>` : siTab === 'topics' && /^\d+\./.test(t) ? `<p class="si-li">${h.replace(/^(\d+)\.\s*/, (m, k) => `<i>${ar(k)}</i>`)}</p>` : `<p>${h}</p>`;
+    if (head) return `<h4>${h.replace(/^\*\s*/, '')}</h4>`;
+    if (siTab === 'topics' && /^\d+\./.test(t)) {
+      const m = h.match(/\(([٠-٩\d]+)\s*[-–]\s*([٠-٩\d]+)\)\s*\.?\s*$/);
+      const txt = h.replace(/^(\d+)\.\s*/, '').replace(/\s*\(([٠-٩\d]+)\s*[-–]\s*([٠-٩\d]+)\)\s*\.?\s*$/, '');
+      return `<button class="si-topic"${m ? ` data-ia="${siSura}:${toLatinDigits(m[1])}"` : ''}><span class="num">${ar(t.match(/^\d+/)[0])}</span><span class="t">${txt}</span>${m ? `<small>${m[1]}–${m[2]}</small>` : ''}</button>`;
+    }
+    return `<p>${h}</p>`;
   };
   // (the overview with its names; the virtue with the Prophet's practice with it)
-  const more = (k, t) => d[k] ? `<h4 class="si-h">${t}</h4>` + d[k].map(para).join('') : '';
+  const more = (k, t) => d[k] ? `<h3 class="si-h">${t}</h3>` + d[k].map(para).join('') : '';
   let h = (d[siTab] || []).map(para).join('');
   if (siTab === 'intro') h += more('names', 'أسماؤها');
   if (siTab === 'grace') h += more('prophet', 'من هدي النبي ﷺ معها');
-  if (siTab === 'intro' && d.counts?.length) h += `<h4>عدد آياتها في مذاهب العدّ</h4><div class="si-counts">${d.counts.map(([t, v]) => `<span><b>${ar(v)}</b><small>${t.replace(/^العد\s*/, '')}</small></span>`).join('')}</div>`;
-  h += `<p class="si-src">المصدر: <a href="https://quranpedia.net/surah/${siSura}" target="_blank" rel="noopener">الموسوعة القرآنية quranpedia.net</a> ${SI_VER ? ` · نسخة ${esc(SI_VER)}` : ''}</p>`;
-  body.innerHTML = h;
-  body.scrollTop = 0;
+  if (siTab === 'intro' && d.counts?.length) h += `<h3 class="si-h">عدد آياتها في مذاهب العدّ</h3><div class="si-counts">${d.counts.map(([t, v]) => `<span><b>${ar(v)}</b><small>${t.replace(/^العد\s*/, '')}</small></span>`).join('')}</div>`;
+  const tabs = SI_TABS.filter(([k]) => d[k] || (k === 'grace' && d.prophet));
+  const y = body.scrollTop, segY = $('#siSeg')?.offsetTop;
+  body.innerHTML = siHead(siSura, d)
+    + `<nav class="si-seg" id="siSeg">${tabs.map(([k, t]) => `<button data-si="${k}"${k === siTab ? ' class="on"' : ''}>${t}</button>`).join('')}</nav>`
+    + `<article class="si-text${siTab === 'topics' ? ' si-topics' : ''}">${h}</article>`
+    + `<p class="si-src"><span>المصدر</span><a href="https://quranpedia.net/surah/${siSura}" target="_blank" rel="noopener">الموسوعة القرآنية</a>${SI_VER ? ` · نسخة ${esc(SI_VER)}` : ''}</p>`;
+  // (another tab: from its top, the band scrolled away if it already was)
+  if (keepTop) body.scrollTop = Math.min(y, segY ?? 0);
 }
 let SI_VER = '';
-$('#siSeg').addEventListener('click', async e => {
+$('#siBody').addEventListener('click', async e => {
   const b = e.target.closest('[data-si]');
-  if (!b || siSura == null) return;
-  siTab = b.dataset.si;
-  document.querySelectorAll('#siSeg button').forEach(x => x.classList.toggle('on', x === b));
-  b.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' });
-  paintSuraInfo((await loadSuraInfo()).surahs[siSura - 1]);
-  haptic(4);
-});
-$('#siBody').addEventListener('click', e => {
+  if (b && siSura != null) {
+    siTab = b.dataset.si;
+    paintSuraInfo((await loadSuraInfo()).surahs[siSura - 1], true);
+    haptic(4);
+    return;
+  }
   const a = e.target.closest('[data-ia]');
   if (!a) return;
   const [s, n] = a.dataset.ia.split(':').map(Number), ai = fromHafsSA(s, n);
@@ -1129,8 +1142,45 @@ $('#siBody').addEventListener('click', e => {
   goTo(R.ayas[ai][2]);
   setTimeout(() => flashAya(ai), 300);
 });
-function closeSuraInfo() { siSura = null; hide($('#suraInfo')); }
+function closeSuraInfo() { siSura = null; hide($('#siVeil')); hide($('#suraInfo')); }
 $('#siClose').onclick = closeSuraInfo;
+$('#siVeil').onclick = closeSuraInfo;
+// pulled down by its grip, or by its text once at the top: let go far enough (or flicked), it closes;
+// otherwise it springs back
+(() => {
+  const el = $('#suraInfo'), body = $('#siBody');
+  let d = null;
+  const start = (y, id, grip) => { d = { y, y0: y, t: performance.now(), id, grip, dy: 0 }; };
+  const move = y => {
+    if (!d) return false;
+    const dy = y - d.y0;
+    if (!d.grip && (body.scrollTop > 0 || dy < 0) && !d.dy) { d = null; return false; }
+    d.dy = Math.max(0, dy);
+    el.style.transition = 'none';
+    el.style.transform = `translateY(${d.dy}px)`;
+    return true;
+  };
+  const end = () => {
+    if (!d) return;
+    const v = d.dy / Math.max(1, performance.now() - d.t), far = d.dy > Math.min(160, el.offsetHeight * .25);
+    el.style.transition = '';
+    if (far || (v > .6 && d.dy > 30)) { el.style.transform = `translateY(${el.offsetHeight}px)`; setTimeout(() => { closeSuraInfo(); }, 180); }
+    else el.style.transform = '';
+    d = null;
+  };
+  el.addEventListener('touchstart', e => {
+    const grip = !!e.target.closest('.tf-grip, .si-close');
+    if (grip || body.scrollTop <= 0) start(e.touches[0].clientY, null, grip);
+  }, { passive: true });
+  el.addEventListener('touchmove', e => { if (d && move(e.touches[0].clientY) && d.dy > 0 && e.cancelable) e.preventDefault(); }, { passive: false });
+  el.addEventListener('touchend', end);
+  el.addEventListener('touchcancel', end);
+  // (a mouse: by the grip)
+  $('#suraInfo .tf-grip').addEventListener('pointerdown', e => { if (e.pointerType !== 'mouse') return; start(e.clientY, e.pointerId, true); e.target.setPointerCapture(e.pointerId); });
+  $('#suraInfo .tf-grip').addEventListener('pointermove', e => { if (d?.id === e.pointerId) move(e.clientY); });
+  $('#suraInfo .tf-grip').addEventListener('pointerup', e => { if (d?.id === e.pointerId) end(); });
+  $('#suraInfo .tf-grip').addEventListener('click', () => { if (!d) closeSuraInfo(); });
+})();
 
 // an update waiting (a new service worker took over): applied by loading the page again,
 // never in the middle of something, and with a screen saying so. resume: what to do once
