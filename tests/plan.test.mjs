@@ -100,3 +100,27 @@ test('calendar file: lines folded, events and alarms', () => {
   assert.ok(text.includes('TRIGGER:PT0M') && text.includes('TRIGGER:-PT5M'));
   for (const line of text.split('\r\n')) assert.ok(Buffer.byteLength(line) <= 75, line);
 });
+
+test('two devices\' recitation records merged: nothing lost, nothing taken out comes back', () => {
+  const T = 1_800_000_000_000;
+  const phone = { said: { 1: T, 2: T, 5: T }, first: { 1: T, 2: 1, 5: T }, days: { '2027-1-15': 4 }, ayas: { 9: { n: 1, words: { 0: 'haraka' }, ok: [], last: T } },
+    sessions: [{ t: T, from: 1, to: 5, list: [] }], total: { secs: 100, sessions: 1 }, gone: { said: { 7: T + 50 } } };
+  const ipad = { said: { 2: T + 10, 3: T + 10, 7: T - 5 }, first: { 2: T + 10, 3: T + 10 }, days: { '2027-1-15': 2, '2027-1-16': 3 },
+    ayas: { 9: { n: 1, words: {}, ok: ['x'], last: T, edit: T + 20 } }, sessions: [{ t: T + 10, from: 2, to: 3, list: [] }, { t: T, from: 1, to: 5, list: [] }],
+    total: { secs: 80, sessions: 2 }, gone: { said: { 5: T + 30 } } };
+  const m = Plan.mergeRecite(phone, ipad);
+  assert.deepEqual(Object.keys(m.said).sort(), ['1', '2', '3']);  // 5 taken out on the iPad after it was said, 7 on the phone
+  assert.equal(m.said[2], T + 10);
+  assert.equal(m.first[2], 1);                                     // memorized before the app, on either
+  assert.deepEqual(m.days, { '2027-1-15': 4, '2027-1-16': 3 });
+  assert.equal(m.ayas[9].edit, T + 20);                            // the weak spot changed last
+  assert.equal(m.sessions.length, 2);
+  assert.deepEqual(m.total, { secs: 100, sessions: 2 });
+  // an aya said again after it was taken out stays
+  const again = Plan.mergeRecite({ said: { 4: T + 100 } }, { said: {}, gone: { said: { 4: T + 50 } } });
+  assert.ok(again.said[4]);
+  // a weak spot cleared on one device stays cleared
+  const cleared = Plan.mergeRecite({ ayas: { 8: { last: T } } }, { ayas: {}, gone: { ayas: { 8: T + 1 } } });
+  assert.equal(cleared.ayas[8], undefined);
+  assert.deepEqual(Plan.mergeDays({ a: 1, b: 2 }, { a: 2, c: 1 }), { a: 2, b: 2, c: 1 });
+});

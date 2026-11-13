@@ -180,7 +180,65 @@ const Plan = (() => {
     return L.map(fold).join('\r\n') + '\r\n';
   }
 
-  return { DAY, dayKey, dayNo, dayStart, revision, pageRuns, streak, lastDays, ward, hijri, MONTHS, OCCASIONS, occasions, month, ics };
+  // ---- two copies of a riwaya's recitation record (recite.<riwaya>), one from each device, made one: nothing
+  // recited on either is lost. `a` is the copy changed less recently (its plain fields give way to b's).
+  // said: the latest time of each aya, unless taken out later (gone.said); first: the earliest; days: the
+  // larger count; an aya's weak spot (ayas), its numbers (stats), a surah's revisions (rev): the copy
+  // changed last, unless taken out later; the sessions: both, once each, the newest 60; totals: the larger.
+  function mergeRecite(a, b) {
+    a ||= {}; b ||= {};
+    const out = { ...a, ...b }, g = {};
+    for (const kind of ['said', 'ayas', 'rev']) {
+      g[kind] = { ...(a.gone?.[kind] || {}) };
+      for (const [k, t] of Object.entries(b.gone?.[kind] || {})) g[kind][k] = Math.max(g[kind][k] || 0, t);
+    }
+    out.gone = g;
+    const keys = (x, y) => new Set([...Object.keys(x || {}), ...Object.keys(y || {})]);
+    out.said = {}; out.first = {};
+    for (const k of keys(a.said, b.said)) {
+      const t = Math.max(a.said?.[k] || 0, b.said?.[k] || 0);
+      if (!t || (g.said[k] || 0) >= t) continue;
+      out.said[k] = t;
+      const f = [a.first?.[k], b.first?.[k]].filter(x => x > 0);
+      if (f.length) out.first[k] = Math.min(...f);
+    }
+    out.days = {};
+    for (const k of keys(a.days, b.days)) out.days[k] = Math.max(a.days?.[k] || 0, b.days?.[k] || 0);
+    const dk = Object.keys(out.days);
+    if (dk.length > 400) {
+      const num = k => { const [y, m, d] = k.split('-').map(Number); return Date.UTC(y, m - 1, d); };
+      dk.sort((x, y) => num(x) - num(y)).slice(0, dk.length - 400).forEach(k => delete out.days[k]);
+    }
+    const ver = r => Math.max(r?.last || 0, r?.at || 0, r?.edit || 0, ...(r?.h || []).map(x => x[0] || 0));
+    const pick = (field, kind) => {
+      const o = {};
+      for (const k of keys(a[field], b[field])) {
+        const x = a[field]?.[k], y = b[field]?.[k], r = !x ? y : !y ? x : ver(y) >= ver(x) ? y : x;
+        if (r && !(kind && (g[kind][k] || 0) >= ver(r))) o[k] = r;
+      }
+      return o;
+    };
+    out.ayas = pick('ayas', 'ayas');
+    out.stats = pick('stats');
+    out.rev = pick('rev', 'rev');
+    const ss = new Map();
+    for (const s of [...(a.sessions || []), ...(b.sessions || [])]) {
+      const k = `${s.t}|${s.from}`, was = ss.get(k);
+      // (the same session on both: the one with fewer mistakes listed, some since forgiven)
+      if (!was || (s.list || []).length < (was.list || []).length) ss.set(k, s);
+    }
+    out.sessions = [...ss.values()].sort((x, y) => y.t - x.t).slice(0, 60);
+    if (a.total || b.total) out.total = { secs: Math.max(a.total?.secs || 0, b.total?.secs || 0), sessions: Math.max(a.total?.sessions || 0, b.total?.sessions || 0) };
+    return out;
+  }
+  // the days kept (hifz.hist.<riwaya>: { day: 1 | 2 }), from two devices: the most done each day
+  function mergeDays(a, b) {
+    const out = { ...(a || {}) };
+    for (const [k, v] of Object.entries(b || {})) out[k] = Math.max(out[k] || 0, v);
+    return out;
+  }
+
+  return { DAY, dayKey, mergeRecite, mergeDays, dayNo, dayStart, revision, pageRuns, streak, lastDays, ward, hijri, MONTHS, OCCASIONS, occasions, month, ics };
 })();
 
 if (typeof module !== 'undefined') module.exports = Plan;

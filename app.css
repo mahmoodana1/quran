@@ -3122,3 +3122,75 @@ body.desk .hz-foot { bottom: 0; }
   .xs-tap { width: min(42vh, 340px); }
   .xs-word { font-size: 20px; }
 }
+
+/* ---------------------------------------------------------------- التسميع's panel (recite.js panelHTML) */
+.tq { container-type: inline-size; }
+.tq-head { display: flex; align-items: center; gap: 10px; margin: 2px 2px 12px; }
+.tq-hi { display: flex; flex-direction: column; min-width: 0; }
+.tq-hi small { font-size: 13px; font-weight: 700; color: var(--g1); }
+.tq-hi b { font-size: clamp(17px, 5cqi, 21px); font-weight: 800; line-height: 1.3; }
+.tq .pp-week { margin-bottom: 14px; }
+.tq .pp-week span { width: min(38px, 10cqi); height: min(38px, 10cqi); font-size: 13px; }
+.tq .pp-week li.now span { width: min(40px, 10.5cqi); height: min(40px, 10.5cqi); }
+/* the one thing to do now */
+.tq-go { width: 100%; display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: 20px; text-align: start;
+  color: var(--p-on); background: linear-gradient(160deg, var(--p-green), var(--p-green-2)); border: 1px solid var(--p-gold);
+  box-shadow: inset 0 0 0 2px var(--p-green), inset 0 0 0 3px color-mix(in srgb, var(--p-gold) 55%, transparent), 0 8px 22px rgba(20, 50, 35, .22); }
+.tq-go:active { transform: scale(.985); }
+.tq-go-i { flex: none; width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(160deg, #f0dba6, #cfac62); color: #23361f; }
+.tq-go-i svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.tq-go-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.tq-go-t b { font-size: 20px; font-weight: 900; }
+.tq-go-t small { font-size: 13px; font-weight: 700; opacity: .85; }
+.tq-go-v { font-size: 17px; line-height: 1.9; opacity: .9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tq-go > svg { flex: none; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; opacity: .8; }
+.tq-quick { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; margin: 10px 0 4px; }
+.tq-quick button span { font-size: clamp(11.5px, 3.6cqi, 13px); text-align: center; line-height: 1.3; }
+.tq-quick button { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 11px 6px; border-radius: 16px; background: var(--surface); border: .5px solid var(--line); font-size: 13px; font-weight: 800; color: var(--ink); }
+.tq-quick button svg { width: 22px; height: 22px; fill: none; stroke: var(--g1); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.tq-quick button.on { background: color-mix(in srgb, var(--c1) 14%, var(--surface)); border-color: color-mix(in srgb, var(--c1) 50%, transparent); }
+.tq-quick button.on svg { stroke: var(--c2); }
+.tq-quick button:active { transform: scale(.96); }
+/* today's wird, a row each */
+.tq-row { position: relative; gap: 12px; min-height: 72px; text-align: start; }
+.tq-row .main { min-width: 0; }
+.tq-ri { flex: none; width: 42px; height: 42px; border-radius: 13px; display: grid; place-items: center; color: #fff; background: linear-gradient(145deg, var(--x1), var(--x2)); }
+.tq-row { --x1: var(--g1); --x2: var(--g2); }
+.tq-row.amber { --x1: var(--a1); --x2: var(--a2); }
+.tq-row.coral { --x1: var(--c1); --x2: var(--c2); }
+.tq-ri svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.tq-rk { display: block; font-size: 11.5px; font-weight: 800; color: color-mix(in srgb, var(--x1) 75%, var(--ink)); }
+.tq-row .t { font-weight: 800; }
+.tq-row.done .t, .tq-row.done .s { color: var(--muted); }
+.tq-row.done .tq-ri { background: var(--ok); }
+.tq-bar { display: block; height: 5px; margin-top: 6px; border-radius: 3px; background: var(--tint-2); overflow: hidden; }
+.tq-bar i { display: block; height: 100%; border-radius: 3px; background: var(--x1); }
+.tq-rgo { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: var(--x2); background: color-mix(in srgb, var(--x1) 16%, transparent); font-size: 22px; font-weight: 700; }
+.tq-rgo:empty { display: none; }
+.tq-rgo svg { width: 16px; height: 16px; fill: currentColor; }
+.tq-row .pp-pen { position: absolute; top: 8px; inset-inline-end: 8px; }
+.tq-row:has(.pp-pen) .tq-rgo { margin-top: 18px; }
+/* the revisions as a grid */
+.tq-revs { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(140px, 44%), 1fr)); gap: 8px; margin-bottom: 4px; }
+.tq-revs .pp-rev { min-width: 0; position: relative; }
+.tq-revs .pp-rev b { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* the numbers */
+.tq-big { position: relative; display: flex; align-items: center; gap: 14px; padding: 16px; border-radius: 20px; color: var(--p-on);
+  background: linear-gradient(160deg, var(--p-green), var(--p-green-2)); border: 1px solid var(--p-gold); margin-bottom: 8px; }
+.tq-big .pp-ring { position: static; flex: none; }
+.tq-big b { display: block; font-size: 34px; font-weight: 900; line-height: 1.1; color: #f3e6c4; }
+.tq-big small { font-size: 13px; font-weight: 700; opacity: .85; }
+.tq-nums { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 8px; }
+.tq-n { padding: 12px; border-radius: 16px; background: var(--surface); border: .5px solid var(--line); display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tq-n b { font-size: 21px; font-weight: 900; color: var(--p-ink); }
+.tq-n small { font-size: 12px; font-weight: 700; color: var(--muted); line-height: 1.35; }
+@container (max-width: 340px) { .tq-nums { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@container (min-width: 620px) { .tq-nums { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+.tq-heat { padding: 12px 14px; border-radius: 16px; background: var(--surface); border: .5px solid var(--line); margin-bottom: 8px; }
+.tq-heat .pp-heat { max-width: 330px; margin-inline: auto; gap: 2px; }
+.tq-heat .pp-heat span { gap: 2px; }
+.tq-links { margin-top: 18px; }
+.tq-links .row > svg:first-child { flex: none; width: 22px; height: 22px; fill: none; stroke: var(--g1); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.tq-links .row > svg:last-child { flex: none; width: 16px; height: 16px; fill: none; stroke: var(--faint); stroke-width: 2; }
+.tq-sync { text-align: center; font-size: 12.5px; color: var(--muted); font-weight: 600; margin: 6px 0 4px; }
+.tq-sync button { color: var(--accent); font-weight: 800; font-size: inherit; }

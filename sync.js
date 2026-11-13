@@ -27,6 +27,9 @@ const Sync = (() => {
   // what goes with the reader from device to device (not what belongs to the device: the model
   // chosen, the look of this screen, what was open)
   const SYNCED = /^(khatmas|kh\.current|kh\.gone|theme|adhkar|adhkar\.size|adhkar\.more|pray|mu\.pace|mu\.paceT|voice\..+|hifz\.(?!open$).+|recite\.(?!view$|barUp$|model$|light$|editS$|editFrom$|live\.).+)$/;
+  // records added to on each device (the recitation's, by riwaya; the days kept in الحفظ): merged, not
+  // one taken in place of the other (Plan.mergeRecite, Plan.mergeDays)
+  const MERGE = /^(recite\.(hafs|shouba|warsh|qaloon|doori|soosi|bazzi|qumbul)|hifz\.hist\.[a-z]+)$/;
   const ls = { get: (k, d) => { try { const v = localStorage.getItem('q.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } }, set: (k, v) => { try { localStorage.setItem('q.' + k, JSON.stringify(v)); } catch {} } };
   let auth = ls.get('sync.auth', null);   // { uid, email, refresh, id, exp }
   let mt = ls.get('sync.mt', {});         // key -> when it last changed here
@@ -141,7 +144,7 @@ const Sync = (() => {
     const forced = localStorage.getItem('q.sync.push') === '1'; // (a backup just restored: it is what counts)
     const local = {};
     for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k.startsWith('q.') && SYNCED.test(k.slice(2))) local[k.slice(2)] = localStorage.getItem(k); }
-    const now = Date.now(), next = { ...remote }, take = {}, bigs = [];
+    const now = Date.now(), next = { ...remote }, take = {}, bigs = [], merges = [];
     let push = false;
     const give = (k, v, t) => {
       push = true; mt[k] = t;
@@ -155,8 +158,24 @@ const Sync = (() => {
     for (const k of new Set([...Object.keys(remote), ...Object.keys(local)])) {
       if (!SYNCED.test(k) || k === 'khatmas' || k === 'kh.gone') continue;
       const r = remote[k], l = local[k];
+      if (MERGE.test(k) && r && l != null && !forced && typeof Plan !== 'undefined') { merges.push(k); continue; }
       const lt = l == null || (fresh && k === 'kh.current') ? 0 : forced ? now : mt[k] || (r ? 1 : now);
       if (r && r.t > lt) take[k] = r; else if (l != null && (!r || lt > r.t)) give(k, l, lt);
+    }
+    // the records kept on both sides, made one
+    for (const k of merges) {
+      const r = remote[k], l = local[k];
+      let rv = r.v;
+      if (r.big) { const d = await api('GET', bigPath(k)); rv = d?.fields?.v?.stringValue; }
+      if (rv == null) { give(k, l, mt[k] || now); continue; }
+      if (rv === l) { mt[k] = Math.max(mt[k] || 0, r.t); continue; }
+      const lo = parse(l, null), ro = parse(rv, null), lt = mt[k] || 0;
+      if (!lo || !ro) { if (r.t > lt) take[k] = { t: r.t, v: rv }; else give(k, l, lt || now); continue; }
+      const [older, newer] = r.t > lt ? [lo, ro] : [ro, lo];
+      const m = JSON.stringify(k.startsWith('hifz.') ? Plan.mergeDays(older, newer) : Plan.mergeRecite(older, newer));
+      if (m !== rv) give(k, m, now);
+      if (m !== l) take[k] = { t: now, v: m };
+      else mt[k] = now;
     }
     for (const k of Object.keys(take)) if (take[k].big) { const d = await api('GET', bigPath(k)); take[k] = { t: take[k].t, v: d?.fields?.v?.stringValue }; if (take[k].v == null) delete take[k]; }
     // the khatmas, merged
