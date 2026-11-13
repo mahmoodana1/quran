@@ -108,7 +108,7 @@
 <!-- reciting from memory: takes the player's place -->
 <div id="recBar" class="bar mini" hidden>
   <div class="pl-track"><i id="recProg"></i></div>
-  <button id="recToggle" class="pl-main" aria-label="إيقاف مؤقت"><svg viewBox="0 0 24 24" class="ic-mic"><path d="M12 3.5a3 3 0 00-3 3v5a3 3 0 006 0v-5a3 3 0 00-3-3zM6.5 11a5.5 5.5 0 0011 0M12 16.5v4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><svg viewBox="0 0 24 24" class="ic-play"><path d="M8.5 5.5v13l10.5-6.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg></button>
+  <button id="recToggle" class="pl-main" aria-label="إيقاف مؤقت"><svg viewBox="0 0 24 24" class="ic-mic"><path d="M12 3.5a3 3 0 00-3 3v5a3 3 0 006 0v-5a3 3 0 00-3-3zM6.5 11a5.5 5.5 0 0011 0M12 16.5v4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg><svg viewBox="0 0 24 24" class="ic-play"><path d="M8.5 5.5v13l10.5-6.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></svg><svg viewBox="0 0 24 24" class="ic-show"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="2.8" fill="currentColor"/></svg></button>
   <div class="pl-info"><b id="recTitle"></b><small id="recSub"></small></div>
   <div class="pl-ctrl">
     <button id="recHide" class="rec-hide" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" fill="none" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.8" fill="none" stroke="currentColor" stroke-width="1.7"/></svg><span>إخفاء</span></button>
@@ -282,6 +282,7 @@
     <div id="riProg" class="rc-dl" hidden><div class="prog"><i id="riBar"></i></div><span id="riPct"></span></div>
     <div class="actions">
       <button id="riGo" class="primary">تنزيل النموذج</button>
+      <button id="riManual">سمّع بلا ميكروفون</button>
       <button id="riLater">ليس الآن</button>
     </div>
   </div>

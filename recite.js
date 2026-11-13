@@ -255,7 +255,7 @@ const Recite = (() => {
         return reloadApp(intent);
       }
       if (r !== 'ok') {
-        prepStep('mic', 'fail', r === 'denied' ? 'لم يُسمح به — اسمح به من إعدادات المتصفح ثم أعد المحاولة'
+        prepStep('mic', 'fail', r === 'denied' ? 'لم يُسمح به — اسمح به من إعدادات المتصفح ثم أعد المحاولة، أو سمّع بلا ميكروفون من إعدادات التسميع'
           : r === 'silent' ? 'لا يصل منه صوت — إن فصلت سماعة أو غيّرت الميكروفون فأعد تحميل التطبيق'
           : r === 'hung' ? 'سمحتَ به، لكن الهاتف لم يُعطِ المتصفح الميكروفون. افتح إعدادات الهاتف ← التطبيقات ← المتصفح (Chrome) ← الأذونات ← الميكروفون ← «السماح أثناء استخدام التطبيق»، وأغلق أي تطبيق يستعمله (مكالمة، تسجيل، مساعد صوتي)، ثم أعد المحاولة'
           : 'تعذّر فتح الميكروفون — تأكد أن المتصفح مسموح له به في إعدادات الهاتف وأن تطبيقًا آخر لا يستعمله، ثم أعد تحميل التطبيق');
@@ -389,7 +389,9 @@ const Recite = (() => {
     // a reading going on (into the next surah, found by reciting) or a session brought back paused only needs the
     // model; anything else the reader begins is checked first, on its screen (withModel → prep)
     const going = opts.carry || opts.stream || opts.seed || opts.restore || opts.checked;
-    if (going ? !ready() : true) return withModel(() => start(from, review, { ...opts, checked: true }), going ? null : { start: [from, review, opts] });
+    // without the microphone (a setting): the reader checks their own reading, see step(); nothing to prepare
+    const manual = opts.restore ? !!opts.restore.manual : !(opts.carry || opts.stream || opts.seed) && setting('manual');
+    if (!manual && (going ? !ready() : true)) return withModel(() => start(from, review, { ...opts, checked: true }), going ? null : { start: [from, review, opts] });
     cancel();
     stopFind();
     stopAudio();
@@ -399,11 +401,11 @@ const Recite = (() => {
     const words = ayas.flatMap(ayaWords);
     if (!words.length) return;
     G = { ayas, words, idx: new Map(words.map((w, k) => [w.p + ':' + w.n, k])), pos: 0, errs: {}, gone: new Set(),
-      hide: !!opts.test || (!opts.seed && store.get('recite.hide', false)), fast: setting('fastOn'), light: MU() && !!store.get('recite.light', false), run: false, secs: 0, busy: 0,
+      manual, hide: manual || !!opts.test || (!opts.seed && store.get('recite.hide', false)), fast: setting('fastOn'), light: MU() && !manual && !!store.get('recite.light', false), run: false, secs: 0, busy: 0,
       review: !!review && !opts.test && !opts.kind, kind: opts.kind || null, test: !!opts.test, lastP: null, miss: 0, tent: 0, found: !!opts.stream };
     // Muaalem: c = the aya being said (in G.ayas), w0 = its first word still to
     // match, cut = how much of the reading belongs to ayas already done
-    if (MU()) {
+    if (MU() && !manual) {
       const starts = [];
       words.forEach((w, k) => { if (w.wi === 0) starts.push(k); });
       G.mu = { c: 0, w0: opts.w0 || 0, cut: opts.cut || 0, final: '', tent: '', starts, lead: true, open: true, stream: !!opts.stream, late: !!opts.stream, letPairs: {} };
@@ -449,9 +451,34 @@ const Recite = (() => {
     paintBar();
     show($('#recBar'));
     syncBubble();
-    if (back) { toast('استُعيدت جلستك — اضغط الميكروفون لتتابع'); return; }
+    if (back) { keep(true); toast(manual ? 'استُعيدت جلستك — تابع من حيث توقفت' : 'استُعيدت جلستك — اضغط الميكروفون لتتابع'); return; }
     resume();
+    if (manual && store.get('recite.manualTold', 0) < 3) {
+      store.set('recite.manualTold', store.get('recite.manualTold', 0) + 1);
+      toast(`اقرأ الآية من حفظك ثم ${S.desk ? 'اضغط المسافة' : 'المس الزر'} لتظهر · المس كلمةً أخطأت فيها لتعلّمها`, 5200);
+    }
   }
+
+  // ---- without the microphone: the ayas hidden, the reader says one from memory and then asks for
+  // it (the bar's button, the space key, a touch on what is hidden): it is shown, counted as said,
+  // and the next one is the one to say. A word they got wrong they touch (again: not wrong after
+  // all); the word they are on touched is a hint, as ever. All else is the session as it is: its
+  // record, its summary, the plan, the revisions
+  function step() {
+    const g = G;
+    if (!g?.manual || g.done) return;
+    if (!g.run) resume();
+    if (g.pos >= g.words.length) return;
+    const now = Date.now(), w = g.words[g.pos];
+    g.secs += Math.min(MANUAL_IDLE, (now - g.t) / 1000); g.t = g.lastAct = now; // (left open is not time spent reciting)
+    g.pos = g.tent = Math.min(g.pos - w.wi + w.of, g.words.length);
+    g.peek = false;
+    haptic(6);
+    paint();
+    if (g.pos >= g.words.length) return g.chain ? chain() : finish();
+    follow(); paintBar(); keep(true);
+  }
+  const MANUAL_IDLE = 90;
 
   // ---- the session, kept as it goes: if the page reloads (an update, or the
   // phone short of memory), it comes back where it was
@@ -461,7 +488,7 @@ const Recite = (() => {
     if (!G || G.done || (!now && Date.now() - keptAt < 3000)) return;
     keptAt = Date.now();
     store.set(LIVE(), { t: Date.now(), ayas: G.ayas, pos: G.pos, errs: G.errs, gone: [...G.gone], heard: G.heard,
-      secs: G.secs + (G.run ? (Date.now() - G.t) / 1000 : 0), hide: G.hide, review: G.review, kind: G.kind, test: G.test });
+      secs: G.secs + (G.run ? (Date.now() - G.t) / 1000 : 0), hide: G.hide, review: G.review, kind: G.kind, test: G.test, manual: G.manual });
   }
   function restore() {
     if (store.get('upd.resume', null)?.prep) return; // an update came mid-preparation: prepResume brings it back
@@ -477,7 +504,8 @@ const Recite = (() => {
     G.run = true; G.t = G.lastAct = Date.now();
     hide($('#recWord'));
     const g = G;
-    const noMic = () => { if (G === g) { pause(); toast('لا يمكن الوصول إلى الميكروفون — اسمح به من إعدادات المتصفح'); } };
+    const noMic = () => { if (G === g) { pause(); toast('لا يمكن الوصول إلى الميكروفون — اسمح به من إعدادات المتصفح، أو سمّع بلا ميكروفون من إعدادات التسميع', 4500); } };
+    if (g.manual) { clearInterval(timer); timer = setInterval(tick, 500); paintBar(); return; }
     if (MU()) {
       const h = d => onMu(g, d);
       if (g.mu.stream && Mu.listening()) { g.mu.stream = false; Mu.listen(h); } // the reading that found the aya goes on
@@ -494,8 +522,9 @@ const Recite = (() => {
     if (!G?.run) return;
     keep(true);
     store.set(ALIVE, null);
-    G.run = false; G.voice = false; G.secs += (Date.now() - G.t) / 1000;
+    G.run = false; G.voice = false; G.secs += G.manual ? Math.min(MANUAL_IDLE, (Date.now() - G.t) / 1000) : (Date.now() - G.t) / 1000;
     clearInterval(timer); clearInterval(leadTimer); showLead(null);
+    if (G.manual) return paintBar();
     if (MU()) {
       // what was read to the end counts; the next stretch is matched from the first word not yet said
       const g = G;
@@ -534,7 +563,7 @@ const Recite = (() => {
     if (!G) return;
     save(); // what was said is kept, however the session ends (another begun, the audio played, the riwaya changed)
     clearInterval(timer); clearInterval(leadTimer);
-    if (!G.keepMic) { if (G.mu) Mu.stop(); else Listen.stop(); }
+    if (!G.keepMic && !G.manual) { if (G.mu) Mu.stop(); else Listen.stop(); }
     G = null; S.focus = null;
     ['#recBar', '#recWord', '#recDone'].forEach(s => hide($(s)));
     paintMarks();
@@ -1331,6 +1360,7 @@ const Recite = (() => {
   function tick() {
     if (!G?.run) return;
     keep();
+    if (G.manual) return;
     alive();
     if (G.hide && !G.peek && !G.voice && !G.busy && Date.now() - G.lastAct > HINT_AFTER) {
       G.peek = true;
@@ -1649,16 +1679,19 @@ const Recite = (() => {
     if (!G) return;
     const w = G.words[Math.min(G.pos, G.words.length - 1)];
     const n = mistakes().length;
-    $('#recTitle').textContent = !G.run ? (G.pos ? 'متوقف مؤقتًا' : 'اضغط وابدأ القراءة')
+    $('#recBar').classList.toggle('manual', !!G.manual);
+    $('#recHide').hidden = !!G.manual;
+    $('#recTitle').textContent = G.manual ? (G.peek ? 'هذه الكلمة التالية' : 'اقرأ الآية ثم أظهرها')
+      : !G.run ? (G.pos ? 'متوقف مؤقتًا' : 'اضغط وابدأ القراءة')
       : G.busy ? 'يتعرّف على ما قرأت…' : G.voice ? 'يستمع…' : G.peek ? 'هذه الكلمة التالية' : 'اقرأ، أنا أستمع';
     const bl = blind();
     $('#recSub').textContent = bl ? (n ? errs(n) : 'تسميع أعمى') : `${ayaLabel(w.ai)}${n ? ' · ' + errs(n) : ''}`;
     $('#recToggle').classList.toggle('voice', !!G.voice);
     $('#recBar').classList.toggle('paused', !G.run);
-    $('#recToggle').classList.toggle('live', G.run);
-    $('#recToggle').setAttribute('aria-label', G.run ? 'إيقاف مؤقت' : 'متابعة');
+    $('#recToggle').classList.toggle('live', G.run && !G.manual);
+    $('#recToggle').setAttribute('aria-label', G.manual ? 'أظهر الآية' : G.run ? 'إيقاف مؤقت' : 'متابعة');
     $('#recHide').classList.toggle('on', G.hide);
-    $('#recFast').hidden = !MU();
+    $('#recFast').hidden = !MU() || !!G.manual;
     $('#recFast').classList.toggle('on', fast());
     $('#recFast').setAttribute('aria-pressed', fast());
     $('#recHide').setAttribute('aria-pressed', G.hide);
@@ -1672,7 +1705,7 @@ const Recite = (() => {
   const CHECK_WAIT = 3000;
   function finish() {
     if (!G || G.done) return;
-    const g = G, wait = MU() && g.run;
+    const g = G, wait = MU() && g.run && !g.manual;
     const checked = wait ? new Promise(r => { g.checked = r; setTimeout(r, CHECK_WAIT); }) : null;
     pause();
     g.done = true;
@@ -1681,7 +1714,7 @@ const Recite = (() => {
     const go = () => {
       if (G !== g) return;
       const list = mistakes().filter(x => x.aya != null || g.errs[x.k] !== 'hint');
-      if (list.length) { g.walk = list; walk(0); return; }
+      if (list.length && !g.manual) { g.walk = list; walk(0); return; } // (marked by the reader's own hand: not gone over again)
       paintDone();
       show($('#recDone'));
     };
@@ -1706,7 +1739,7 @@ const Recite = (() => {
     const rows = mistakes(true).map(({ k, e, aya }) => {
       const w = G.words[k], gone = G.gone.has(k);
       const t = aya != null ? `<span class="t">${ayaLabel(aya)}</span><span class="s">${AYA_TYPES[e]}</span>`
-        : `<span class="t" style="font-family:${R.font}">${esc(wordText(w))}</span><span class="s">${ayaLabel(w.ai)} · ${TYPES[e]}</span>`;
+        : `<span class="t" style="font-family:${R.font}">${esc(wordText(w))}</span><span class="s">${ayaLabel(w.ai)} · ${G.manual && e === 'wrong' ? 'أخطأت فيها' : TYPES[e]}</span>`;
       return `<div class="row rc-row${gone ? ' gone' : ''}"><span class="rc-mk rc-${e || 'skip'}"></span><span class="main">${t}</span>
         <button class="rc-not" data-rd-gone="${k}"${aya != null ? ` data-rd-n="${w.of}"` : ''}>${gone ? 'تراجع' : 'لم أخطئ'}</button></div>`;
     }).join('');
@@ -1810,6 +1843,22 @@ const Recite = (() => {
       G.peek = true; G.errs[k] = 'hint';
       G.lastAct = Date.now();
       paint(); paintBar();
+      return true;
+    }
+    // without the microphone: what is still hidden touched shows the aya; a word shown touched is
+    // marked wrong by the reader, and touched again is not
+    if (G.manual && !G.done && k != null) {
+      if (k >= G.pos) { step(); return true; }
+      const was = G.errs[k] && G.errs[k] !== 'hint' && !G.gone.has(k);
+      if (was) delete G.errs[k]; else G.errs[k] = 'wrong';
+      G.gone.delete(k);
+      paint(); paintBar(); keep(true);
+      el.classList.remove('rc-cleared', 'rc-unclear');
+      void el.offsetWidth;
+      el.classList.add(was ? 'rc-cleared' : 'rc-unclear');
+      setTimeout(() => el.classList.remove('rc-cleared', 'rc-unclear'), 700);
+      haptic(was ? 8 : [10, 40, 10]);
+      if (!was && setting('sound')) chime();
       return true;
     }
     // while reading: a tap on a word marked takes the mark away (again: puts it
@@ -2686,13 +2735,15 @@ const Recite = (() => {
 
     // ---- الإعدادات, and how it all works
     function setHTML() {
+      const MIC = () => MU() && !setting('manual'); // (what the microphone's reading is judged by: not shown without it)
       return `<div class="group">
-        ${toggle('hide', 'ابدأ والكلمات مخفية', 'تظهر كل كلمة حين تقرؤها')}
+        ${toggle('manual', 'بلا ميكروفون', 'تختبر نفسك بنفسك: الآيات مخفية، تقرأ الآية من حفظك ثم تُظهرها وتلمس ما أخطأت فيه. بلا نموذج ولا ميكروفون')}
+        ${setting('manual') ? '' : toggle('hide', 'ابدأ والكلمات مخفية', 'تظهر كل كلمة حين تقرؤها')}
         ${toggle('sound', 'صوت واهتزاز عند الخطأ', 'نغمة خفيفة واهتزاز حين تُعلَّم كلمة')}
         ${toggle('blind', 'تسميع أعمى', 'مع الإخفاء: لا أثر لما بعدك، فلا عدد للكلمات ولا أرقام للآيات')}
         ${toggle('weak', 'مواضع الضعف في المصحف', 'خط منقّط خفيف تحت كلمات أخطأت فيها')}
-        ${MU() ? toggle('fastOn', 'القراءة السريعة', 'كل جلسة تبدأ بها. وتعمل وحدها إن أسرعت، وتتوقف إن عدت إلى قراءتك المعتادة، أو بزر «سريع»: يُعلَّم فيها ما تجاوزته أو قرأته بكلمة أخرى، والحركة إن سُمعت الكلمة واضحة؛ ولا يُفحص المدّ ولا الغنّة ولا الحروف المتقاربة') : ''}
-        ${MU() ? `<div class="group-label">التجويد</div>
+        ${MIC() ? toggle('fastOn', 'القراءة السريعة', 'كل جلسة تبدأ بها. وتعمل وحدها إن أسرعت، وتتوقف إن عدت إلى قراءتك المعتادة، أو بزر «سريع»: يُعلَّم فيها ما تجاوزته أو قرأته بكلمة أخرى، والحركة إن سُمعت الكلمة واضحة؛ ولا يُفحص المدّ ولا الغنّة ولا الحروف المتقاربة') : ''}
+        ${MIC() ? `<div class="group-label">التجويد</div>
         ${toggle('tjMadd', 'المدّ', 'يُعلَّم المدّ الطبيعي إن قُصِر، والمتصل واللازم إن لم يُمَدّا')}
         ${setting('tjMadd') ? toggle('tjMunfasil', 'المدّ المنفصل أربع حركات', 'قراءة الشاطبية؛ إن تركتها مطفأة فالقصر جائز') : ''}
         ${toggle('tjOver', 'المدّ الزائد', 'يُعلَّم المدّ الطبيعي إن زِيد فيه كثيرًا، والحرف القصير إن مُدّ')}
@@ -2720,6 +2771,7 @@ const Recite = (() => {
       [MIC, 'اضغط رقم أي آية في المصحف ثم «تسميع»، أو الميكروفون أعلى الصفحة واقرأ: نجد الآية ونتابعك منها.'],
       ['<svg viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg>', '«إخفاء» يخفي ما بعد موضعك. إن توقفت، تظهر لك الكلمة التالية تلميحًا.'],
       ['<svg viewBox="0 0 24 24"><path d="M4 18h16" stroke-dasharray="2 3"/><path d="M8 13l4-7 4 7"/></svg>', 'المس الكلمة المخطوءة لترى ما سُمِع، أو لتسمعها، أو لتلغي الخطأ إن لم تخطئ.'],
+      ['<svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>', 'بلا ميكروفون؟ فعّله من إعدادات التسميع ⚙: تقرأ الآية من حفظك ثم تُظهرها وتلمس ما أخطأت فيه.'],
       ['<svg viewBox="0 0 24 24"><path d="M12 3.5l2.4 5 5.4.6-4 3.7 1.1 5.4L12 15.5l-4.9 2.7 1.1-5.4-4-3.7 5.4-.6z"/></svg>', `تُتقَن الآية بقراءتها صحيحة في ${ar(MASTER_DAYS)} أيام مختلفة، فتخرج من مواضع الضعف.`],
       ['<svg viewBox="0 0 24 24"><rect x="5.5" y="10.5" width="13" height="9.5" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 017 0v2.5"/></svg>', 'يعمل على جهازك دون إنترنت، وصوتك لا يغادره.'],
     ];
@@ -3011,6 +3063,7 @@ const Recite = (() => {
   // going on after a pause: if the model was let go meanwhile (Mu's idle unload), or the microphone
   // or an update needs seeing to, the steps first, on their screen
   $('#recToggle').onclick = () => {
+    if (G?.manual) return step();
     if (G?.run) return pause();
     const g = G;
     if (MU() && g && !g.done) return withModel(() => { if (G === g) resume(); }, {});
@@ -3092,6 +3145,14 @@ const Recite = (() => {
     }, () => { paintDl(); toast('تعذر التنزيل — تحقق من الاتصال'); });
   };
   $('#riLater').onclick = () => { pending = null; hide($('#recIntro')); };
+  // (no model, no microphone: the reader checks their own reading; the setting says so from then on)
+  $('#riManual').onclick = () => {
+    const then = pending;
+    pending = null; hide($('#recIntro'));
+    store.set('recite.manual', true);
+    toast('التسميع بلا ميكروفون — تغيّره متى شئت من إعدادات التسميع', 3600);
+    then?.();
+  };
 
   $('#rdList').addEventListener('click', e => {
     const b = e.target.closest('[data-rd-gone]');

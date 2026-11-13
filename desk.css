@@ -309,3 +309,6 @@ body.desk #sheet .pp-c, body.desk #sheet .pp-rev, body.desk #sheet .pp-words but
 body.desk #sheet .pp-c:hover, body.desk #sheet .pp-rev:hover, body.desk #sheet .pp-words button:hover, body.desk #sheet .pp-wide-b:hover { filter: brightness(1.06); }
 body.desk #sheet .pp-c:active, body.desk #sheet .pp-rev:active { transform: none; filter: brightness(.96); }
 body.desk #sheet .pp-icons button:hover, body.desk #sheet .pp-back:hover { background: var(--tint-2); }
+/* (a word said while the reciting bar or the player is up: under them, never over their buttons) */
+body.desk.rc-on #toast, body.desk:has(#player:not([hidden])) #toast { top: calc(var(--dk-top) + 66px); }
+#toast { pointer-events: none; }
