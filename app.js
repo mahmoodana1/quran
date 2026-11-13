@@ -25,7 +25,7 @@ const RECITERS = {
 // data/audio/hafs.<id>.json: each aya a stretch of it, so one runs into the
 // next as recited) rather than everyayah's aya files, each cut apart with its
 // own silence: id -> MB of the whole recitation
-const HAFS_CONT = { alafasy: 1718, sudais: 1223, qatami: 1181, ghamdi: 1071, ajamy: 1846, shatri: 1501, abbad: 1669, ayyoub: 1403, budair: 3113, qahtani: 1590, jaber: 2232, matroud: 1416, alaqimy: 1619, bukhatir: 1362, rifai: 1482, 'husary-mj': 2689, basit: 449, tablawi: 1771 };
+const HAFS_CONT = { maher: 710, alafasy: 1718, sudais: 1223, qatami: 1181, ghamdi: 1071, ajamy: 1846, shatri: 1501, abbad: 1669, ayyoub: 1403, budair: 3113, qahtani: 1590, jaber: 2232, matroud: 1416, alaqimy: 1619, bukhatir: 1362, rifai: 1482, 'husary-mj': 2689, basit: 449, tablawi: 1771 };
 const HAFS_VOICES = [
   ['yasser', 'ياسر الدوسري', '', 'Yasser_Ad-Dussary_128kbps', 128],
   ['alafasy', 'مشاري راشد العفاسي', '', 'Alafasy_128kbps', 128],

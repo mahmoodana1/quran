@@ -23,6 +23,9 @@ test: median 0.4 s, 2.9% more than 1 s off, 0.6% more than 3 s).
 
     python3 tools/align.py data/audio/bazzi.json data/audio/qumbul.json [features-dir]
 
+Another recording than Deban's: TGT=<folder of its NNN.mp3> (Maher al-Muaiqly's
+murattal of 1424-25, against his own timed recording of 1440, read 133).
+
 Needs curl, ffmpeg, numpy, numba and librosa. The output holds {"t": [...]}
 in the format of data/audio/*.json; tools/recitations.py adds the rest.
 """
@@ -294,6 +297,6 @@ if __name__ == '__main__':
     for s in range(len(T) + 1, 115):
         t = ref['t'][s - 1]
         rows = list(zip(t[:-1], t[1:]))
-        T.append(align_surah(f'{QUNBUL}{s:03d}.mp3', f"{ref['url']}{s:03d}.mp3", rows, cache))
+        T.append(align_surah(f"{os.environ.get('TGT', QUNBUL)}{s:03d}.mp3", f"{ref['url']}{s:03d}.mp3", rows, cache))
         json.dump({'t': T}, open(out, 'w'), separators=(',', ':'))
         print(s, len(rows), 'ayat', flush=True)

@@ -82,6 +82,10 @@ EXTRA = {
         ('basit', 'عبد الباسط عبد الصمد', 53, 'abdulbasit-abdulsamad/r3/'),
         ('basit-mj', 'عبد الباسط عبد الصمد', 51, 'abdulbasit-abdulsamad/r1/'),
         ('tablawi', 'محمد محمود الطبلاوي', 106, 'muhammad-tablawi/r1/'),
+        # his murattal of 1424-25 has no published timing (his timed one, read
+        # 133, is the slower one of 1440): aligned against that one first,
+        #   TGT=https://cdn.mp3quran.net/audio/maher-muaiqly/r1/ python3 tools/align.py <read 133 timing> data/audio/hafs.maher.json
+        ('maher', 'ماهر المعيقلي', 'read 133', 'maher-muaiqly/r1/'),
     ],
     'warsh': [
         ('husary', 'محمود خليل الحصري', 120, 'mahmoud-husary/r3/'),
@@ -144,7 +148,11 @@ def timing(read, s, cache):
 def one(data, cache, qumbul, rid, name, read, folder, out):
     n = counts(data, rid)
     T = []
-    if read is None:
+    if isinstance(read, str):
+        # timing worked out by tools/align.py, written where this writes
+        T = json.load(open(out))['t']
+        src = 'aligned with tools/align.py against ' + read
+    elif read is None:
         if not os.path.exists(qumbul):
             print(rid, 'skipped: no timing yet (tools/align.py)')
             return
