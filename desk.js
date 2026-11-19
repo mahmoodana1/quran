@@ -39,7 +39,7 @@ const Desk = (() => {
       ['Ctrl ← / →', 'السورة التالية / السابقة'], ['/', 'البحث: سورة، آية، صفحة، جزء'], ['عجلة الفأرة', 'تقليب الصفحات'],
     ]],
     ['الآيات', [
-      ['↓ / ↑', 'الآية التالية / السابقة'], ['Enter', 'خيارات الآية المحددة'], ['T', 'تفسير الآية'], ['M', 'الآيات المتشابهة'],
+      ['↓ / ↑', 'الآية التالية / السابقة'], ['Enter', 'خيارات الآية المحددة'], ['T', 'تفسير الآية'], ['A', 'سبب نزول الآية'], ['M', 'الآيات المتشابهة'],
       ['B', 'علامة على الآية أو الصفحة'], ['C', 'نسخ الآية'], ['نقرتان', 'معنى الكلمة ونطقها'],
     ]],
     ['الاستماع والتسميع', [
@@ -494,8 +494,9 @@ const Desk = (() => {
         else if (c === 'KeyB') { done(); mark(); }
         else if (c === 'KeyN' && P.ai != null) { done(); $('#plNext').onclick(); }
         else if (c === 'KeyP' && P.ai != null) { done(); $('#plPrev').onclick(); }
-        else if (sel() == null && ['KeyT', 'KeyM', 'KeyC', 'KeyR', 'KeyL'].includes(c)) { toast('اختر آية أولًا: انقرها أو استعمل ↓ ↑', 1500); }
+        else if (sel() == null && ['KeyT', 'KeyA', 'KeyM', 'KeyC', 'KeyR', 'KeyL'].includes(c)) { toast('اختر آية أولًا: انقرها أو استعمل ↓ ↑', 1500); }
         else if (c === 'KeyT') { done(); openTafsir(sel(), 'tafsir'); }
+        else if (c === 'KeyA') { done(); openTafsir(sel(), 'asbab'); }
         else if (c === 'KeyM') { done(); openTafsir(sel(), 'similar'); }
         else if (c === 'KeyC') { done(); copy(sel()); }
         else if (c === 'KeyR') { done(); Recite.start(sel()); }

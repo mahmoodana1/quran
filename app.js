@@ -1881,13 +1881,17 @@ async function similarHTML(ai) {
 }
 let tfMode = 'tafsir';
 $('#tfSeg').onclick = e => { const b = e.target.closest('[data-tf]'); if (b && tfAya != null) openTafsir(tfAya, b.dataset.tf); };
-$('#tfBody').addEventListener('click', e => { const b = e.target.closest('[data-sim]'); if (b) openTafsir(+b.dataset.sim, 'similar'); });
+$('#tfBody').addEventListener('click', e => {
+  const b = e.target.closest('[data-sim]'); if (b) openTafsir(+b.dataset.sim, 'similar');
+  const g = e.target.closest('[data-tf-go]'); if (g && tfAya != null) openTafsir(tfAya, g.dataset.tfGo);
+});
 
 async function openTafsir(ai, mode = tfMode) {
   tfMode = mode;
   document.querySelectorAll('#tfSeg [data-tf]').forEach(b => b.classList.toggle('on', b.dataset.tf === mode));
-  $('#tfSub').textContent = mode === 'similar' ? 'الآيات المتشابهة' : 'تفسير السعدي';
+  $('#tfSub').textContent = mode === 'similar' ? 'الآيات المتشابهة' : mode === 'asbab' ? 'سبب النزول' : 'تفسير السعدي';
   similarOf(ai).then(l => { if (tfAya !== ai) return; const k = $('#tfSimN'); k.hidden = !l.n; k.textContent = ar(l.n); });
+  asbabOf(R.ayas[ai]).then(l => { if (tfAya !== ai) return; const k = $('#tfAsN'); k.hidden = !l.n; k.textContent = ar(l.n); }).catch(() => {});
   tfAya = ai;
   S.act = ai; S.focus = ai; paintMarks();
   const a = R.ayas[ai];
@@ -1902,6 +1906,13 @@ async function openTafsir(ai, mode = tfMode) {
   if (mode === 'similar') {
     const html = await similarHTML(ai);
     if (tfAya === ai && tfMode === 'similar') { body.innerHTML = html; body.scrollTop = 0; }
+    return;
+  }
+  if (mode === 'asbab') {
+    let html;
+    try { html = asbabHTML(await asbabOf(a)); }
+    catch { html = '<div class="tf-wait">تعذّر تحميل أسباب النزول — تحقق من الاتصال أو حمّلها من الإعدادات («تحميل الكل»)</div>'; }
+    if (tfAya === ai && tfMode === 'asbab') { body.innerHTML = html; body.scrollTop = 0; }
     return;
   }
   try {
@@ -1921,8 +1932,12 @@ async function openTafsir(ai, mode = tfMode) {
       const label = to > from ? `تفسير الآيات ${ar(from)}–${ar(to)}` : '';
       html += (label ? `<div class="tf-group">${label}</div>` : '') + tafsirHTML(e);
     }
+    // where a cause of revelation is known, a word of it above the tafsir: a tap to its tab
     let why = '';
-    try { why = await asbabHTML(a); } catch {}
+    try {
+      const w = await asbabOf(a);
+      if (w.n) why = `<button class="tf-why-go" data-tf-go="asbab"><b>لهذه الآية سبب نزول</b><small>${w.n > 1 ? `${ar(w.n)} روايات` : 'رواية'}</small></button>`;
+    } catch {}
     if (tfAya !== ai) return;
     body.innerHTML = why + (html || '<div class="tf-wait">لا يوجد تفسير لهذه الآية</div>');
     body.scrollTop = 0;
@@ -1931,23 +1946,59 @@ async function openTafsir(ai, mode = tfMode) {
   }
 }
 
-// the cause of revelation of an aya, where one is known (الموسوعة القرآنية; tools/surahinfo.py):
-// folded, above the tafsir; its ayas in Hafs numbering, a heading per cause
+// the causes of revelation of an aya, its own tab in the tafsir sheet (every aya has it): from
+// صحيح أسباب النزول (data/asbab-sahih.json, tools/asbab.py) and الموسوعة القرآنية (data/asbab.json,
+// tools/surahinfo.py), both in Hafs numbering; an aya of another riwaya asks for the Hafs ayas it covers
+const ASBAB_V = 2;
+const ASBAB_URLS = [`data/asbab-sahih.json?v=${ASBAB_V}`, `data/asbab.json?v=${ASBAB_V}`];
 let asbab = null;
-async function asbabHTML(a) {
-  const d = (await (asbab ||= loadJSON('data/asbab.json?v=1').catch(e => { asbab = null; throw e; }))).ayas;
-  const want = [];
+const loadAsbab = () => (asbab ||= Promise.allSettled(ASBAB_URLS.map(u => loadJSON(u))).then(([sh, qp]) => {
+  if (sh.status !== 'fulfilled' && qp.status !== 'fulfilled') throw sh.reason;
+  // صحيح أسباب النزول by aya: "s:n" → its entries
+  const by = new Map();
+  for (const e of sh.value?.list || []) for (const n of e[1]) { const k = `${e[0]}:${n}`; by.has(k) ? by.get(k).push(e) : by.set(k, [e]); }
+  const qk = Object.keys(qp.value?.ayas || {}).map(k => { const m = k.match(/^(\d+):(\d+)(?:-(\d+))?$/); return m && [k, +m[1], +m[2], +(m[3] || m[2])]; }).filter(Boolean);
+  return { by, qp: qp.value?.ayas || {}, qk, ok: [sh.status === 'fulfilled', qp.status === 'fulfilled'] };
+}).catch(e => { asbab = null; throw e; }));
+async function asbabOf(a) {
+  const d = await loadAsbab();
+  const sahih = [], qp = [];
   for (let h = a[5]; h <= a[6]; h++) {
     const [s, n] = META.hafs[h];
-    for (const k of Object.keys(d)) {
-      const m = k.match(/^(\d+):(\d+)(?:-(\d+))?$/);
-      if (+m[1] === s && n >= +m[2] && n <= +(m[3] || m[2]) && !want.includes(k)) want.push(k);
-    }
+    for (const e of d.by.get(`${s}:${n}`) || []) if (!sahih.includes(e)) sahih.push(e);
+    for (const [k, ks, from, to] of d.qk) if (ks === s && n >= from && n <= to && !qp.includes(k)) qp.push(k);
   }
-  if (!want.length) return '';
+  return { a, sahih, qp: qp.map(k => d.qp[k]), ok: d.ok, n: sahih.reduce((t, e) => t + e[2].length, 0) + qp.length };
+}
+function asbabHTML(w) {
   const p = t => t.replace(/<a [^>]*>|<\/a>/g, '').replace(/<q>/g, '<span class="q">').replace(/<\/q>/g, '</span>');
-  const body = want.flatMap(k => d[k]).map(t => /^\*/.test(t) ? `<h4>${p(t.replace(/^\*\s*/, ''))}</h4>` : `<p>${p(t)}</p>`).join('');
-  return `<details class="tf-why"><summary><b>سبب نزولها</b><small>${want.length > 1 ? `${ar(want.length)} روايات` : 'من الموسوعة القرآنية'}</small></summary>${body}<p class="si-src">المصدر: الموسوعة القرآنية quranpedia.net</p></details>`;
+  const [s0] = META.hafs[w.a[5]];
+  const suraAyas = l => {
+    const runs = [];
+    for (const n of l) { const r = runs[runs.length - 1]; r && n === r[1] + 1 ? r[1] = n : runs.push([n, n]); }
+    return runs.map(([x, y]) => x === y ? ar(x) : `${ar(x)}–${ar(y)}`).join('، ');
+  };
+  if (!w.n) {
+    return `<div class="as-none"><b>لم يُذكر لهذه الآية سبب نزول</b>
+      <p>لم يرد لها سبب نزول خاص في ${w.ok.every(Boolean) ? 'المصدرين المعتمدين هنا: صحيح أسباب النزول، والموسوعة القرآنية' : 'المصدر المحمَّل'}.
+      وأكثر القرآن نزل ابتداءً هدايةً للناس من غير سبب، ونزل بعضه عقب واقعة أو سؤال؛ وذلك هو سبب النزول.</p></div>`;
+  }
+  let html = '';
+  if (w.sahih.length) {
+    html += `<section class="as-src"><h3>صحيح أسباب النزول <small>إبراهيم محمد العلي</small></h3>`;
+    for (const [s, l, nar] of w.sahih) {
+      html += `<div class="as-it">${l.length > 1 || s !== s0 ? `<div class="tf-group">نزلت في ${l.length > 1 ? 'الآيات' : 'الآية'} ${suraAyas(l)}</div>` : ''}`;
+      html += nar.map((ps, i) => `${nar.length > 1 ? `<h4>الرواية ${ar(i + 1)}</h4>` : ''}${ps.map(t => `<p>${p(t)}</p>`).join('')}`).join('');
+      html += '</div>';
+    }
+    html += '</section>';
+  }
+  if (w.qp.length) {
+    html += `<section class="as-src"><h3>الموسوعة القرآنية <small>quranpedia.net</small></h3>`;
+    html += w.qp.map(l => `<div class="as-it">${l.map(t => /^\*/.test(t) ? `<h4>${p(t.replace(/^\*\s*/, ''))}</h4>` : `<p>${p(t)}</p>`).join('')}</div>`).join('');
+    html += '</section>';
+  }
+  return html + '<p class="si-src">المصادر: صحيح أسباب النزول (دراسة حديثية) لإبراهيم محمد العلي · الموسوعة القرآنية quranpedia.net</p>';
 }
 
 function closeTafsir() {
@@ -2086,7 +2137,7 @@ const mushafTasks = () => [
   ...Object.keys(HAFS_CONT).map(k => ({ cache: MUSHAF_CACHE, url: new URL(`data/audio/hafs.${k}.json?v=${AUDIO_DATA_VERSION}`, location.href).href })),
   // what is said about each surah, and the causes of revelation
   { cache: MUSHAF_CACHE, url: new URL(`data/surah-info.json?v=${SI_V}`, location.href).href },
-  { cache: MUSHAF_CACHE, url: new URL('data/asbab.json?v=1', location.href).href },
+  ...ASBAB_URLS.map(u => ({ cache: MUSHAF_CACHE, url: new URL(u, location.href).href })),
   { cache: MUSHAF_CACHE, url: Adhkar.url() },
   ...LOCAL_FONTS.map(f => ({ cache: MUSHAF_CACHE, url: new URL(`fonts/${f}.woff2`, location.href).href })),
   ...Array.from({ length: 604 }, (_, i) => ({ cache: FONT_CACHE, url: `${QCF_BASE}p${i + 1}.woff2` })),

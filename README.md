@@ -34,9 +34,13 @@ Static PWA: open it in Safari → Share → **Add to Home Screen**. It must be s
   the words hidden (التسميع). «حفظتُ» marks it memorized (the same record التسميع keeps) and moves on;
   today's revision: the last week's ayas (السبقي) and a share of the older ones (المنزل, all of it every N days).
 - **About a surah** (its name band → «عن السورة»): overview and names, topics (each a tap to its ayas),
-  aims, virtue and the Prophet's practice with it; its causes of revelation folded above each aya's tafsir.
+  aims, virtue and the Prophet's practice with it.
   From الموسوعة القرآنية ([quranpedia.net](https://quranpedia.net), dump of 2026-11-07, free for use in apps),
   built by `tools/surahinfo.py` into `data/surah-info.json` and `data/asbab.json`.
+- **سبب النزول** (causes of revelation): a tab of its own in every aya's sheet, beside the tafsir and the
+  similar ayas (on a computer `A`), its count of narrations on it; an aya with none says so. From صحيح أسباب
+  النزول (إبراهيم محمد العلي, via [asbab-al-nuzul-dataset](https://github.com/mostafaahmed97/asbab-al-nuzul-dataset),
+  MIT; `tools/asbab.py` → `data/asbab-sahih.json`) and الموسوعة القرآنية (`data/asbab.json`): 327 ayas.
 - **Offline**: Settings → «تحميل الكل» saves the mushaf, tafsir, adhkar and (optionally) the recitation.
 - **Audio**: every riwaya is recited by a reciter of that riwaya, played continuously with
   page follow and the aya highlighted:

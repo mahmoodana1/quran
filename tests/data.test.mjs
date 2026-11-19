@@ -55,4 +55,11 @@ test('surah info and causes of revelation', () => {
   assert.equal(si.surahs.length, 114);
   const as = json('data/asbab.json');
   for (const k of Object.keys(as.ayas)) assert.match(k, /^\d+:\d+(-\d+)?$/);
+  // صحيح أسباب النزول: [surah, [ayas], [[paragraph, ...], ...]], each aya one of its surah's (Hafs)
+  const hafs = counts.hafs, sh = json('data/asbab-sahih.json');
+  assert.ok(sh.list.length > 150);
+  for (const [s, l, nar] of sh.list) {
+    assert.ok(s >= 1 && s <= 114 && l.length && l.every(n => Number.isInteger(n) && n >= 1 && n <= hafs[s - 1]), `${s}:${l}`);
+    assert.ok(nar.length && nar.every(ps => ps.length && ps.every(p => typeof p === 'string' && p && !/[{}]|<(?!\/?q>)/.test(p))), `${s}:${l}`);
+  }
 });
