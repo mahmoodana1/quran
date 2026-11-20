@@ -955,7 +955,7 @@ wordAudio.addEventListener('error', () => { sayEl?.classList.remove('say'); if (
       const a = act.dataset.act;
       if (a === 'index' || a === 'suras') openSheet(); // (the panel last open, as it was left)
       else if (a === 'marks') openSheet('marks');
-      else if (a === 'bm') toggleBookmark(+act.closest('.page')?.dataset.page || S.page);
+      else if (a === 'bm') openSheet('marks'); // (the ribbons and the saved ayas; an aya is marked from its card)
       else if (a === 'mic') Recite.mic();
       return;
     }

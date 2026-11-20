@@ -3668,3 +3668,34 @@ b.hz4-v { font-size: 19px; font-weight: 900; }
 .hz4-ayas > span { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
 .hz4-stp button { width: 30px; }
 .hz4-stp b { min-width: 28px; }
+
+/* العلامات: the ribbons as one list, like the app's other lists — a row each, its details folded under it */
+.rb-group { overflow: hidden; }
+.rb-group .rb-strip { margin: 4px 6px 6px; padding-bottom: 6px; border-bottom: .5px solid var(--line); }
+.rb-item { position: relative; }
+.rb-item + .rb-item { border-top: .5px solid var(--line); }
+.rb-row { padding-inline-end: 54px; min-height: 64px; gap: 12px; }
+.rb-row + .rb-row::before { display: none; }
+.rb-row .rb-flag { flex: none; width: 12px; height: 26px; background: var(--mc); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%); }
+.rb-row .s { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rb-row .rb-bar { display: block; height: 4px; margin-top: 4px; border-radius: 2px; background: var(--tint-2); overflow: hidden; }
+.rb-row .rb-bar i { display: block; height: 100%; border-radius: 2px; background: var(--mc); }
+.rb-row .rb-pct { flex: none; font-size: 14px; font-weight: 800; color: var(--mi); font-variant-numeric: tabular-nums; }
+.rb-tog { position: absolute; top: 14px; inset-inline-end: 10px; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: var(--muted); }
+.rb-tog svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s ease; }
+.rb-item.open .rb-tog svg { transform: rotate(180deg); }
+.rb-tog:active { background: var(--tint); }
+.rb-more { display: flex; flex-direction: column; gap: 10px; padding: 0 16px 14px; }
+.rb-st { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.rb-st span { display: flex; flex-direction: column; align-items: center; padding: 6px 4px; border-radius: 10px; font-size: 11px; color: var(--muted); background: var(--tint); }
+.rb-st b { font-size: 15px; font-weight: 800; color: var(--ink); }
+.rb-more .rb-days { height: 24px; }
+.rb-ed { display: flex; gap: 8px; }
+.rb-ed .rb-name { flex: 1; min-width: 0; padding: 7px 10px; border: 1px solid var(--p-rule); border-radius: 10px; background: var(--sheet); font: inherit; font-size: 14px; color: var(--ink); }
+.rb-ed .rb-name:focus { outline: none; border-color: var(--mc); }
+.rb-ed button { flex: none; padding: 0 14px; border-radius: 10px; font-size: 13px; font-weight: 700; color: var(--danger); border: 1px solid color-mix(in srgb, var(--danger) 30%, var(--p-rule)); }
+.rb-group .rb-intro { margin: 0; padding: 14px 16px 6px; font-size: 13px; }
+.rb-group .rb-free { display: flex; align-items: center; gap: 8px; margin: 0; padding: 10px 16px 12px; border-top: .5px solid var(--line); }
+.rb-group .rb-free small { flex: 1; font-size: 12px; color: var(--muted); }
+.rb-group .rb-free button { width: 26px; height: 26px; padding: 0; border-radius: 50%; display: grid; place-items: center; background: none; }
+.rb-group .rb-free i { width: 16px; height: 16px; border-radius: 50%; background: var(--mc); }

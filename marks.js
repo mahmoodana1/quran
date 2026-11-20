@@ -175,36 +175,40 @@ const Marks = (() => {
     return `<div class="rb-strip"><div class="rb-track"><i class="rb-here" style="right:${kp}%" title="تقرأ الآن"></i>${pins}</div>
       <div class="rb-ends"><span>الفاتحة</span><span>الجزء ١٥</span><span>الناس</span></div></div>`;
   }
-  function cardHTML(c) {
-    const e = rb()[c.id], ai = aiOf(e.h), a = R.ayas[ai], total = R.pages.length;
-    const st = stats(c) || { today: 0, week: 0, daily: [], perDay: 0 };
-    const pct = Math.min(100, Math.round(a[2] / total * 100));
-    const max = Math.max(1, ...st.daily);
-    const left = total - a[2], e0 = st.perDay > 0 && left > 0 ? Math.ceil(left / st.perDay) : null, eta = e0 && e0 <= 999 ? e0 : null;
-    const days = st.daily.map((v, j) => `<i class="${v ? 'g' : ''}${j === st.daily.length - 1 ? ' now' : ''}" style="height:${v ? Math.max(18, v / max * 100) : 8}%" title="${pg(v)}"></i>`).join('');
-    return `<div class="rb-card rb-${c.id}" data-rb-go="${c.id}" role="button">
-      <div class="rb-top"><i class="rb-flag"></i><input class="rb-name" data-rb-name="${c.id}" value="${esc(nameOf(c))}" maxlength="28" enterkeyhint="done" aria-label="اسم الشريط"><b class="rb-pct">${ar(pct)}٪</b></div>
-      <div class="rb-where"><b>${suraName(a[0])} · الآية ${ar(a[1])}</b><span>صفحة ${ar(a[2])}${a[3] ? ` · الجزء ${ar(a[3])}` : ''} · ${ago(e.t)}</span></div>
-      <div class="rb-bar"><i style="width:${pct}%"></i></div>
-      <div class="rb-stats">
-        <span class="${st.today ? 'up' : ''}"><b>${st.today ? '+' + ar(st.today) : '٠'}</b>اليوم</span>
-        <span class="${st.week ? 'up' : ''}"><b>${st.week ? '+' + ar(st.week) : '٠'}</b>هذا الأسبوع</span>
-        <span><b>${eta ? '~' + ar(eta) : '—'}</b>${eta ? (eta <= 10 ? 'أيام للختم' : 'يومًا للختم') : 'للختم'}</span>
-      </div>
-      <div class="rb-days" aria-label="الصفحات كل يوم، آخر أسبوعين">${days}</div>
-      <div class="rb-acts"><button data-rb-go="${c.id}" class="go">اذهب إليه</button><button data-rb-del="${c.id}" class="del">رفع</button></div>
-    </div>`;
+  // a ribbon, one row: its colour, its name, where it is and how far through the mushaf; a tap goes there,
+  // «⌄» opens what it did (today, the week, the last two weeks, when the mushaf is done at that pace) and
+  // its name and «رفع» (shown: open, a Set of colours)
+  const open = new Set();
+  function rowHTML(c) {
+    const e = rb()[c.id], ai = aiOf(e.h), a = R.ayas[ai], total = R.pages.length, pct = Math.min(100, Math.round(a[2] / total * 100)), op = open.has(c.id);
+    let more = '';
+    if (op) {
+      const st = stats(c) || { today: 0, week: 0, daily: [], perDay: 0 };
+      const max = Math.max(1, ...st.daily), left = total - a[2], e0 = st.perDay > 0 && left > 0 ? Math.ceil(left / st.perDay) : null, eta = e0 && e0 <= 999 ? e0 : null;
+      more = `<div class="rb-more">
+        <div class="rb-st"><span><b>${st.today ? '+' + ar(st.today) : '٠'}</b>اليوم</span><span><b>${st.week ? '+' + ar(st.week) : '٠'}</b>هذا الأسبوع</span><span><b>${eta ? '~' + ar(eta) : '—'}</b>${eta ? (eta <= 10 ? 'أيام للختم' : 'يومًا للختم') : 'للختم'}</span></div>
+        <div class="rb-days" aria-label="الصفحات كل يوم، آخر أسبوعين">${st.daily.map((v, j) => `<i class="${v ? 'g' : ''}${j === st.daily.length - 1 ? ' now' : ''}" style="height:${v ? Math.max(18, v / max * 100) : 8}%"></i>`).join('')}</div>
+        <div class="rb-ed"><input class="rb-name" data-rb-name="${c.id}" value="${esc(nameOf(c))}" maxlength="28" enterkeyhint="done" aria-label="اسم الشريط"><button data-rb-del="${c.id}">رفع</button></div></div>`;
+    }
+    return `<div class="rb-item rb-${c.id}${op ? ' open' : ''}">
+      <button class="row rb-row" data-rb-go="${c.id}"><i class="rb-flag"></i>
+        <span class="main"><span class="t">${esc(nameOf(c))}</span><span class="s">${suraName(a[0])} ${ar(a[1])} · صفحة ${ar(a[2])} · ${ago(e.t)}</span>
+          <span class="rb-bar"><i style="width:${pct}%"></i></span></span>
+        <span class="rb-pct">${ar(pct)}٪</span></button>
+      <button class="rb-tog" data-rb-more="${c.id}" aria-expanded="${op}" aria-label="التفاصيل"><svg viewBox="0 0 24 24"><path d="M6 9.5l6 6 6-6"/></svg></button>${more}</div>`;
   }
   function panelHTML() {
     const ps = placed().sort((x, y) => (rb()[y.id].t || 0) - (rb()[x.id].t || 0)), free = C.filter(c => !ps.includes(c));
-    let h = '<div class="group-label">الأشرطة الملوّنة</div>';
-    if (ps.length) h += stripHTML() + ps.map(cardHTML).join('');
-    else h += '<div class="rb-intro">ستة أشرطة بألوان زاهية، كأشرطة المصحف: اضغط رقم آية ثم «علامة» واختر لونًا. يبرز الشريط آيته في الصفحة، وينتقل إذا وضعته على غيرها، ويُحسب لك ما تقدّمت به كل يوم.</div>';
-    if (free.length) h += `<div class="rb-free">${free.map(c => `<button data-rb-free="${c.id}" class="rb-${c.id}"><i></i>${esc(nameOf(c).replace(/^الشريط /, ''))}</button>`).join('')}</div>`;
-    return h;
+    let h = `<div class="group-label">الأشرطة الملوّنة</div><div class="group rb-group">`;
+    if (ps.length) h += stripHTML() + ps.map(rowHTML).join('');
+    else h += '<p class="rb-intro">ستة أشرطة ملوّنة كأشرطة المصحف: اضغط رقم آية ثم «علامة» واختر لونًا. يبرز الشريط آيته، وينتقل إن وضعته على غيرها، ويُحسب ما تقدّمت به.</p>';
+    if (free.length) h += `<div class="rb-free"><small>${ps.length ? 'أشرطة لم توضع' : 'الألوان'}</small>${free.map(c => `<button data-rb-free="${c.id}" class="rb-${c.id}" aria-label="${esc(nameOf(c))}"><i></i></button>`).join('')}</div>`;
+    return h + '</div>';
   }
   function onSheetClick(e) {
     if (e.target.closest('.rb-name')) return true;
+    const mo = e.target.closest('[data-rb-more]');
+    if (mo) { const id = mo.dataset.rbMore; open.has(id) ? open.delete(id) : open.add(id); const b = $('#sheetBody'), y = b.scrollTop; renderSheet(); b.scrollTop = y; haptic(4); return true; }
     const fr = e.target.closest('[data-rb-free]');
     if (fr) { toast('اضغط رقم آية ثم «علامة» واختر هذا اللون', 2400); return true; }
     const del = e.target.closest('[data-rb-del]');
