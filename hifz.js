@@ -24,7 +24,7 @@ const Hifz = (() => {
   const PRESETS = [
     ['light', 'خفيف', 'لمن يحفظ بسرعة', { each: 3, whole: 1, rEach: 2, lEach: 1, gap: 1 }],
     ['mid', 'متوازن', 'لأكثر الحفّاظ', { each: 5, whole: 2, rEach: 3, lEach: 2, gap: 1 }],
-    ['deep', 'متقن', 'تكرار كثير لحفظ راسخ', { each: 10, whole: 3, rEach: 5, lEach: 3, gap: 1.5 }],
+    ['deep', 'متقن', 'تكرار كثير لحفظ راسخ', { each: 10, whole: 3, rEach: 5, lEach: 3, gap: 2 }],
   ];
   const opts = () => {
     const o = { ...DEF, ...store.get('hifz.o', {}) };
@@ -168,6 +168,13 @@ const Hifz = (() => {
       </div>`;
   }
   const listText = list => list.length ? `${ayaLabel(list[0])}${list.length > 1 ? ` – ${R.ayas[list.at(-1)][0] === R.ayas[list[0]][0] ? ar(R.ayas[list.at(-1)][1]) : ayaLabel(list.at(-1))}` : ''}` : '';
+
+  // the lesson, all of it memorized but not today (marked as known, recited on another day): the next one
+  function settle() {
+    if (!store.get('hifz.' + R.id, null)) return;
+    const L = lesson(), l = log(), said = l.said || {}, first = l.first || {}, t0 = Plan.dayStart(), list = listOf(L);
+    if (list.every(a => said[a]) && !list.some(a => first[a] >= t0) && !(undo && undo.L.a === L.a)) { const N = nextLesson(L); if (N.a !== L.a) setLesson(N); }
+  }
 
   // ---- a lesson in rounds («سمّع بعد كل»): each few ayas listened to, repeated and recited, then the lesson
   // linked and recited whole. Where it is kept: hifz.chain { k: the lesson, i: the round, fin: the last part, d: day }
@@ -343,6 +350,7 @@ const Hifz = (() => {
     if (view === 'known') return knownHTML();
     if (view === 'days' || view === 'remind') return subHTML(view);
     if (needsSetup()) return setupHTML();
+    settle();
     // ---- the day, two things: revise what is memorized, learn the lesson; each a card with one button, the
     // thing to do next. The rest (the way, what is known, the days, the reminder) a short list below
     const L = lesson(), o = opts(), list = listOf(L), said = log().said || {};
@@ -350,38 +358,37 @@ const Hifz = (() => {
     const on = STEPS.filter(([k]) => o.steps[k]), plays = on.filter(([k]) => k !== 'recite');
     const allPlayed = !plays.length || plays.every(([k]) => done[k]);
     const un = undo && Date.now() - undo.t < 10 * 60e3 ? undo : null;
-    const rv = o.review ? review(L) : null, revOn = rv && rv.all.length > 0, revFirst = revOn && !rv.done;
+    const rv = o.review ? review(L) : null, revOn = rv && rv.all.length > 0;
     const pages = (p0, p1) => p1 > p0 ? `الصفحات ${ar(p0)}–${ar(p1)}` : `صفحة ${ar(p0)}`;
-    const nums = revOn ? (revFirst ? ['١', '٢'] : ['٢', '١']) : ['', ''];
 
-    // the revision
+    // the revision, always first (old before new); done, it stays where it is, small
+    const head = (cls, icon, title, why, status) => `<div class="hz3-h"><span class="hz3-i ${cls}">${icon}</span><span class="hz3-t"><b>${title}</b><small>${why}</small></span>${status ? `<span class="hz3-s">${status}</span>` : ''}</div>`;
     let rev = '';
     if (revOn) {
       const what = [rv.near.length && 'جديد الأسبوع', rv.pages.length && `${rv.pages.length === 1 ? 'صفحة' : 'صفحات'} ${Plan.pageRuns(rv.pages, ar)}`].filter(Boolean).join(' و');
-      rev = rv.done
-        ? `<section class="hz2 hz2-ok"><span class="hz2-n">${IC.check}</span><div class="hz2-m"><b>أتممت مراجعة اليوم</b><small>${what}</small></div>
-            <button class="hz2-ic" data-hz-revplay aria-label="استمع إليها">${IC.play}</button></section>`
-        : `<section class="hz2 hz2-rev"><span class="hz2-n">${nums[0]}</span>
-            <div class="hz2-m"><small>مراجعة اليوم</small><b>${ayaN(rv.left.length)}${rv.left.length < rv.all.length ? ' باقية' : ''}</b><span>${what}</span>
-              <i class="hz2-bar"><i style="width:${Math.round((1 - rv.left.length / rv.all.length) * 100)}%"></i></i>
-              ${rv.late ? `<em>تأخّرت ${ar(rv.late)} ${rv.late <= 10 && rv.late > 2 ? 'صفحات' : 'صفحة'}، وتأتي أولًا</em>` : ''}</div>
-            <div class="hz2-a"><button class="hz2-go" data-hz-revall>${IC.mic}<span>سمّع</span></button><button class="hz2-ic" data-hz-revplay aria-label="استمع إليها">${IC.play}</button></div></section>`;
+      rev = `<section class="hz3 rev${rv.done ? ' ok' : ''}">${head('rev', IC.repeat, 'مراجعة اليوم', 'ما حفظته من قبل، كي لا يتفلّت', rv.done ? `${IC.check}تمّت` : `بقي ${ayaN(rv.left.length)}`)}
+        ${rv.done ? '' : `<div class="hz3-b"><span class="hz3-what">${what}</span>
+          <i class="hz2-bar"><i style="width:${Math.round((1 - rv.left.length / rv.all.length) * 100)}%"></i></i>
+          ${rv.late ? `<em class="hz3-late">تأخّرت ${ar(rv.late)} ${rv.late <= 10 && rv.late > 2 ? 'صفحات' : 'صفحة'}، وتأتي أولًا</em>` : ''}
+          <div class="hz3-a"><button class="hz3-go rev" data-hz-revall>${IC.mic}<span>سمّع المراجعة</span></button><button class="hz3-ic" data-hz-revplay aria-label="استمع إليها">${IC.play}<span>استمع</span></button></div></div>`}</section>`;
     }
 
     // the lesson: what to do next, one button
     const rd = rounds(L, o), ch0 = rd && chainOf(L), chs = rd && chunksOf(L, o.every);
     const nx = all ? ['memo', 'إلى الدرس التالي', IC.check]
-      : rd ? ['all', ch0 ? (ch0.fin ? 'سمّع الدرس كله' : `تابع: ${chunkText(chs[ch0.i])}`) : 'ابدأ الجلسة', IC.play]
-      : !allPlayed ? ['all', Object.keys(done).length ? 'أكمل الجلسة' : 'ابدأ الجلسة', IC.play]
+      : rd ? ['all', ch0 ? (ch0.fin ? 'سمّع الدرس كله' : `تابع: ${chunkText(chs[ch0.i])}`) : 'ابدأ الدرس', IC.play]
+      : !allPlayed ? ['all', Object.keys(done).length ? 'أكمل الدرس' : 'ابدأ الدرس', IC.play]
       : o.steps.recite ? ['recite', 'سمّع من حفظك', IC.mic] : ['memo', 'حفظتُه — إلى التالي', IC.check];
     const act = nx[0] === 'all' ? 'data-hz-all' : nx[0] === 'recite' ? 'data-hz-go="recite"' : 'data-hz-memo';
-    const les = `<section class="hz2 hz2-les${all ? ' hz2-done' : ''}"><span class="hz2-n">${nums[1]}</span>
-        <div class="hz2-m"><small>درسك <button class="hz2-chg" data-hz-view="edit">${IC.edit}غيّر</button></small>
-          <b>${rangeText(L)}</b><span>${ayaN(list.length)} · ${pages(R.ayas[L.a][2], R.ayas[L.b][2])}${have && !all ? ` · حفظت ${ar(have)}` : ''}<button class="hz2-see" data-hz-show>في المصحف</button></span></div>
-        <div class="hz2-steps">${on.map(([k, t]) => { const ok = k === 'recite' ? all : done[k]; return `<button class="${ok ? 'ok' : ''}${k === (nx[0] === 'recite' ? 'recite' : '') ? ' now' : ''}" data-hz-go="${k}">${ok ? IC.check : ''}${t}</button>`; }).join('<i></i>')}</div>
+    const les = `<section class="hz3 les${all ? ' ok' : ''}">${head('les', IC.book, 'الدرس الجديد', 'آيات تحفظها اليوم', all ? `${IC.check}حفظته` : have ? `حفظت ${ar(have)} من ${ar(list.length)}` : '')}
+      <div class="hz3-b">
+        <div class="hz3-name"><b>${rangeText(L)}</b><button class="hz2-chg" data-hz-view="edit">${IC.edit}غيّر</button></div>
+        <span class="hz3-what">${ayaN(list.length)} · ${pages(R.ayas[L.a][2], R.ayas[L.b][2])} · <button class="hz2-see" data-hz-show>اعرضه في المصحف</button></span>
+        <div class="hz2-steps">${on.map(([k, t]) => { const ok = k === 'recite' ? all : done[k]; return `<button class="${ok ? 'ok' : ''}" data-hz-go="${k}">${ok ? IC.check : ''}${t}</button>`; }).join('<i></i>')}</div>
         <button class="hz2-big" ${act}>${nx[2]}<span>${nx[1]}</span></button>
         ${rd && !all ? `<small class="hz2-how">${ch0 && !ch0.fin ? `${ar(ch0.i + 1)} من ${ar(chs.length)} · ` : ''}${o.every === 1 ? 'آيةً آية' : `كل ${ayaN(o.every)}`}: ${[o.steps.listen && 'استمع', o.steps.repeat && 'ردّد', 'سمّع'].filter(Boolean).join('، ')}${o.steps.link ? ' · ثم اربط الدرس' : ''}</small>` : ''}
-        ${!all ? '<button class="hz2-memo" data-hz-memo>تحفظه من قبل؟ علّمه وانتقل للتالي</button>' : ''}</section>`;
+        ${!all ? '<button class="hz2-memo" data-hz-memo>تحفظه من قبل؟ تخطَّه</button>' : '<button class="hz2-memo" data-hz-all>أعد الدرس مرة أخرى</button>'}
+      </div></section>`;
 
     // the days, in a line
     const { active } = days(), st = Plan.streak(active), n = Object.keys(said).filter(k => R.ayas[+k]).length;
@@ -390,7 +397,7 @@ const Hifz = (() => {
     return `<div class="hz">${typeof Extras !== 'undefined' ? Extras.safetyHTML() : ''}
       ${un ? `<div class="hz-undo"><span>سُجّل حفظ ${un.text}</span><button data-hz-undo>تراجع</button><button data-hz-undo-x aria-label="إخفاء">×</button></div>` : ''}
       <div class="hz2-day"><b>يومك</b><small>${st.now ? `${ar(st.now)} ${st.now === 1 ? 'يوم' : st.now === 2 ? 'يومان' : st.now <= 10 ? 'أيام' : 'يومًا'} متتالية` : 'ابدأ سلسلة أيامك'}${n ? ` · ${ayaN(n)} محفوظة` : ''}</small></div>
-      ${revFirst ? rev + les : les + rev}
+      ${rev}${les}
       <div class="group hz2-more">
         ${row('way', 'طريقتك في الحفظ', `${pr ? pr[1] : 'مخصّصة'} · ${on.map(([, t]) => t).join('، ')}`)}
         ${row('known', 'ما تحفظه من قبل', 'سور تحفظها، لتُراجَع ولا تأتيك دروسًا')}
@@ -406,28 +413,46 @@ const Hifz = (() => {
   }
 
   // ---- the way of memorizing: a preset, the steps in the routine, each step's repeats, and the rest
+  // ---- the way of memorizing: a ready way at the top; then the steps of a session in their order, each a
+  // card with its switch (on or off, plainly), what it does in a line, and — on — its one or two numbers;
+  // the reciting, the speed and the revision at the end
+  const LIM = { each: [1, 20], whole: [0, 10], rEach: [1, 10], lEach: [1, 5] };
+  const EXPLAIN = {
+    listen: 'يقرأ القارئ الدرس، وأنت تستمع وتتابع في المصحف',
+    repeat: 'يقرأ القارئ الآية ثم يسكت، فتعيدها بعده بصوتك',
+    link: 'تُقرأ الآيات موصولة: الأولى، ثم الأولى والثانية… حتى يتصل الدرس',
+    recite: 'تقرأ من حفظك، والتطبيق يتابعك وينبّهك على الخطأ',
+  };
+  function num(k, label, v, fmt = x => `${ar(x)} ${x === 1 ? 'مرة' : x === 2 ? 'مرتان' : 'مرات'}`) {
+    const [lo, hi] = LIM[k];
+    return `<div class="hz-n2"><span>${label}</span><div><button data-hz-inc="${k}" data-d="-1"${v <= lo ? ' disabled' : ''} aria-label="أنقص">−</button><b>${fmt(v)}</b><button data-hz-inc="${k}" data-d="1"${v >= hi ? ' disabled' : ''} aria-label="زد">+</button></div></div>`;
+  }
   function wayHTML() {
-    const o = opts(), pre = presetOf(o);
-    const sec = (k, t, body) => o.steps[k] ? `<div class="hz-sec"><b>${t}</b>${body}</div>` : '';
+    const o = opts(), pre = presetOf(o), whole = o.whole === Infinity ? 10 : o.whole;
+    const body = {
+      listen: num('each', 'كل آية', o.each) + num('whole', 'ثم الدرس كله', whole, x => x ? `${ar(x)} ${x === 1 ? 'مرة' : x === 2 ? 'مرتان' : 'مرات'}` : 'لا'),
+      repeat: num('rEach', 'كل آية', o.rEach) + chips('gap', 'مهلتك لتعيدها', [[0.5, 'قصيرة'], [1, 'بطول الآية'], [2, 'طويلة']], o.gap),
+      link: num('lEach', 'كل آية قبل وصلها', o.lEach),
+      recite: chips('every', 'متى تسمّع', [[1, 'بعد كل آية'], [2, 'كل آيتين'], [3, 'كل ٣'], [0, 'آخر الدرس']], o.every) + toggle('hide', 'إخفاء الكلمات وأنت تسمّع', o.hide),
+    };
+    const card = ([k, t], i) => {
+      const on = !!o.steps[k];
+      return `<div class="hz-s2${on ? ' on' : ''}"><button class="hz-s2-h rc-set" data-hz-stepon="${k}" role="switch" aria-checked="${on}">
+          <span class="hz-s2-i">${[IC.listen, IC.repeat, IC.link, IC.mic][i]}</span><span class="hz-s2-t"><b>${t}</b><small>${EXPLAIN[k]}</small></span>
+          <span class="tog${on ? ' on' : ''}"><i></i></span></button>
+        ${on ? `<div class="hz-s2-b">${body[k]}</div>` : ''}</div>`;
+    };
+    const flow = STEPS.filter(([k]) => o.steps[k]).map(([, t]) => t);
     return `<div class="pp pp-sub"><div class="pp-bar"><button class="pp-back" data-hz-view="" aria-label="رجوع">${IC.back}</button><b>طريقتك في الحفظ</b></div>
       <div class="pp-subb hz-ed">
         <div class="hz-presets">${PRESETS.map(([id, t, sub]) => `<button data-hz-preset="${id}" class="${pre === id ? 'on' : ''}"><b>${t}</b><small>${sub}</small></button>`).join('')}</div>
-        <p class="hz-hint">${pre === 'custom' ? 'طريقة مخصّصة: غيّرت الأعداد بنفسك.' : 'اختر طريقة جاهزة، أو غيّر أي عدد أدناه.'}</p>
-        <div class="hz-sec"><b>خطوات جلستك</b><small>اختر ما يناسبك، و«ابدأ الجلسة» يمرّ بها بالترتيب</small>
-          <div class="hz-tg">${STEPS.map(([k, t]) => `<button data-hz-stepon="${k}" class="${o.steps[k] ? 'on' : ''}" role="switch" aria-checked="${!!o.steps[k]}">${o.steps[k] ? IC.check : ''}<span>${t}</span></button>`).join('')}</div></div>
-        ${sec('listen', 'الاستماع', chips('each', 'كل آية', [[1, '١'], [3, '٣'], [5, '٥'], [7, '٧'], [10, '١٠'], [20, '٢٠']], o.each)
-          + chips('whole', 'ثم الدرس كله', [[1, '١'], [2, '٢'], [3, '٣'], [5, '٥'], [0, '∞']], o.whole === Infinity ? 0 : o.whole))}
-        ${sec('repeat', 'الترديد', chips('rEach', 'كل آية', [[1, '١'], [2, '٢'], [3, '٣'], [5, '٥'], [7, '٧']], o.rEach)
-          + chips('gap', 'مهلتك بعدها', [[0.5, 'نصفها'], [1, 'مثلها'], [1.5, 'مرة ونصف'], [2, 'ضعفها']], o.gap))}
-        ${sec('link', 'الربط', chips('lEach', 'كل آية قبل ربطها', [[1, '١'], [2, '٢'], [3, '٣'], [5, '٥']], o.lEach))}
-        <div class="hz-sec"><b>التلاوة</b>${chips('rate', 'السرعة', [[0.75, 'أبطأ'], [0.9, 'أبطأ قليلًا'], [1, 'عادية'], [1.25, 'أسرع']], o.rate)}
-          <button class="hz-sw hz-o" data-hz-reciter><span>القارئ</span><span class="hz-val">${esc(reciterFull(R.id))} ›</span></button></div>
-        <div class="hz-sec"><b>التسميع والمراجعة</b>
-          ${o.steps.recite ? chips('every', 'سمّع من حفظك بعد كل', [[1, 'آية'], [2, 'آيتين'], [3, '٣ آيات'], [5, '٥ آيات'], [0, 'الدرس كله']], o.every) : ''}
-          ${o.steps.recite && o.every ? '<small class="hz-sm">تستمع وتردّد آيةً آية وتسمّعها، ثم تربط الدرس وتسمّعه كله</small>' : ''}
-          ${toggle('hide', 'إخفاء الكلمات عند التسميع', o.hide)}
-          ${toggle('review', 'إظهار مراجعة اليوم', o.review)}
-          ${o.review ? chips('days', 'تُراجَع محفوظاتك القديمة كلها كل', [[3, '٣ أيام'], [5, '٥'], [7, '٧'], [10, '١٠'], [14, '١٤'], [30, '٣٠']], o.days) : ''}</div>
+        <p class="hz-hint">جلستك: ${flow.join(' ← ')}${pre === 'custom' ? ' · مخصّصة' : ''}</p>
+        ${STEPS.map(card).join('')}
+        <div class="hz-sec"><b>التلاوة والمراجعة</b>
+          ${chips('rate', 'سرعة القارئ', [[0.75, 'أبطأ'], [0.9, 'أبطأ قليلًا'], [1, 'عادية'], [1.25, 'أسرع']], o.rate)}
+          <button class="hz-sw hz-o" data-hz-reciter><span>القارئ</span><span class="hz-val">${esc(reciterFull(R.id))} ›</span></button>
+          ${toggle('review', 'مراجعة يومية لما تحفظ', o.review)}
+          ${o.review ? chips('days', 'يُراجَع كل محفوظك مرة كل', [[3, '٣ أيام'], [7, 'أسبوع'], [14, 'أسبوعين'], [30, 'شهر']], o.days) : ''}</div>
         <button class="hz-reset" data-hz-preset="mid">العودة إلى الطريقة الأصلية</button>
       </div></div>`;
   }
@@ -602,6 +627,11 @@ const Hifz = (() => {
       let val = +op.dataset.v;
       if (op.dataset.hzOpt === 'whole' && !val) val = 1e9;
       return keepY(() => setOpt(op.dataset.hzOpt, val));
+    }
+    const inc = t.closest('[data-hz-inc]');
+    if (inc) {
+      const k = inc.dataset.hzInc, [lo, hi] = LIM[k], cur = o[k] === Infinity ? 10 : o[k];
+      return keepY(() => setOpt(k, Math.max(lo, Math.min(hi, cur + +inc.dataset.d))));
     }
     const ps = t.closest('[data-hz-preset]');
     if (ps) return keepY(() => { const p = PRESETS.find(x => x[0] === ps.dataset.hzPreset)[3]; store.set('hifz.o', { ...store.get('hifz.o', {}), ...p }); });

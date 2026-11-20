@@ -3578,3 +3578,56 @@ body.desk .hz-foot { bottom: 0; }
 .kp-row i.on { background: var(--p-green); }
 .kp-quick { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 10px 0 2px; }
 .kp-quick button { padding: 5px 12px; border-radius: 999px; font-size: 12.5px; color: var(--ink); background: var(--tint); }
+
+/* «طريقتك»: a card a step, its switch plain to see, its numbers under it while it is on */
+.hz-s2 { border-radius: 16px; border: 1px solid var(--line); background: var(--surface); overflow: hidden; transition: border-color .2s ease; }
+.hz-s2.on { border-color: color-mix(in srgb, var(--p-green) 45%, var(--line)); }
+.hz-s2-h { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 14px; text-align: start; }
+.hz-s2-i { flex: none; width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; color: var(--muted); background: var(--tint); }
+.hz-s2.on .hz-s2-i { color: var(--p-on); background: var(--p-green); }
+.hz-s2-i svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.hz-s2-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.hz-s2-t b { font-size: 16px; font-weight: 800; color: var(--ink); }
+.hz-s2:not(.on) .hz-s2-t b { color: var(--muted); }
+.hz-s2-t small { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+.hz-s2-b { padding: 0 14px 10px; border-top: 1px dotted var(--p-rule); }
+.hz-s2-b .hz-o, .hz-s2-b .hz-sw { border-top: 0; }
+.hz-n2 { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0 2px; font-size: 14px; font-weight: 700; }
+.hz-n2 > div { display: flex; align-items: center; gap: 4px; }
+.hz-n2 button { width: 34px; height: 34px; border-radius: 50%; font-size: 19px; font-weight: 700; color: var(--p-green); background: color-mix(in srgb, var(--p-green) 10%, transparent); }
+.hz-n2 button:disabled { opacity: .3; }
+.hz-n2 b { min-width: 68px; text-align: center; font-size: 14.5px; font-weight: 800; }
+:root[data-theme="dark"] .hz-n2 button { color: #8fd3a8; }
+
+/* الحفظ's two cards: always in this order — the revision, then the new lesson — each titled, with its
+   purpose in a line and where it stands at the side; pressed, they answer at once */
+.hz3 { margin-bottom: 12px; border-radius: 18px; background: var(--surface); border: 1px solid var(--line); box-shadow: 0 1px 3px rgba(60, 40, 10, .05); overflow: hidden; }
+.hz3-h { display: flex; align-items: center; gap: 11px; padding: 12px 14px; }
+.hz3-i { flex: none; width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; color: #fff; }
+.hz3-i svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.hz3-i.rev { background: #b8893a; }
+.hz3-i.les { background: var(--p-green); }
+.hz3-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.hz3-t b { font-size: 16.5px; font-weight: 900; }
+.hz3-t small { font-size: 12px; color: var(--muted); }
+.hz3-s { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 800; color: var(--muted); background: var(--tint); }
+.hz3-s svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.hz3.ok .hz3-s { color: var(--ok); background: color-mix(in srgb, var(--ok) 12%, transparent); }
+.hz3.rev.ok .hz3-i { background: var(--ok); }
+.hz3-b { display: flex; flex-direction: column; gap: 6px; padding: 0 14px 14px; }
+.hz3-what { font-size: 13px; color: var(--muted); line-height: 1.6; }
+.hz3-late { font-style: normal; font-size: 12px; color: var(--c-marks); }
+.hz3-name { display: flex; align-items: center; gap: 10px; }
+.hz3-name b { font-size: 24px; font-weight: 900; line-height: 1.3; }
+.hz3 .hz2-steps, .hz3 .hz2-big { margin-top: 4px; }
+.hz3 .hz2-memo, .hz3 .hz2-how { align-self: center; }
+.hz3 .hz2-bar { margin-top: 0; }
+.hz3-a { display: flex; gap: 8px; margin-top: 4px; }
+.hz3-go { flex: 1; display: flex; align-items: center; justify-content: center; gap: 7px; padding: 12px; border-radius: 13px; font-size: 15.5px; font-weight: 800; color: #fff; background: linear-gradient(160deg, #c39548, #9c7128); }
+.hz3-ic { display: flex; align-items: center; gap: 5px; padding: 0 14px; border-radius: 13px; font-size: 13.5px; font-weight: 700; color: #8a6420; background: color-mix(in srgb, #b8893a 13%, transparent); }
+:root[data-theme="dark"] .hz3-ic { color: #e2bd73; }
+.hz3-go svg, .hz3-ic svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.hz3-ic svg path[fill] { fill: currentColor; stroke: none; }
+.hz3 button, .hz-s2 button, .hz2-more .row { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+.hz3 button:active, .hz-s2-h:active, .hz-n2 button:active { transform: scale(.96); transition: none; }
+.hz-s2-h .tog { flex: none; }
