@@ -307,6 +307,7 @@ const Hifz = (() => {
     const un = undo && Date.now() - undo.t < 10 * 60e3 ? undo : null;
     let h = `<div class="hz">${typeof Extras !== 'undefined' ? Extras.safetyHTML() : ''}
       ${un ? `<div class="hz-undo"><span>سُجّل حفظ ${un.text}</span><button data-hz-undo>تراجع</button><button data-hz-undo-x aria-label="إخفاء">×</button></div>` : ''}
+      <!--hz-rev-->
       <section class="hz-lesson">
         <div class="hz-l-top"><small>درسك</small><button class="hz-edit" data-hz-view="edit" aria-label="غيّر الدرس">${IC.edit}<span>غيّر</span></button></div>
         <b class="hz-l-name">${rangeText(L)}</b>
@@ -316,27 +317,34 @@ const Hifz = (() => {
     // one tap for the whole routine (the listening steps, one after the other), then the recitation
     if (plays.length) h += `<button class="hz-go${allPlayed ? ' ok' : ''}" data-hz-all><span class="hz-go-i">${allPlayed ? IC.check : IC.play}</span>
         <span><b>${allPlayed ? 'أعد الجلسة' : 'ابدأ الجلسة'}</b><small>${plays.map(([, t]) => t).join(' ثم ')} · دون توقف${o.steps.recite && !all ? '، ثم سمّع' : ''}</small></span></button>`;
-    h += `<ol class="hz-steps">${on.map(([k, t, sub]) => {
+    // (the steps one by one: a row of tiles, each its own; what each does is said in «طريقتك»)
+    h += `<div class="hz-tiles" style="--n:${on.length}">${on.map(([k, t, sub]) => {
         const ok = k === 'recite' ? all : done[k], i = STEPS.findIndex(x => x[0] === k);
-        return `<li><button class="hz-step${ok ? ' ok' : ''}" data-hz-go="${k}"><span class="hz-n">${ok ? IC.check : ar(on.findIndex(x => x[0] === k) + 1)}</span>
-          <span class="hz-st"><b>${t}</b><small>${sub(o)}</small></span><span class="hz-ic">${[IC.listen, IC.repeat, IC.link, IC.mic][i]}</span></button></li>`;
-      }).join('')}</ol>
+        return `<button class="hz-tile${ok ? ' ok' : ''}" data-hz-go="${k}" title="${esc(sub(o))}"><span class="hz-ic">${ok ? IC.check : [IC.listen, IC.repeat, IC.link, IC.mic][i]}</span><b>${t}</b><small>${ok ? 'تمّ' : ar(on.findIndex(x => x[0] === k) + 1)}</small></button>`;
+      }).join('')}</div>
       <button class="hz-done${all ? ' ok' : ''}${!all && !Object.keys(done).length ? ' quiet' : ''}" data-hz-memo>${all ? 'حفظتَه، ما شاء الله — إلى الدرس التالي' : 'حفظتُ هذا الدرس — إلى التالي'}</button>
       <button class="hz-way" data-hz-view="way">${IC.tune}<span><b>طريقتك في الحفظ</b><small>${pr ? pr[1] : 'مخصّصة'} · ${ar(on.length)} ${on.length <= 2 ? (on.length === 1 ? 'خطوة' : 'خطوتان') : 'خطوات'} · ${o.rate === 1 ? 'سرعة عادية' : o.rate < 1 ? 'أبطأ' : 'أسرع'}</small></span>${IC.back.replace('M9.5 6l6 6-6 6', 'M14.5 6l-6 6 6 6')}</button>`;
     if (o.review) {
       const rv = review(L);
-      h += `<div class="pp-h hz-h"><b>مراجعة اليوم</b><small>${rv.done ? 'أتممتها اليوم، بارك الله فيك' : rv.all.length ? `بقي ${ayaN(rv.left.length)} تُسمَّع اليوم` : 'بلا مراجعة يتفلّت الحفظ'}</small></div>`;
-      if (!rv.near.length && !rv.part.length) h += `<p class="hz-empty">ما تحفظه يُراجَع هنا: القريب منه كل يوم، والقديم صفحاتٍ كل يوم حتى يُختم كل ${ar(o.days)} أيام، وما أخطأت فيه في التسميع يعود أسرع.</p>`;
+      let rh = '';
+      const H = x => { rh += x; };
+      H(`<div class="pp-h hz-h"><b>مراجعة اليوم</b><small>${rv.done ? 'أتممتها اليوم، بارك الله فيك' : rv.all.length ? `بقي ${ayaN(rv.left.length)} تُسمَّع اليوم` : 'بلا مراجعة يتفلّت الحفظ'}</small></div>`);
+      if (!rv.near.length && !rv.part.length) H(`<p class="hz-empty">ما تحفظه يُراجَع هنا: القريب منه كل يوم، والقديم صفحاتٍ كل يوم حتى يُختم كل ${ar(o.days)} أيام، وما أخطأت فيه في التسميع يعود أسرع.</p>`);
       else {
         const pg = rv.pages.length, st = new Set(rv.left);
         const nearDone = rv.near.length && rv.near.every(a => !st.has(a)), farDone = rv.part.length && rv.part.every(a => !st.has(a));
-        h += `<div class="group hz-rev${rv.done ? ' ok' : ''}">
+        if (rv.left.length) H(`<button class="hz-revgo" data-hz-revall><span class="hz-go-i">${IC.mic}</span><span><b>سمّع مراجعة اليوم</b><small>${ayaN(rv.left.length)}${rv.left.length < rv.all.length ? ' باقية' : ''} · القريب ثم المنزل، دفعة واحدة</small></span></button>`);
+        H(`<div class="group hz-rev${rv.done ? ' ok' : ''}">
         ${revRow('near', 'القريب', rv.near.length ? `ما حفظته هذا الأسبوع · ${ayaN(rv.near.length)}` : Object.values(log().first || {}).some(t => t >= Plan.dayStart()) ? 'ما حفظته اليوم يأتي هنا من الغد' : 'لا جديد هذا الأسبوع', rv.near, nearDone)}
         ${revRow('far', 'المنزل', rv.part.length ? `${pg === 1 ? 'صفحة واحدة' : pg === 2 ? 'صفحتان' : `${ar(pg)} صفحات`}${rv.weakPages ? `، ${rv.weakPages === 1 ? 'إحداها' : ar(rv.weakPages)} فيها مواضع ضعف` : ''}</span><span class="s hz-pg">${rv.pages.length === 1 ? 'الصفحة' : 'الصفحات'} ${Plan.pageRuns(rv.pages, ar)}` : 'لا قديم بعد', rv.part, farDone)}
-      </div>`;
-        if (rv.late) h += `<p class="hz-late">تأخّرت ${ar(rv.late)} ${rv.late <= 10 && rv.late > 2 ? 'صفحات' : 'صفحة'} عن موعد مراجعتها، وستأتي أولًا في الأيام القادمة.</p>`;
+      </div>`);
+        if (rv.late) H(`<p class="hz-late">تأخّرت ${ar(rv.late)} ${rv.late <= 10 && rv.late > 2 ? 'صفحات' : 'صفحة'} عن موعد مراجعتها، وستأتي أولًا في الأيام القادمة.</p>`);
       }
+      // (revision first, as memorizers do — old before new — until it is done for the day)
+      if (rv.all.length && !rv.done) h = h.replace('<!--hz-rev-->', `<div class="hz-first">${rh}</div>`);
+      else h += rh;
     }
+    h = h.replace('<!--hz-rev-->', '');
     h += daysHTML();
     h += typeof Extras !== 'undefined' ? Extras.remindRowHTML('hifz') : '';
     h += `<button class="hz-more" data-hz-view="known">${IC.check.replace('<svg', '<svg class="hz-k-i"')}<span>علّم ما تحفظه من قبل</span></button>`;
@@ -542,6 +550,7 @@ const Hifz = (() => {
     }
     const fl = t.closest('[data-hz-flag]');
     if (fl) return keepY(() => setOpt(fl.dataset.hzFlag, !o[fl.dataset.hzFlag]));
+    if (t.closest('[data-hz-revall]')) { const r = review(L); if (r.left.length) { stopAudio(); closeSheet(); Recite.start(null, r.left, { kind: 'rev', hide: o.hide }); } return true; }
     const rv = t.closest('[data-hz-rev]');
     if (rv) {
       const r = review(L), l2 = rv.dataset.hzRev === 'near' ? r.near : r.part;
@@ -640,5 +649,31 @@ const Hifz = (() => {
     if (N) { store.set('hifz.setup', 1); setLesson({ ...N, dir: 0, n }); }
   }
 
-  return { fromPlan, check, panelHTML, onClick, onChange, mounted, reset, learnSura, view: view0, setView: v => { view = v; } };
+  // today, as التسميع's wird shows it: the lesson (memorized today?) and the revision
+  function today_() {
+    if (!R) return null;
+    const L = lesson(), o = opts(), first = log().first || {}, t0 = Plan.dayStart();
+    const newToday = Object.keys(first).filter(k => first[k] >= t0 && R.ayas[+k]).map(Number).sort((a, b) => a - b);
+    return { L, text: rangeText(L), n: listOf(L).length, steps: stepsDone(L), setup: needsSetup(), newToday, rv: o.review ? review(L) : null };
+  }
+
+  // «احفظ من هنا» on an aya: the lesson from it, as long as lessons are
+  function fromAya(ai) {
+    const L = store.get('hifz.' + R.id, null), n = L?.n || (L && R.ayas[L.a] ? Math.min(L.b - L.a + 1, 10) : 5);
+    store.set('hifz.setup', 1);
+    setLesson({ ...span(ai, n), dir: 0, n });
+    view = '';
+    openSheet('hifz');
+    toast(`درسك: ${rangeText(lesson())}`);
+  }
+
+  // a lesson recited clean in التسميع (its ayas memorized by that): the next one, the panel open on it
+  function advance() {
+    const L = lesson(), said = log().said || {};
+    if (listOf(L).every(a => said[a])) { mark(1); setLesson(nextLesson(L)); toast(`بارك الله لك — درسك التالي: ${rangeText(lesson())}`, 2600); }
+    view = '';
+    openSheet('hifz');
+  }
+
+  return { advance, fromAya, today: today_, fromPlan, check, panelHTML, onClick, onChange, mounted, reset, learnSura, view: view0, setView: v => { view = v; } };
 })();

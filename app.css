@@ -3467,3 +3467,35 @@ body.desk .hz-foot { bottom: 0; }
 .hz-done.quiet { color: var(--p-green); background: none; box-shadow: none; border: 1px dashed color-mix(in srgb, var(--p-green) 50%, transparent); font-size: 14px; padding: 10px 14px; }
 :root[data-theme="dark"] .hz-done.quiet { color: #8fd3a8; }
 .hz-more .hz-k-i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; }
+/* الحفظ: the steps as one row of tiles; today's revision first, with one button for all of it */
+.hz-tiles { display: grid; grid-template-columns: repeat(var(--n, 4), 1fr); gap: 8px; margin: 0 0 4px; }
+.hz-tile {
+  display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 10px 4px 8px; border-radius: 14px;
+  background: var(--surface); border: 1px solid var(--line); color: var(--ink); transition: transform .15s ease;
+}
+.hz-tile:active { transform: scale(.95); }
+.hz-tile .hz-ic { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; color: var(--p-green); background: color-mix(in srgb, var(--p-green) 9%, transparent); }
+:root[data-theme="dark"] .hz-tile .hz-ic { color: #8fd3a8; }
+.hz-tile .hz-ic svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.hz-tile b { font-size: 14.5px; font-weight: 800; }
+.hz-tile small { font-size: 11px; color: var(--muted); }
+.hz-tile.ok { border-color: color-mix(in srgb, var(--ok) 45%, transparent); background: color-mix(in srgb, var(--ok) 7%, var(--surface)); }
+.hz-tile.ok .hz-ic { color: #fff; background: var(--ok); }
+.hz-tile.ok .hz-ic svg { stroke-width: 2.6; }
+.hz-tile.ok small { color: var(--ok); font-weight: 700; }
+.hz-first { margin-bottom: 14px; }
+.hz-first .pp-h { margin-top: 0; }
+.hz-revgo {
+  width: 100%; display: flex; align-items: center; gap: 12px; text-align: start; margin: 0 0 10px; padding: 11px 14px; border-radius: 14px;
+  color: var(--p-on); background: linear-gradient(160deg, var(--p-green), var(--p-green-2)); border: 1px solid var(--p-gold);
+}
+.hz-revgo .hz-go-i { width: 38px; height: 38px; color: var(--p-green-2); background: linear-gradient(160deg, #f0dba6, #cfac62); box-shadow: none; }
+.hz-revgo .hz-go-i svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; margin: 0; }
+.hz-revgo > span:last-child { display: flex; flex-direction: column; gap: 1px; }
+.hz-revgo b { font-size: 16px; font-weight: 900; }
+.hz-revgo small { font-size: 12px; opacity: .8; }
+.ab-hz {
+  margin-inline-start: 4px; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 700;
+  color: var(--p-green); background: color-mix(in srgb, var(--p-green) 9%, transparent); border: 1px solid color-mix(in srgb, var(--p-green) 30%, transparent);
+}
+:root[data-theme="dark"] .ab-hz { color: #8fd3a8; }

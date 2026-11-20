@@ -1341,6 +1341,7 @@ $('#ayaBar').addEventListener('click', async e => {
   if (b.dataset.act === 'similar') openTafsir(i, 'similar');
   if (b.dataset.act === 'close') closeActions();
   if (b.dataset.act === 'set') openSheet('settings');
+  if (b.dataset.act === 'hifz') { closeActions(); Hifz.fromAya(i); }
 });
 
 // a short buzz: the Vibration API where there is one; iPhones have none, but
@@ -2301,7 +2302,7 @@ function settingsHTML() {
       <span class="rw-dl" data-dl="rw" data-rid="${r.id}" role="button" hidden></span></button>`;
   }).join('');
   const v = voice(R.id), n = voices(R.id).length, rname = META.riwayat.find(r => r.id === R.id)?.name || '';
-  const nav = [['set-audio', 'التلاوة'], ['set-look', 'المظهر'], ['set-off', 'دون اتصال'], ['set-data', 'بياناتك'], ['set-app', 'التطبيق'], ['set-rw', 'الرواية']]
+  const nav = [['set-audio', 'التلاوة'], ['set-hifz', 'الحفظ'], ['set-look', 'المظهر'], ['set-off', 'دون اتصال'], ['set-data', 'بياناتك'], ['set-app', 'التطبيق'], ['set-rw', 'الرواية']]
     .map(([id, t]) => `<button data-set-jump="${id}">${t}</button>`).join('');
   return `
     ${typeof Install !== 'undefined' ? Install.settingsHTML() : ''}
@@ -2315,6 +2316,14 @@ function settingsHTML() {
       ${'wakeLock' in navigator ? switchRow('awake', 'إبقاء الشاشة مضاءة', 'لا تنطفئ الشاشة وأنت تقرأ أو تستمع أو تسمّع') : ''}
     </div>
     <p class="note">${n > 1 ? `اختر من تحب أن تستمع إليه في ${rname}، واستمع إلى نموذج من تلاوة كل قارئ قبل اختياره.` : `تلاوة ${rname} بصوت ${v.name}.`}</p>
+
+    <div class="group-label" id="set-hifz">الحفظ والتسميع</div>
+    <div class="group">
+      <button class="row" data-hz-open="way"><span class="main"><span class="t">طريقتك في الحفظ</span><span class="s">خطوات الجلسة، وكم تتكرر كل آية، والسرعة، والمراجعة</span></span><svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button>
+      <button class="row" data-hz-open="known"><span class="main"><span class="t">ما تحفظه من قبل</span><span class="s">علّم سورًا تحفظها لتُراجَع ولا تأتيك دروسًا</span></span><svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button>
+      <button class="row" data-hz-open="edit"><span class="main"><span class="t">درسك</span><span class="s">السورة، ومن أي آية إلى أي آية</span></span><svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button>
+      <button class="row" data-hz-open="rc-set"><span class="main"><span class="t">إعدادات التسميع</span><span class="s">النموذج، والتنبيه، وإخفاء الكلمات، والتجويد</span></span><svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button>
+    </div>
 
     <div class="group-label" id="set-look">المظهر</div>
     <div class="themes">${themes}</div>
@@ -3211,6 +3220,8 @@ $('#sheetBody').addEventListener('click', async e => {
   const th = e.target.closest('[data-theme-set]');
   if (th) { store.set('theme', th.dataset.themeSet); applyTheme(); renderSheet(); return; }
   if (e.target.closest('[data-open-lib]')) { openLibrary(); return; }
+  const ho = e.target.closest('[data-hz-open]');
+  if (ho) { const v = ho.dataset.hzOpen; if (v === 'rc-set') openSheet('recite', 'set'); else { openSheet('hifz'); Hifz.setView(v); renderSheet(); $('#sheetBody').scrollTop = 0; } return; }
   const sw = e.target.closest('[data-switch]');
   if (sw) {
     const id = sw.dataset.switch, on = !store.get(id, false);

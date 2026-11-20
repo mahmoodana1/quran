@@ -1873,7 +1873,8 @@ const Recite = (() => {
     if (G.next != null) $('#rdNext').textContent = `تابع: سورة ${suraName(R.ayas[G.next][0])}`;
     $('#rdAgain').hidden = G.next != null && !list.length;
     $('#rdAgain').classList.toggle('primary', G.next == null);
-    $('#rdAgain').textContent = G.test ? 'اختبار آخر' : list.length ? 'أعد الآيات المخطوءة' : 'تابع من الآية التالية';
+    // (a lesson recited clean: on to the next one; a revision: back to the day's plan — not on into ayas not memorized)
+    $('#rdAgain').textContent = G.test ? 'اختبار آخر' : list.length ? 'أعد الآيات المخطوءة' : G.kind === 'new' ? (G.pos < G.words.length ? 'أكمل الدرس' : 'إلى الدرس التالي') : G.kind === 'rev' ? 'رجوع إلى الحفظ' : 'تابع من الآية التالية';
     if (G.test) { $('#rdAgain').hidden = false; $('#rdAgain').classList.add('primary'); }
   }
 
@@ -2221,7 +2222,9 @@ const Recite = (() => {
   // where «تابع» picks up: after the last session, else this page
   function resumeAya() {
     const last = store.get('recite.last.' + R.id);
-    return last != null && R.ayas[last] ? last : pageInfo(S.page).first;
+    if (last != null && R.ayas[last]) return last;
+    const hz = typeof Hifz !== 'undefined' && Hifz.today();
+    return hz?.rv?.left[0] ?? hz?.L?.a ?? pageInfo(S.page).first;
   }
 
   // (tajweed: one setting before madd and ghunna were apart; turned off, both start off)
@@ -2578,7 +2581,8 @@ const Recite = (() => {
     }
     return out.sort((a, b) => b.due - a.due || a.s - b.s);
   }
-  const dueText = r => r.due > 0 ? `متأخرة ${r.due === 1 ? 'يومًا' : r.due === 2 ? 'يومين' : `${ar(r.due)} أيام`}` : r.due === 0 ? 'موعدها اليوم' : r.due === -1 ? 'غدًا' : `بعد ${ar(-r.due)} أيام`;
+  // (when a surah was last recited: the day's revision itself is الحفظ's, by page — one schedule, not two)
+  const dueText = r => r.today ? 'سُمّعت اليوم' : `آخر تسميع ${ago(r.last)}`;
   // a surah's memorized ayas, in order (what its revision goes over)
   const memorized = (l, s) => { const out = [], a0 = R.suraStart[s], n = suraSizes()[s]; for (let a = a0; a < a0 + n; a++) if (l.said?.[a]) out.push(a); return out; };
 
@@ -2631,15 +2635,24 @@ const Recite = (() => {
       </div>`;
 
     // ---- today's wird: a row each, ticked when done
-    const rows = [];
-    if (pl && !pl.finished) {
+    const rows = [], hz = typeof Hifz !== 'undefined' ? Hifz.today() : null;
+    if (hz && !hz.setup) {
+      const met = hz.newToday.length > 0, st = Object.keys(hz.steps).length;
+      rows.push({ c: 'green', icon: ICONS.seed, k: 'حفظ جديد', t: met ? `حفظت اليوم ${ayaCount(hz.newToday.length)}` : hz.text,
+        s: met ? `والتالي: ${hz.text}` : st ? `بدأت درسك · ${ar(st)} ${st === 1 ? 'خطوة' : st === 2 ? 'خطوتان' : 'خطوات'}` : `درسك · ${ayaCount(hz.n)} · استمع ثم ردّد ثم سمّع`, done: met, act: 'data-rc-hifz' });
+    } else if (hz?.setup) rows.push({ c: 'green', icon: ICONS.seed, k: 'حفظ جديد', t: 'ابدأ رحلة حفظ', s: 'من أين تبدأ، وكم في الدرس — في «الحفظ»', act: 'data-rc-hifz', add: true });
+    else if (pl && !pl.finished) {
       const met = pl.todayN >= pl.per, a0 = pl.portion[0], a1 = pl.portion[pl.portion.length - 1];
       rows.push({ c: 'green', icon: ICONS.seed, k: 'حفظ جديد', t: suraName(pl.s), s: met ? `أتممت ورد اليوم · ${ayaCount(pl.todayN)}` : `الآيات ${ar(R.ayas[a0][1])}${a1 !== a0 ? '–' + ar(R.ayas[a1][1]) : ''} · ${ar(pl.todayN)} من ${ar(pl.per)}`, f: Math.min(1, pl.todayN / pl.per), done: met, act: 'data-rc-new', edit: pl.s });
     } else rows.push({ c: 'green', icon: ICONS.seed, k: 'حفظ جديد', t: pl?.finished ? 'سورة جديدة؟' : 'ابدأ رحلة حفظ', s: pl?.finished ? `أتممت ${suraName(pl.s)}، ما شاء الله` : 'اختر سورة وكم آية في اليوم', act: 'data-rc-view="pick"', add: true });
-    const due = revs.filter(r => r.due >= 0);
-    if (due.length) rows.push({ c: 'amber', icon: ICONS.review, k: 'مراجعة', t: suraName(due[0].s), s: dueText(due[0]) + (due.length > 1 ? ` · و${ar(due.length - 1)} غيرها` : ''), act: `data-rc-rev="${due[0].s}"`, edit: due[0].s });
+    const due = revs.filter(r => r.due >= 0), hv = hz?.rv;
+    if (hv && hv.all.length) rows.push({ c: 'amber', icon: ICONS.review, k: 'مراجعة', t: hv.done ? 'أتممت مراجعة اليوم' : `${ayaCount(hv.left.length)}${hv.left.length < hv.all.length ? ' باقية' : ''}`,
+      s: [hv.near.length && 'ما حفظته هذا الأسبوع', hv.pages.length && `${hv.pages.length === 1 ? 'الصفحة' : 'الصفحات'} ${Plan.pageRuns(hv.pages, ar)}`].filter(Boolean).join(' · '),
+      f: hv.all.length ? 1 - hv.left.length / hv.all.length : null, done: hv.done, act: 'data-rc-hzrev' });
+    else if (hv) { /* nothing memorized to revise yet */ }
+    else if (due.length) rows.push({ c: 'amber', icon: ICONS.review, k: 'مراجعة', t: suraName(due[0].s), s: dueText(due[0]) + (due.length > 1 ? ` · و${ar(due.length - 1)} غيرها` : ''), act: `data-rc-rev="${due[0].s}"`, edit: due[0].s });
     else if (revs.length) rows.push({ c: 'amber', icon: ICONS.review, k: 'مراجعة', t: 'لا شيء مستحق اليوم', s: `التالية: ${suraName(revs[0].s)} ${dueText(revs[0])}`, done: true, act: `data-rc-rev="${revs[0].s}"`, edit: revs[0].s });
-    if (weak.length) rows.push({ c: 'coral', icon: ICONS.fix, k: 'تثبيت', t: `${ar(weak.length)} ${weak.length <= 10 && weak.length > 2 ? 'مواضع' : 'موضعًا'} ضعف`, s: 'آيات أخطأت فيها، سمّعها حتى تثبت', act: 'data-rc-review' });
+    if (weak.length) rows.push({ c: 'coral', icon: ICONS.fix, k: 'تثبيت', t: weak.length === 1 ? 'موضع ضعف واحد' : weak.length === 2 ? 'موضعا ضعف' : `${ar(weak.length)} ${weak.length <= 10 ? 'مواضع' : 'موضعًا'} ضعف`, s: 'آيات أخطأت فيها، سمّعها حتى تثبت', act: 'data-rc-review' });
     const doneN = rows.filter(x => x.done).length;
     h += `<div class="pp-h"><b>ورد اليوم</b><small>${ar(doneN)} من ${ar(rows.length)}</small></div>
       <div class="group tq-wird">${rows.map(x => `<button class="row tq-row ${x.c}${x.done ? ' done' : ''}" ${x.act}>${x.edit ? pen(x.edit) : ''}
@@ -2666,9 +2679,9 @@ const Recite = (() => {
 
     // ---- the revisions, the most urgent first (a grid, no row to scroll sideways)
     if (revs.length) {
-      h += `<div class="pp-h"><b>المراجعة</b>${revs.length > 6 ? `<small>${ar(revs.length)} سورة</small>` : ''}<button data-rc-view="revs">الجدول كله</button></div>
-        <div class="tq-revs">${revs.slice(0, 6).map(r => `<button class="pp-rev ${r.due > 0 ? 'late' : r.due === 0 ? 'now' : 'later'}" data-rc-rev="${r.s}">
-          ${pen(r.s)}<small>${r.due > 0 ? `متأخرة ${ar(r.due)}` : r.due === 0 ? 'اليوم' : r.due === -1 ? 'غدًا' : `بعد ${ar(-r.due)} أيام`}</small>
+      h += `<div class="pp-h"><b>سورك</b><small>الأقدم تسميعًا أولًا</small><button data-rc-view="revs">كلها</button></div>
+        <div class="tq-revs">${[...revs].sort((a, b) => a.last - b.last).slice(0, 6).map(r => `<button class="pp-rev ${r.today ? 'later' : r.due > 0 ? 'now' : 'later'}" data-rc-rev="${r.s}">
+          ${pen(r.s)}<small>${r.today ? 'سُمّعت اليوم' : ago(r.last)}</small>
           <b>${suraName(r.s)}</b>
           <span class="pp-str">${[0, 1, 2, 3, 4].map(j => `<i${j < Math.min(5, r.n) ? ' class="on"' : ''}></i>`).join('')}</span></button>`).join('')}</div>`;
     }
@@ -3230,6 +3243,8 @@ const Recite = (() => {
     if (from) { e.stopPropagation(); closeSheet(); start(+from.dataset.rcFrom); return true; }
     if (e.target.closest('[data-rc-find]')) { closeSheet(); if (!G && !F) find(); return true; }
     // the plan's: today's new ayas, a surah's revision, the ayas a day, the surah chosen
+    if (e.target.closest('[data-rc-hifz]')) { openSheet('hifz'); return true; }
+    if (e.target.closest('[data-rc-hzrev]')) { const r = Hifz.today()?.rv; if (r?.left.length) { closeSheet(); start(null, r.left, { kind: 'rev' }); } else openSheet('hifz'); return true; }
     if (e.target.closest('[data-rc-new]')) {
       const pl = planInfo(log());
       if (pl && !pl.finished) { closeSheet(); start(null, pl.portion.length ? pl.portion : [pl.a0], { kind: 'new' }); }
@@ -3482,6 +3497,10 @@ const Recite = (() => {
     const bad = [...new Set(liveErrs().map(k => g.words[k].ai))];
     closeDone();
     if (g.test) { const t = testPick(); if (t) start(null, t, { test: true }); return; }
+    // (the lesson stopped part way: the rest of it; recited whole: the next lesson)
+    if (!bad.length && g.kind === 'new' && g.pos < g.words.length) { start(null, [...new Set(g.words.slice(g.pos).map(w => w.ai))], { kind: 'new', hide: g.hide }); return; }
+    if (!bad.length && g.kind === 'new' && typeof Hifz !== 'undefined') { Hifz.advance(); return; }
+    if (!bad.length && g.kind === 'rev') { openSheet('hifz'); return; }
     if (bad.length) start(null, bad);
     else start(Math.min(g.words[g.pos - 1].ai + 1, R.ayas.length - 1));
   };
