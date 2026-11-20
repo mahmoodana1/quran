@@ -3559,3 +3559,22 @@ body.desk .hz-foot { bottom: 0; }
 :root[data-theme="dark"] .hz2-chg, :root[data-theme="dark"] .hz2-ic, :root[data-theme="dark"] .hz2-steps button.now { color: #8fd3a8; }
 .hz2-more { margin-top: 6px; }
 .hz2-more .row { min-height: 52px; }
+.hz2-how { grid-column: 1 / -1; justify-self: center; margin-top: 6px; font-size: 12px; color: var(--muted); }
+.hz-sm { display: block; margin: -2px 0 8px; font-size: 12px; color: var(--muted); }
+
+/* the khatma: its own length of time, and its pages set by hand */
+.kh-custom .kh-c-row { display: flex; gap: 8px; }
+.kh-custom .kh-c-row input { flex: 1; }
+.kh-custom .kh-c-row select { flex: 1.2; }
+.kh-custom small { font-size: 12px; font-weight: 500; color: var(--accent); line-height: 1.6; }
+.kp { max-height: min(86vh, 760px); display: flex; flex-direction: column; }
+.kp h2 { margin-bottom: 2px; }
+.kp-sum { margin: 0 0 10px; font-size: 12.5px; color: var(--muted); text-align: center; }
+.kp-rows { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; padding: 2px; }
+.kp-row { display: flex; align-items: center; gap: 8px; }
+.kp-row button { flex: none; width: 66px; font-size: 11.5px; font-weight: 700; color: var(--muted); text-align: start; }
+.kp-row span { flex: 1; display: grid; grid-template-columns: repeat(auto-fill, minmax(11px, 1fr)); gap: 2px; direction: rtl; }
+.kp-row i { aspect-ratio: 1; border-radius: 2px; background: var(--tint-2); cursor: pointer; }
+.kp-row i.on { background: var(--p-green); }
+.kp-quick { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 10px 0 2px; }
+.kp-quick button { padding: 5px 12px; border-radius: 999px; font-size: 12.5px; color: var(--ink); background: var(--tint); }

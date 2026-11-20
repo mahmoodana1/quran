@@ -3371,7 +3371,7 @@ function renderShelf() {
         <div class="book-row"><b>${esc(k.name)}</b><button class="dots" data-edit="${k.id}" aria-label="تعديل">•••</button></div>
         <div class="book-sub">${riwayaName(k.riwaya)}</div>
         <div class="prog"><i style="width:${pct}%"></i></div>
-        <div class="book-meta"><span>قرأت ${ar(pagesRead(k))} من ${ar(khatmaTotal(k))} صفحة</span><span>${ar(pct)}٪</span></div>
+        <div class="book-meta"><span data-pages="${k.id}">قرأت ${ar(pagesRead(k))} من ${ar(khatmaTotal(k))} صفحة</span><span>${ar(pct)}٪</span></div>
         ${wardText(k) ? `<div class="book-ward">${wardText(k)}</div>` : ''}
         ${k.done ? `<div class="book-done">✓ ${k.done === 1 ? 'ختمة مكتملة' : `${ar(k.done)} ختمات مكتملة`}</div>` : ''}
       </div>
@@ -3393,6 +3393,8 @@ function openLibrary() {
 $('#libClose').onclick = () => { hide($('#library')); openSheet(libFrom); };
 
 $('#shelf').addEventListener('click', async e => {
+  const pg = e.target.closest('[data-pages]');
+  if (pg) return openPages(KH.find(k => k.id === pg.dataset.pages));
   const t = e.target.closest('[data-open],[data-edit],[data-new]');
   if (!t) return;
   if (t.dataset.edit) return openEditor(KH.find(k => k.id === t.dataset.edit));
@@ -3425,7 +3427,11 @@ function openEditor(k) {
   f.name.value = k ? k.name : `ختمة ${ar(KH.length + 1)}`;
   f.riwaya.innerHTML = META.riwayat.map(r => `<option value="${r.id}">رواية ${r.name}</option>`).join('');
   f.riwaya.value = k ? k.riwaya : 'hafs';
-  f.goal.value = String(k?.goal?.days || 0);
+  // (a goal not among the choices: shown as the reader's own, in days)
+  const gd = k?.goal?.days || 0, listed = [...f.goal.options].some(o => o.value === String(gd));
+  f.goal.value = listed ? String(gd) : 'c';
+  f.gn.value = listed ? 14 : gd; f.gu.value = '1'; f.gd.value = '';
+  customGoal();
   const cover = k ? k.cover : KH.length % COVERS.length;
   $('#swatches').innerHTML = COVERS.map((c, i) =>
     `<label class="sw" style="--c1:${c.bg[0]};--c2:${c.bg[1]};--gold:${c.gold}"><input type="radio" name="cover" value="${i}"${i === cover ? ' checked' : ''}><span></span></label>`).join('');
@@ -3441,7 +3447,23 @@ function updatePreview() {
   const f = $('#khForm');
   $('#khPreview').innerHTML = coverHTML({ name: f.name.value || '—', cover: +f.cover.value }, true);
 }
-$('#khForm').addEventListener('input', () => {
+// the goal in days: one of the choices, or the reader's own (so many days, weeks or months, or until a day)
+function goalDays(f = $('#khForm')) {
+  if (f.goal.value !== 'c') return +f.goal.value;
+  if (f.gd.value) { const d = new Date(f.gd.value + 'T00:00'); return Math.max(1, Math.round((d - Plan.dayStart()) / 864e5) + 1); }
+  return Math.max(1, Math.min(3650, Math.round((+f.gn.value || 1) * +f.gu.value)));
+}
+function customGoal() {
+  const f = $('#khForm'), c = f.goal.value === 'c';
+  $('#khCustom').hidden = !c;
+  if (!c) return;
+  const d = goalDays(f), end = new Date(Date.now() + (d - 1) * 864e5), total = editing ? khatmaTotal(editing) : 604, left = total - (editing ? pagesRead(editing) : 0);
+  $('#khCustomSum').textContent = `${ar(d)} ${d === 1 ? 'يوم' : d === 2 ? 'يومان' : d <= 10 ? 'أيام' : 'يومًا'} · تنتهي ${ar(new Intl.DateTimeFormat('ar', { weekday: 'long', day: 'numeric', month: 'long' }).format(end))} · نحو ${ar(Math.ceil(left / d))} ${Math.ceil(left / d) <= 10 && Math.ceil(left / d) > 2 ? 'صفحات' : 'صفحة'} كل يوم`;
+}
+$('#khForm').addEventListener('input', e => {
+  if (e.target.name === 'gd' && e.target.value) { e.target.form.gn.value = goalDays(); e.target.form.gu.value = '1'; }
+  if (e.target.name === 'gn' || e.target.name === 'gu') e.target.form.gd.value = '';
+  customGoal();
   updatePreview();
   $('#khWarn').hidden = !(editing && $('#khForm').riwaya.value !== editing.riwaya);
 });
@@ -3453,7 +3475,7 @@ $('#khForm').addEventListener('submit', async e => {
   if (editing) {
     const riwayaChanged = editing.riwaya !== f.riwaya.value;
     Object.assign(editing, { name, cover: +f.cover.value });
-    setGoal(editing, +f.goal.value);
+    setGoal(editing, goalDays(f));
     if (riwayaChanged) {
       editing.riwaya = f.riwaya.value;
       editing.mark = null; editing.page = 1; editing.pages = ''; editing.endShown = false;
@@ -3464,7 +3486,7 @@ $('#khForm').addEventListener('submit', async e => {
     renderShelf();
   } else {
     const k = newKhatma(name, f.riwaya.value, +f.cover.value);
-    setGoal(k, +f.goal.value);
+    setGoal(k, goalDays(f));
     KH.push(k); saveKh();
     hide($('#khEdit'));
     await openKhatma(k.id);
@@ -3501,6 +3523,59 @@ $('#khDelete').onclick = async () => {
   saveKh();
   renderShelf();
 };
+
+// the pages read, set by hand (its «قرأت … صفحة» tapped, on the shelf): a page each, a row a juz (or
+// twenty pages, for a riwaya not open), a row's name taking all of it or none. Not counted as today's reading
+let pagesEd = null;
+function openPages(k) {
+  if (!k) return;
+  const total = khatmaTotal(k), m = (k.pages || '').padEnd(total, '0').slice(0, total).split('');
+  let rows = [];
+  if (k.riwaya === R.id) { const at = juzStarts(); for (let j = 1; j <= 30; j++) if (at[j]) rows.push([`الجزء ${ar(j)}`, at[j], (at[j + 1] || total + 1) - 1]); }
+  else for (let p = 1; p <= total; p += 20) rows.push([`${ar(p)}–${ar(Math.min(total, p + 19))}`, p, Math.min(total, p + 19)]);
+  pagesEd = { k, m };
+  let el = $('#khPages');
+  if (!el) {
+    el = document.createElement('section'); el.id = 'khPages'; el.className = 'modal'; el.hidden = true;
+    el.innerHTML = `<div class="card kp"><h2>الصفحات المقروءة</h2><p class="kp-sum"></p><div class="kp-rows"></div>
+      <div class="kp-quick"><button data-kp-all="1">كلها</button><button data-kp-all="0">لا شيء</button><button data-kp-upto>حتى الصفحة التي تقرؤها</button></div>
+      <div class="actions"><button class="primary" data-kp-save>حفظ</button><button data-kp-x>إلغاء</button></div></div>`;
+    document.body.append(el);
+    el.addEventListener('click', e => {
+      const E = pagesEd; if (!E) return;
+      const c = e.target.closest('[data-kp]'), r = e.target.closest('[data-kp-row]');
+      if (c) { const i = +c.dataset.kp - 1; E.m[i] = E.m[i] === '1' ? '0' : '1'; c.classList.toggle('on'); paintPagesSum(); haptic(3); return; }
+      if (r) { const [a, b] = r.dataset.kpRow.split('-').map(Number), on = E.m.slice(a - 1, b).every(x => x === '1'); for (let p = a; p <= b; p++) E.m[p - 1] = on ? '0' : '1'; paintPages(); haptic(5); return; }
+      const all = e.target.closest('[data-kp-all]');
+      if (all) { E.m.fill(all.dataset.kpAll); paintPages(); return; }
+      if (e.target.closest('[data-kp-upto]')) { const to = E.k === K ? S.page : E.k.page || 1; E.m = E.m.map((_, i) => i < to - 1 ? '1' : '0'); paintPages(); return; }
+      if (e.target.closest('[data-kp-x]') || e.target === el) { pagesEd = null; hide(el); return; }
+      if (e.target.closest('[data-kp-save]')) {
+        E.k.pages = E.m.join('');
+        E.k.day = { d: Plan.dayKey(), n0: pagesRead(E.k) }; // (a change by hand is not today's reading)
+        E.k.read = Date.now(); saveKh();
+        pagesEd = null; hide(el); renderShelf();
+        toast(`قرأت ${ar(pagesRead(E.k))} من ${ar(total)} صفحة`);
+      }
+    });
+  }
+  pagesEd.rows = rows;
+  paintPages();
+  show(el);
+}
+function paintPagesSum() {
+  const E = pagesEd, n = E.m.filter(x => x === '1').length;
+  $('#khPages .kp-sum').textContent = `«${E.k.name}» · قرأت ${ar(n)} من ${ar(E.m.length)} صفحة · اضغط صفحة أو اسم صف`;
+}
+function paintPages() {
+  const E = pagesEd;
+  $('#khPages .kp-rows').innerHTML = E.rows.map(([t, a, b]) => {
+    let cells = '';
+    for (let p = a; p <= b; p++) cells += `<i data-kp="${p}" class="${E.m[p - 1] === '1' ? 'on' : ''}" title="${ar(p)}"></i>`;
+    return `<div class="kp-row"><button data-kp-row="${a}-${b}">${t}</button><span>${cells}</span></div>`;
+  }).join('');
+  paintPagesSum();
+}
 
 function showDone() {
   $('#doneCover').innerHTML = coverHTML(K, true);

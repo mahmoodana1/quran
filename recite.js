@@ -1874,7 +1874,9 @@ const Recite = (() => {
     $('#rdAgain').hidden = G.next != null && !list.length;
     $('#rdAgain').classList.toggle('primary', G.next == null);
     // (a lesson recited clean: on to the next one; a revision: back to the day's plan — not on into ayas not memorized)
-    $('#rdAgain').textContent = G.test ? 'اختبار آخر' : list.length ? 'أعد الآيات المخطوءة' : G.kind === 'new' ? (G.pos < G.words.length ? 'أكمل الدرس' : 'إلى الدرس التالي') : G.kind === 'rev' ? 'رجوع إلى الحفظ' : 'تابع من الآية التالية';
+    // (a lesson in rounds, this one recited whole: on to the next round)
+    const round = !list.length && G.kind === 'new' && G.pos >= G.words.length && typeof Hifz !== 'undefined' ? Hifz.chainLabel() : null;
+    $('#rdAgain').textContent = G.test ? 'اختبار آخر' : list.length ? 'أعد الآيات المخطوءة' : round || (G.kind === 'new' ? (G.pos < G.words.length ? 'أكمل الدرس' : 'إلى الدرس التالي') : G.kind === 'rev' ? 'رجوع إلى الحفظ' : 'تابع من الآية التالية');
     if (G.test) { $('#rdAgain').hidden = false; $('#rdAgain').classList.add('primary'); }
   }
 
@@ -3497,6 +3499,7 @@ const Recite = (() => {
     const bad = [...new Set(liveErrs().map(k => g.words[k].ai))];
     closeDone();
     if (g.test) { const t = testPick(); if (t) start(null, t, { test: true }); return; }
+    if (!bad.length && g.kind === 'new' && g.pos >= g.words.length && typeof Hifz !== 'undefined' && Hifz.chainLabel()) { Hifz.chainNext(); return; }
     // (the lesson stopped part way: the rest of it; recited whole: the next lesson)
     if (!bad.length && g.kind === 'new' && g.pos < g.words.length) { start(null, [...new Set(g.words.slice(g.pos).map(w => w.ai))], { kind: 'new', hide: g.hide }); return; }
     if (!bad.length && g.kind === 'new' && typeof Hifz !== 'undefined') { Hifz.advance(); return; }

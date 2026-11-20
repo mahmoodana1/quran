@@ -19,7 +19,7 @@ const Hifz = (() => {
   const view0 = () => view;
   // each: listening, times an aya; whole: then the lesson; rEach / gap: repeating after the reciter, times an
   // aya and the pause (times the aya's length); lEach: linking, times an aya; steps: which are in the routine
-  const DEF = { each: 5, whole: 2, rEach: 3, gap: 1, lEach: 2, rate: 1, hide: true, days: 7, review: true,
+  const DEF = { each: 5, whole: 2, rEach: 3, gap: 1, lEach: 2, rate: 1, hide: true, days: 7, review: true, every: 1,
     steps: { listen: true, repeat: true, link: true, recite: true } };
   const PRESETS = [
     ['light', 'خفيف', 'لمن يحفظ بسرعة', { each: 3, whole: 1, rEach: 2, lEach: 1, gap: 1 }],
@@ -168,6 +168,50 @@ const Hifz = (() => {
       </div>`;
   }
   const listText = list => list.length ? `${ayaLabel(list[0])}${list.length > 1 ? ` – ${R.ayas[list.at(-1)][0] === R.ayas[list[0]][0] ? ar(R.ayas[list.at(-1)][1]) : ayaLabel(list.at(-1))}` : ''}` : '';
+
+  // ---- a lesson in rounds («سمّع بعد كل»): each few ayas listened to, repeated and recited, then the lesson
+  // linked and recited whole. Where it is kept: hifz.chain { k: the lesson, i: the round, fin: the last part, d: day }
+  const chunksOf = (L, n) => { const l = listOf(L), out = []; for (let i = 0; i < l.length; i += n) out.push(l.slice(i, i + n)); return out; };
+  const rounds = (L, o = opts()) => o.steps.recite && o.every && listOf(L).length > o.every;
+  function chainOf(L) {
+    const c = store.get('hifz.chain', null);
+    return c && c.k === lessonKey(L) && c.d === today() ? c : null;
+  }
+  const chunkText = c => `${c.length > 1 ? 'الآيات' : 'الآية'} ${ar(R.ayas[c[0]][1])}${c.length > 1 ? '–' + ar(R.ayas[c.at(-1)][1]) : ''}`;
+  function recite(list, o) { stopAudio(); closeSheet(); Recite.start(null, list, { kind: 'new', hide: o.hide }); }
+  function runRound(L, c) {
+    const o = opts(), all = listOf(L), ch = chunksOf(L, o.every);
+    store.set('hifz.chain', c);
+    if (c.fin) {
+      // the last part: the lesson linked, then recited whole
+      if (o.steps.link && all.length > 1) play(all, { ...stepPlay('link', o), rate: o.rate }, () => recite(all, o));
+      else recite(all, o);
+      return;
+    }
+    const part = ch[c.i], seq = ['listen', 'repeat'].filter(k => o.steps[k]).map(k => ({ ...stepPlay(k, o), name: `${stepPlay(k, o).name} (${ar(c.i + 1)} من ${ar(ch.length)})` }));
+    if (seq.length) play(part, { seq, rate: o.rate }, () => recite(part, o)); else recite(part, o);
+  }
+  // the label of what comes after this round (for التسميع's end screen), or null when the rounds are done
+  function chainLabel() {
+    const L = lesson(), c = chainOf(L), o = opts();
+    if (!c || c.fin || !rounds(L, o)) return null;
+    const ch = chunksOf(L, o.every);
+    return c.i + 1 < ch.length ? `تابع: ${chunkText(ch[c.i + 1])}` : o.steps.link ? 'اربط الدرس ثم سمّعه كله' : 'سمّع الدرس كله';
+  }
+  function chainNext() {
+    const L = lesson(), c = chainOf(L), o = opts();
+    if (!c) return;
+    const ch = chunksOf(L, o.every);
+    if (c.i + 1 < ch.length) runRound(L, { ...c, i: c.i + 1 });
+    else {
+      // (the steps of listening counted as done once every round was gone through)
+      const s = { ...stepsDone(L) };
+      ['listen', 'repeat'].forEach(k => { if (o.steps[k]) s[k] = 1; });
+      store.set('hifz.day', { d: today(), k: lessonKey(L), s });
+      mark(1);
+      runRound(L, { ...c, fin: 1 });
+    }
+  }
 
   // ---- the first time: what is memorized already, where to begin, how long a lesson (once; hifz.setup)
   let undo = null; // («حفظتُ» just tapped: { L, added, t, text }, to take back)
@@ -325,7 +369,9 @@ const Hifz = (() => {
     }
 
     // the lesson: what to do next, one button
+    const rd = rounds(L, o), ch0 = rd && chainOf(L), chs = rd && chunksOf(L, o.every);
     const nx = all ? ['memo', 'إلى الدرس التالي', IC.check]
+      : rd ? ['all', ch0 ? (ch0.fin ? 'سمّع الدرس كله' : `تابع: ${chunkText(chs[ch0.i])}`) : 'ابدأ الجلسة', IC.play]
       : !allPlayed ? ['all', Object.keys(done).length ? 'أكمل الجلسة' : 'ابدأ الجلسة', IC.play]
       : o.steps.recite ? ['recite', 'سمّع من حفظك', IC.mic] : ['memo', 'حفظتُه — إلى التالي', IC.check];
     const act = nx[0] === 'all' ? 'data-hz-all' : nx[0] === 'recite' ? 'data-hz-go="recite"' : 'data-hz-memo';
@@ -334,6 +380,7 @@ const Hifz = (() => {
           <b>${rangeText(L)}</b><span>${ayaN(list.length)} · ${pages(R.ayas[L.a][2], R.ayas[L.b][2])}${have && !all ? ` · حفظت ${ar(have)}` : ''}<button class="hz2-see" data-hz-show>في المصحف</button></span></div>
         <div class="hz2-steps">${on.map(([k, t]) => { const ok = k === 'recite' ? all : done[k]; return `<button class="${ok ? 'ok' : ''}${k === (nx[0] === 'recite' ? 'recite' : '') ? ' now' : ''}" data-hz-go="${k}">${ok ? IC.check : ''}${t}</button>`; }).join('<i></i>')}</div>
         <button class="hz2-big" ${act}>${nx[2]}<span>${nx[1]}</span></button>
+        ${rd && !all ? `<small class="hz2-how">${ch0 && !ch0.fin ? `${ar(ch0.i + 1)} من ${ar(chs.length)} · ` : ''}${o.every === 1 ? 'آيةً آية' : `كل ${ayaN(o.every)}`}: ${[o.steps.listen && 'استمع', o.steps.repeat && 'ردّد', 'سمّع'].filter(Boolean).join('، ')}${o.steps.link ? ' · ثم اربط الدرس' : ''}</small>` : ''}
         ${!all ? '<button class="hz2-memo" data-hz-memo>تحفظه من قبل؟ علّمه وانتقل للتالي</button>' : ''}</section>`;
 
     // the days, in a line
@@ -376,6 +423,8 @@ const Hifz = (() => {
         <div class="hz-sec"><b>التلاوة</b>${chips('rate', 'السرعة', [[0.75, 'أبطأ'], [0.9, 'أبطأ قليلًا'], [1, 'عادية'], [1.25, 'أسرع']], o.rate)}
           <button class="hz-sw hz-o" data-hz-reciter><span>القارئ</span><span class="hz-val">${esc(reciterFull(R.id))} ›</span></button></div>
         <div class="hz-sec"><b>التسميع والمراجعة</b>
+          ${o.steps.recite ? chips('every', 'سمّع من حفظك بعد كل', [[1, 'آية'], [2, 'آيتين'], [3, '٣ آيات'], [5, '٥ آيات'], [0, 'الدرس كله']], o.every) : ''}
+          ${o.steps.recite && o.every ? '<small class="hz-sm">تستمع وتردّد آيةً آية وتسمّعها، ثم تربط الدرس وتسمّعه كله</small>' : ''}
           ${toggle('hide', 'إخفاء الكلمات عند التسميع', o.hide)}
           ${toggle('review', 'إظهار مراجعة اليوم', o.review)}
           ${o.review ? chips('days', 'تُراجَع محفوظاتك القديمة كلها كل', [[3, '٣ أيام'], [5, '٥'], [7, '٧'], [10, '١٠'], [14, '١٤'], [30, '٣٠']], o.days) : ''}</div>
@@ -502,6 +551,12 @@ const Hifz = (() => {
     const v = t.closest('[data-hz-view]');
     if (v) { view = v.dataset.hzView; renderSheet(); $('#sheetBody').scrollTop = 0; haptic(5); return true; }
     const L = lesson(), o = opts(), list = listOf(L);
+    if (t.closest('[data-hz-all]') && rounds(L, o)) {
+      const c = chainOf(L);
+      runRound(L, c || { k: lessonKey(L), i: 0, d: today() });
+      haptic(8);
+      return true;
+    }
     if (t.closest('[data-hz-all]')) {
       // (begun today: the steps not done yet; all done: the whole again)
       const ks0 = STEPS.map(([k]) => k).filter(k => o.steps[k] && k !== 'recite'), dn = stepsDone(L), left = ks0.filter(k => !dn[k]);
@@ -684,5 +739,5 @@ const Hifz = (() => {
     openSheet('hifz');
   }
 
-  return { advance, fromAya, today: today_, fromPlan, check, panelHTML, onClick, onChange, mounted, reset, learnSura, view: view0, setView: v => { view = v; } };
+  return { chainLabel, chainNext, advance, fromAya, today: today_, fromPlan, check, panelHTML, onClick, onChange, mounted, reset, learnSura, view: view0, setView: v => { view = v; } };
 })();

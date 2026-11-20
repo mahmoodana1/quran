@@ -230,7 +230,13 @@
         <option value="0">بلا مدة</option><option value="3">٣ أيام</option><option value="7">أسبوع</option><option value="10">١٠ أيام</option>
         <option value="15">١٥ يومًا</option><option value="20">٢٠ يومًا</option><option value="30">شهر (جزء كل يوم)</option>
         <option value="40">٤٠ يومًا</option><option value="60">شهرين</option><option value="90">٣ أشهر</option><option value="180">٦ أشهر</option><option value="365">سنة</option>
+        <option value="c">مدة أخرى…</option>
       </select></label>
+      <div class="field kh-custom" id="khCustom" hidden><span>في</span>
+        <div class="kh-c-row"><input name="gn" type="number" inputmode="numeric" min="1" max="999" value="14" aria-label="العدد">
+          <select name="gu" aria-label="الوحدة"><option value="1">يوم</option><option value="7">أسبوع</option><option value="30">شهر</option></select></div>
+        <span>أو حتى يوم</span><input name="gd" type="date" aria-label="حتى يوم">
+        <small id="khCustomSum"></small></div>
     </div>
     <p id="khWarn" class="kh-warn" hidden>تغيير الرواية يعيد الختمة إلى الصفحة الأولى.</p>
     <div class="fields"><div class="field"><span>الغلاف</span><div id="swatches" class="swatches"></div></div></div>
