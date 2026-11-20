@@ -65,7 +65,8 @@ const Marks = (() => {
       e.classList.add('mkd'); e.style.setProperty('--mc', `var(--rb-${cs[0].id})`); e.style.setProperty('--mi', `var(--rb-${cs[0].id}-i)`);
     });
     // the header: the ribbons on this page
-    root.querySelectorAll('.page').forEach(p => {
+    // (root may be the page itself, as it is built)
+    [...(root.matches?.('.page') ? [root] : []), ...root.querySelectorAll('.page')].forEach(p => {
       const tags = p.querySelector('.rb-tags');
       if (!tags) return;
       const n = +p.dataset.page, here = placed().filter(c => pageOfH(rb()[c.id].h) === n);
@@ -75,10 +76,11 @@ const Marks = (() => {
       tags.innerHTML = here.map(c => `<i class="rb-${c.id}" title="${esc(nameOf(c))}"></i>`).join('');
       tags.hidden = !here.length;
     });
-    if (root === document || root.isConnected) bands(root);
+    // (the bands: drawBands, once the page is in the document)
   }
   // a band of the ribbon's colour behind each line of its aya, and a bar at the line's edge
   function bands(root) {
+    if (root !== document && !root.isConnected) return;
     const want = new Map();
     for (const c of placed()) { const ai = aiOf(rb()[c.id].h); if (ai != null) want.set(ai, [...(want.get(ai) || []), c.id]); }
     root.querySelectorAll('.mkb, .mk-edge').forEach(el => { if (want.get(+el.dataset.a)?.join() !== el.dataset.k) el.remove(); });
@@ -233,5 +235,5 @@ const Marks = (() => {
   // (Enter in a name: done)
   document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches?.('.rb-name')) e.target.blur(); });
 
-  return { C, paint, onOpen, onBar, palette: openPalette, pick, panelHTML, onSheetClick, onChange, on, placed };
+  return { C, paint, bands, onOpen, onBar, palette: openPalette, pick, panelHTML, onSheetClick, onChange, on, placed };
 })();

@@ -688,6 +688,9 @@ function drawBands(root) {
     h.style.width = (r - l + pad * 2) + 'px';
     ln.prepend(h);
   }
+  // the coloured ribbons' bands too, wherever bands are drawn (a page put in once its font is in, a page
+  // slid in): not only once something else paints the page
+  if (typeof Marks !== 'undefined') Marks.bands(root);
 }
 
 // ---------------------------------------------------------------- paging
