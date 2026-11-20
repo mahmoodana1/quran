@@ -141,3 +141,16 @@ test('ribbon: new ground only, by day, a new round afresh', () => {
   assert.equal(round.week, 6);
   assert.equal(Plan.ribbon([], pageOf, NOW), null);
 });
+
+test('ribbons from two devices: each as moved last, names as renamed last, both logs kept', () => {
+  const a = { red: { h: 10, t: 100, log: [[5, 50], [10, 100]], name: 'ورد', nt: 300 }, blue: { h: 7, t: 90, log: [[7, 90]] }, green: { h: null, t: 500, log: [[3, 20]] } };
+  const b = { red: { h: 40, t: 200, log: [[5, 50], [40, 200]] }, green: { h: 3, t: 20, log: [[3, 20]] }, purple: { h: 1, t: 5, log: [[1, 5]] } };
+  const m = Plan.mergeRibbons(a, b);
+  assert.equal(m.red.h, 40);
+  assert.deepEqual(m.red.log, [[5, 50], [10, 100], [40, 200]]);
+  assert.equal(m.red.name, 'ورد');
+  assert.equal(m.blue.h, 7);
+  assert.equal(m.green.h, null);           // lifted on one device after: stays lifted
+  assert.equal(m.purple.h, 1);
+  assert.equal(Plan.mergeRibbons(undefined, undefined), undefined);
+});

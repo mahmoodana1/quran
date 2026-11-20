@@ -196,22 +196,22 @@ svg { fill: currentColor; }
 
 /* ---------- the coloured ribbons (marks.js) ---------- */
 :root {
-  --rb-red: #e63946; --rb-red-i: #c81d2a;
-  --rb-orange: #f77f00; --rb-orange-i: #c25e00;
-  --rb-yellow: #f5b700; --rb-yellow-i: #a07300;
-  --rb-green: #16a34a; --rb-green-i: #0e7c37;
-  --rb-blue: #1d7fe8; --rb-blue-i: #1462bf;
-  --rb-purple: #9d4edd; --rb-purple-i: #7a2dbd;
-  --rb-a: 20%;
+  --rb-red: #c0504d; --rb-red-i: #9a3b38;
+  --rb-orange: #d08a3e; --rb-orange-i: #a2651f;
+  --rb-yellow: #c9a43a; --rb-yellow-i: #87691a;
+  --rb-green: #4f8f63; --rb-green-i: #386b48;
+  --rb-blue: #4b7ba8; --rb-blue-i: #355e87;
+  --rb-purple: #8a6aa8; --rb-purple-i: #6a4d8a;
+  --rb-a: 13%;
 }
 :root[data-theme="dark"] {
-  --rb-red: #ff5c66; --rb-red-i: #ff7a82;
-  --rb-orange: #ff9b30; --rb-orange-i: #ffad55;
-  --rb-yellow: #ffd23f; --rb-yellow-i: #ffd23f;
-  --rb-green: #34d374; --rb-green-i: #5ee08f;
-  --rb-blue: #4ea4ff; --rb-blue-i: #74b8ff;
-  --rb-purple: #c084fc; --rb-purple-i: #cf9dfd;
-  --rb-a: 26%;
+  --rb-red: #d4827e; --rb-red-i: #e09a96;
+  --rb-orange: #dc9f63; --rb-orange-i: #e6b47f;
+  --rb-yellow: #d6bc63; --rb-yellow-i: #e0ca80;
+  --rb-green: #7fb38e; --rb-green-i: #98c4a5;
+  --rb-blue: #82a8cf; --rb-blue-i: #9dbbdb;
+  --rb-purple: #b098c9; --rb-purple-i: #c2aed6;
+  --rb-a: 17%;
 }
 .rb-red { --mc: var(--rb-red); --mi: var(--rb-red-i); }
 .rb-orange { --mc: var(--rb-orange); --mi: var(--rb-orange-i); }
@@ -224,20 +224,19 @@ svg { fill: currentColor; }
 .mkb {
   position: absolute; z-index: -1; top: 4%; bottom: 4%; border-radius: .3em; pointer-events: none;
   background: color-mix(in srgb, var(--mc) var(--rb-a), transparent);
-  box-shadow: inset 0 -.08em 0 color-mix(in srgb, var(--mc) 80%, transparent);
+  box-shadow: inset 0 -.05em 0 color-mix(in srgb, var(--mc) 50%, transparent);
   animation: hlIn .35s ease;
 }
-.mk-edge { position: absolute; top: 10%; bottom: 10%; right: -7px; width: 4px; border-radius: 2px; pointer-events: none; }
+.mk-edge { position: absolute; top: 14%; bottom: 14%; right: -6px; width: 3px; border-radius: 2px; pointer-events: none; opacity: .75; }
 .w.end.mkd, .w.end.mkd.sel {
-  color: var(--mi); -webkit-text-stroke-width: .03em;
-  filter: drop-shadow(0 0 .12em color-mix(in srgb, var(--mc) 60%, transparent));
+  color: var(--mi); -webkit-text-stroke-width: .02em;
 }
 .w.end.mkd.play { color: var(--ok); }
 /* the ribbons on a page, hanging from the top of the screen into its header */
 .phead .side { align-self: stretch; }
 .rb-tags {
   align-self: flex-start; display: flex; gap: 3px; margin-top: calc(-1 * env(safe-area-inset-top)); margin-inline-end: -8px;
-  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, .25));
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .15));
 }
 .rb-tags[hidden] { display: none; }
 .rb-tags i {
@@ -258,9 +257,9 @@ svg { fill: currentColor; }
 .mk-pal i {
   position: relative; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center;
   background: var(--mc); color: #fff; transition: transform .15s ease, box-shadow .2s ease;
-  box-shadow: 0 2px 6px color-mix(in srgb, var(--mc) 40%, transparent);
+  box-shadow: 0 1px 3px color-mix(in srgb, var(--mc) 30%, transparent);
 }
-.mk-pal .rb-yellow i { color: #3a2a00; }
+.mk-pal .rb-yellow i { color: #fff; }
 .mk-pal button:active i { transform: scale(.9); }
 .mk-pal button.on i { box-shadow: 0 0 0 3px var(--surface), 0 0 0 5.5px var(--mc); }
 .mk-pal i svg { width: 20px; height: 20px; }
@@ -286,8 +285,8 @@ svg { fill: currentColor; }
 .rb-ends { display: flex; justify-content: space-between; font-size: 11px; color: var(--faint); padding: 0 6px; }
 .rb-card {
   position: relative; margin-bottom: 12px; padding: 14px 18px 12px 16px; border-radius: 18px; overflow: hidden;
-  background: linear-gradient(270deg, color-mix(in srgb, var(--mc) 11%, var(--surface)), var(--surface) 65%);
-  border: .5px solid color-mix(in srgb, var(--mc) 35%, var(--line)); box-shadow: inset -5px 0 0 var(--mc), 0 1px 2px rgba(60, 40, 10, .05);
+  background: linear-gradient(270deg, color-mix(in srgb, var(--mc) 6%, var(--surface)), var(--surface) 60%);
+  border: .5px solid color-mix(in srgb, var(--mc) 22%, var(--line)); box-shadow: inset -4px 0 0 var(--mc), 0 1px 2px rgba(60, 40, 10, .05);
 }
 .rb-card:active { transform: scale(.995); }
 .rb-top { display: flex; align-items: center; gap: 10px; }
@@ -309,14 +308,15 @@ svg { fill: currentColor; }
 .rb-stats .up b { color: var(--mi); }
 .rb-days { display: flex; align-items: flex-end; gap: 3px; height: 30px; }
 .rb-days i { flex: 1; border-radius: 3px; background: var(--tint-2); }
-.rb-days i.g { background: color-mix(in srgb, var(--mc) 65%, transparent); }
+.rb-days i.g { background: color-mix(in srgb, var(--mc) 55%, transparent); }
 .rb-days i.now { box-shadow: 0 0 0 1.5px var(--mc); }
 .rb-days i.now.g { background: var(--mc); }
 .rb-acts { display: flex; gap: 8px; margin-top: 12px; }
 .rb-acts button { padding: 9px 16px; border-radius: 12px; font-size: 14px; font-weight: 600; }
 .rb-acts .go { flex: 1; background: var(--mc); color: #fff; }
-.rb-yellow .rb-acts .go { color: #3a2a00; }
+.rb-yellow .rb-acts .go { color: #fff; }
 .rb-acts .del { color: var(--muted); background: var(--tint); }
+:root[data-theme="dark"] .rb-acts .go, :root[data-theme="dark"] .mk-pal button:not(.fav) i, :root[data-theme="dark"] .acts-row button.rbd i { color: #1b1813; }
 .rb-free { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 4px 10px; }
 .rb-free button { display: flex; align-items: center; gap: 7px; padding: 6px 14px 6px 12px; border-radius: 16px; background: var(--tint); font-size: 13px; color: var(--ink); }
 .rb-free i { width: 12px; height: 12px; border-radius: 50%; background: var(--mc); }

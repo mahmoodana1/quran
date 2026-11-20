@@ -262,7 +262,26 @@ const Plan = (() => {
     return { page: pageOf(log[log.length - 1][0]), today: daily[n - 1], week, daily, perDay: week / 7, since: log[0][1] };
   }
 
-  return { DAY, dayKey, mergeRecite, mergeDays, dayNo, dayStart, revision, ribbon, pageRuns, streak, lastDays, ward, hijri, MONTHS, OCCASIONS, occasions, month, ics };
+  // a khatma's ribbons (k.rb: { colour: { h, t, name, nt, log } }) from two devices: each ribbon as
+  // it was moved (or lifted) last, its name as renamed last, the moves of both kept
+  function mergeRibbons(a, b, keep = 400) {
+    if (!a && !b) return undefined;
+    const out = {};
+    for (const id of new Set([...Object.keys(a || {}), ...Object.keys(b || {})])) {
+      const x = a?.[id], y = b?.[id];
+      if (!x || !y) { out[id] = x || y; continue; }
+      const [o, n] = (x.t || 0) > (y.t || 0) ? [y, x] : [x, y];
+      const seen = new Set(), log = [];
+      for (const m of [...(o.log || []), ...(n.log || [])].sort((p, q) => p[1] - q[1])) { const k = m[0] + ':' + m[1]; if (!seen.has(k)) { seen.add(k); log.push(m); } }
+      const named = (x.nt || 0) > (y.nt || 0) ? x : (y.nt || 0) > (x.nt || 0) ? y : n;
+      out[id] = { ...n, log: log.slice(-keep) };
+      if (named.name) out[id].name = named.name; else delete out[id].name;
+      if (named.nt) out[id].nt = named.nt;
+    }
+    return out;
+  }
+
+  return { DAY, dayKey, mergeRibbons, mergeRecite, mergeDays, dayNo, dayStart, revision, ribbon, pageRuns, streak, lastDays, ward, hijri, MONTHS, OCCASIONS, occasions, month, ics };
 })();
 
 if (typeof module !== 'undefined') module.exports = Plan;

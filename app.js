@@ -2314,7 +2314,7 @@ function settingsHTML() {
 
     <div class="group-label" id="set-look">المظهر</div>
     <div class="themes">${themes}</div>
-    <div class="group">${switchRow('lite', 'مظهر خفيف', 'بلا ضبابية خلف الأشرطة ولا حركات مستمرة: أسلس على الهواتف المتوسطة والقديمة')}</div>
+    <div class="group">${switchRow('lite', 'مظهر خفيف', 'بلا ضبابية خلف الأشرطة ولا حركات مستمرة: أسلس على الهواتف المتوسطة والقديمة')}${S.desk ? '' : switchRow('norotate', 'إيقاف التدوير التلقائي', IOS ? 'على iPhone وiPad لا يسمح النظام لتطبيق ويب بتثبيت الاتجاه: ثبّته من «قفل اتجاه الشاشة» في مركز التحكم' : `تبقى الشاشة ${rotLockName()} ولو أدرت الهاتف`)}</div>
 
     <div class="group-label">الختمة</div>
     <div class="group"><button class="row" data-open-lib><span class="mini-cover">${coverHTML(K, true)}</span>
@@ -2447,6 +2447,37 @@ async function syncAwake() {
 }
 document.addEventListener('visibilitychange', syncAwake);
 syncAwake();
+
+// auto rotation turned off: the screen held the way it was when it was turned off (rot.lock),
+// through screen.orientation.lock, which Android allows the installed app (not a browser tab, and
+// no iPhone: there the phone's own rotation lock is the way, said under the switch)
+const IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const rotNow = () => (screen.orientation?.type || (innerWidth > innerHeight ? 'landscape-primary' : 'portrait-primary'));
+const rotLockName = () => !store.get('rot.lock', '') ? 'على اتجاهها الآن (عمودية أو أفقية)' : store.get('rot.lock').startsWith('landscape') ? 'أفقية' : 'عمودية';
+async function syncRotate(byHand = false) {
+  const so = screen.orientation;
+  if (!store.get('norotate', false)) {
+    store.set('rot.lock', '');
+    try { so?.unlock?.(); } catch {}
+    return;
+  }
+  if (byHand || !store.get('rot.lock', '')) store.set('rot.lock', rotNow());
+  try {
+    if (!so?.lock) throw new Error('no lock');
+    await so.lock(store.get('rot.lock'));
+    if (byHand) toast(`ثُبّتت الشاشة ${rotLockName()}`);
+  } catch {
+    if (!byHand) return;
+    // (not allowed here: the switch back off, and why)
+    store.set('norotate', false); store.set('rot.lock', '');
+    const sw = document.querySelector('[data-switch="norotate"]');
+    if (sw) { sw.setAttribute('aria-checked', false); sw.querySelector('.tog').classList.remove('on'); }
+    toast(IOS ? 'لا يسمح iPhone بذلك لتطبيق ويب: استعمل «قفل اتجاه الشاشة» في مركز التحكم'
+      : 'لا يمكن تثبيت الاتجاه هنا: ثبّت التطبيق على الشاشة الرئيسية أو استعمل قفل التدوير في الهاتف', 4200);
+  }
+}
+document.addEventListener('visibilitychange', () => { if (!document.hidden) syncRotate(); });
+syncRotate();
 
 // the app's version, and the room its downloads take
 function refreshAppInfo() {
@@ -3182,6 +3213,7 @@ $('#sheetBody').addEventListener('click', async e => {
     store.set(id, on);
     sw.setAttribute('aria-checked', on); sw.querySelector('.tog').classList.toggle('on', on);
     if (id === 'awake') syncAwake();
+    if (id === 'norotate') syncRotate(true).then(() => { const s = sw.querySelector('.s'); if (s && !IOS) s.textContent = `تبقى الشاشة ${rotLockName()} ولو أدرت الهاتف`; });
     if (id === 'lite') document.documentElement.classList.toggle('lite', on);
     return;
   }

@@ -142,13 +142,23 @@ const Marks = (() => {
       setTimeout(() => { if (S.act === i) closeActions(); }, was ? 250 : 420);
       return true;
     }
-    if (e.target.closest('[data-act=bookmark]')) {
-      if (box.hidden) { box.innerHTML = palette(i); box.hidden = false; } else box.hidden = true;
-      $('#ayaBar [data-act=bookmark]').classList.toggle('open', !box.hidden);
-      if (typeof keepClear === 'function') keepClear();
-      return true;
-    }
+    if (e.target.closest('[data-act=bookmark]')) { openPalette(box.hidden); return true; }
     return false;
+  }
+  // open (or close) the palette on the aya open in the bar
+  function openPalette(open = true) {
+    if (S.act == null) return;
+    const box = $('#ayaBarMk');
+    if (open) { box.innerHTML = palette(S.act); box.hidden = false; } else box.hidden = true;
+    $('#ayaBar [data-act=bookmark]').classList.toggle('open', !box.hidden);
+    if (typeof keepClear === 'function') keepClear();
+  }
+  // the n-th colour (7: «احفظها») picked from the keyboard, when the palette is open
+  function pick(n) {
+    const box = $('#ayaBarMk');
+    if (S.act == null || box.hidden || $('#ayaBar').hidden) return false;
+    box.querySelectorAll('[data-mk]')[n - 1]?.click();
+    return true;
   }
   function afterChange() {
     if (typeof refreshHeader === 'function') refreshHeader();
@@ -214,6 +224,7 @@ const Marks = (() => {
     const id = n.dataset.rbName, v = n.value.trim().slice(0, 28), c = C.find(x => x.id === id);
     const ent = rb()[id] ||= { log: [] };
     ent.name = v && v !== 'الشريط ' + c.name ? v : undefined;
+    ent.nt = Date.now();
     K.read = Date.now(); saveKh();
     n.value = nameOf(c);
     paintMarks();
@@ -222,5 +233,5 @@ const Marks = (() => {
   // (Enter in a name: done)
   document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.matches?.('.rb-name')) e.target.blur(); });
 
-  return { C, paint, onOpen, onBar, panelHTML, onSheetClick, onChange, on, placed };
+  return { C, paint, onOpen, onBar, palette: openPalette, pick, panelHTML, onSheetClick, onChange, on, placed };
 })();

@@ -40,7 +40,7 @@ const Desk = (() => {
     ]],
     ['الآيات', [
       ['↓ / ↑', 'الآية التالية / السابقة'], ['Enter', 'خيارات الآية المحددة'], ['T', 'تفسير الآية'], ['A', 'سبب نزول الآية'], ['M', 'الآيات المتشابهة'],
-      ['B', 'علامة على الآية أو الصفحة'], ['C', 'نسخ الآية'], ['نقرتان', 'معنى الكلمة ونطقها'],
+      ['B', 'الأشرطة الملوّنة للآية (ثم ١–٦، و٧ لحفظها)، أو علامة الصفحة'], ['C', 'نسخ الآية'], ['نقرتان', 'معنى الكلمة ونطقها'],
     ]],
     ['الاستماع والتسميع', [
       ['Space', 'تشغيل التلاوة / إيقافها'], ['N / P', 'الآية التالية / السابقة في التلاوة'], ['R', 'سمّع من الآية المحددة'], ['V', 'ابحث بصوتك عن آية'],
@@ -252,7 +252,10 @@ const Desk = (() => {
     playFrom(sel() ?? pageInfo(base(S.page)).first);
   }
   function mark() {
-    if (S.act != null) toggleSave(S.act); else toggleBookmark(S.page);
+    // an aya chosen: the coloured ribbons' palette (then 1–6, 7 to save it); else the page's bookmark
+    const i = sel();
+    if (i != null && typeof Marks !== 'undefined') { if (S.act !== i) { $('#ayaBar')._key = null; openActions(i); } Marks.palette(true); }
+    else if (S.act != null) toggleSave(S.act); else toggleBookmark(S.page);
   }
   // the aya chosen with the keys: lit, its card or its tafsir following if one is open
   function step(d) {
@@ -466,6 +469,8 @@ const Desk = (() => {
       return;
     }
     const rec = Recite.active();
+    // (the ribbons' palette open: a digit picks a colour)
+    if (/^[1-7١-٧]$/.test(k) && typeof Marks !== 'undefined' && Marks.pick(+String('١٢٣٤٥٦٧'.indexOf(k) + 1 || k))) { done(); return; }
     switch (k) {
       case 'ArrowLeft': case 'PageDown': done(); turn(1); break;
       case 'ArrowRight': case 'PageUp': done(); turn(-1); break;

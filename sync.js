@@ -120,7 +120,15 @@ const Sync = (() => {
   // the khatmas of two devices: each one as it is where it was read last; one deleted anywhere, gone
   function mergeKh(a, b, gone) {
     const by = new Map();
-    for (const k of [...a, ...b]) { if (!k?.id || gone.includes(k.id)) continue; const o = by.get(k.id); if (!o || (k.read || 0) > (o.read || 0)) by.set(k.id, k); }
+    for (const k of [...a, ...b]) {
+      if (!k?.id || gone.includes(k.id)) continue;
+      const o = by.get(k.id);
+      if (!o) { by.set(k.id, k); continue; }
+      const [old, nw] = (k.read || 0) > (o.read || 0) ? [o, k] : [k, o];
+      // (the coloured ribbons: each one as it was moved last, on whichever device)
+      const rb = typeof Plan !== 'undefined' && (old.rb || nw.rb) ? Plan.mergeRibbons(old.rb, nw.rb) : nw.rb;
+      by.set(k.id, rb ? { ...nw, rb } : nw);
+    }
     return [...by.values()].sort((x, y) => (x.created || 0) - (y.created || 0));
   }
   const parse = (s, d) => { try { const v = JSON.parse(s); return v ?? d; } catch { return d; } };
@@ -153,7 +161,7 @@ const Sync = (() => {
     };
     // a device signing in for the first time, its own khatma never read in: the reader's khatmas
     // take its place (not a second «ختمتي» beside theirs), opened where they were left
-    const untouched = k => (k.page || 1) <= 1 && !k.bookmarks?.length && !(k.pages || '').includes('1') && !k.done;
+    const untouched = k => (k.page || 1) <= 1 && !k.bookmarks?.length && !Object.values(k.rb || {}).some(r => r?.h != null) && !(k.pages || '').includes('1') && !k.done;
     const lk0 = parse(local.khatmas, []), fresh = !forced && ls.get('sync.met', '') !== auth.uid && remote.khatmas && lk0.some(untouched) && parse(remote.khatmas.v, []).length > 0;
     for (const k of new Set([...Object.keys(remote), ...Object.keys(local)])) {
       if (!SYNCED.test(k) || k === 'khatmas' || k === 'kh.gone') continue;
