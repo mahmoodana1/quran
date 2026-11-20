@@ -238,7 +238,31 @@ const Plan = (() => {
     return out;
   }
 
-  return { DAY, dayKey, mergeRecite, mergeDays, dayNo, dayStart, revision, pageRuns, streak, lastDays, ward, hijri, MONTHS, OCCASIONS, occasions, month, ics };
+  // a coloured ribbon's moves (log: [[hafs aya, when], …], oldest first) as pages gone forward: today,
+  // this week, each of the last n days (daily, oldest first) and a day's pace over the week. Only new
+  // ground counts: moved back and forward again over the same pages is not counted twice, and moved back
+  // further than back pages (a new round of the mushaf) starts afresh from there.
+  function ribbon(log, pageOf, now = Date.now(), n = 14, back = 20) {
+    if (!log?.length) return null;
+    const first = pageOf(log[0][0]);
+    const at = t => { let p = first; for (const [h, w] of log) { if (w > t) break; p = pageOf(h); } return p; };
+    const gain = (from, to) => {
+      let hi = at(from), g = 0;
+      for (const [h, w] of log) {
+        if (w <= from) continue;
+        if (w > to) break;
+        const p = pageOf(h);
+        if (p > hi) { g += p - hi; hi = p; } else if (p < hi - back) hi = p;
+      }
+      return g;
+    };
+    const t0 = dayStart(now), daily = [];
+    for (let k = n - 1; k >= 0; k--) { const s = t0 - k * DAY; daily.push(gain(s - 1, s + DAY - 1)); }
+    const week = gain(t0 - 6 * DAY - 1, now);
+    return { page: pageOf(log[log.length - 1][0]), today: daily[n - 1], week, daily, perDay: week / 7, since: log[0][1] };
+  }
+
+  return { DAY, dayKey, mergeRecite, mergeDays, dayNo, dayStart, revision, ribbon, pageRuns, streak, lastDays, ward, hijri, MONTHS, OCCASIONS, occasions, month, ics };
 })();
 
 if (typeof module !== 'undefined') module.exports = Plan;

@@ -541,7 +541,7 @@ function renderPage(p) {
   let html = `<header class="phead">
     <button class="sura-btn" data-act="suras"><span>${suraName(fa[0])}</span><i class="chev">${icon('chev')}</i></button>
     <span class="pnum">${ar(p)}</span>
-    <div class="side"><span class="juz">الجزء ${ar(fa[3])}</span><button class="bm-btn${marked ? ' on' : ''}" data-act="bm" aria-label="علامة">${icon(marked ? 'bmOn' : 'bm')}</button></div>
+    <div class="side"><span class="rb-tags" data-act="marks" role="button" aria-label="الأشرطة الملوّنة" hidden></span><span class="juz">الجزء ${ar(fa[3])}</span><button class="bm-btn${marked ? ' on' : ''}" data-act="bm" aria-label="علامة">${icon(marked ? 'bmOn' : 'bm')}</button></div>
   </header>${ORNAMENT}<div class="lines" style="font-family:${R.glyph ? `qcf-p${p}` : R.font}">`;
 
   const n = opening ? lines.reduce((m, l, i) => (l ? i + 1 : m), 0) : 15;
@@ -588,6 +588,7 @@ function paintMarks(root = document) {
   root.querySelectorAll('.w.end').forEach(e => { if (saved.has(+e.dataset.a)) e.classList.add('sel'); });
   if (S.play != null) root.querySelectorAll(`.w.end[data-a="${S.play}"]`).forEach(e => e.classList.add('play'));
   if (typeof Recite !== 'undefined') Recite.paint(root);
+  if (typeof Marks !== 'undefined') Marks.paint(root);
   // bands need layout: pages not yet in the document get them on insertion
   if (root === document || root.isConnected) drawBands(root);
   keepClear();
@@ -950,6 +951,7 @@ wordAudio.addEventListener('error', () => { sayEl?.classList.remove('say'); if (
     if (act) {
       const a = act.dataset.act;
       if (a === 'index' || a === 'suras') openSheet(); // (the panel last open, as it was left)
+      else if (a === 'marks') openSheet('marks');
       else if (a === 'bm') toggleBookmark(+act.closest('.page')?.dataset.page || S.page);
       else if (a === 'mic') Recite.mic();
       return;
@@ -1275,6 +1277,8 @@ function openActions(i) {
   $('#ayaBarTitle').textContent = ayaLabel(i);
   $('#ayaBar [data-act=bookmark] span').textContent = isSaved(i) ? 'محفوظة' : 'علامة';
   $('#ayaBar [data-act=bookmark]').classList.toggle('on', isSaved(i));
+  $('#ayaBar [data-act=bookmark]').classList.remove('open');
+  if (typeof Marks !== 'undefined') Marks.onOpen(i);
   const card = typeof Recite !== 'undefined' ? Recite.card(i) : '';
   $('#ayaBarRc').innerHTML = card;
   $('#ayaBarRc').hidden = !card;
@@ -1316,6 +1320,8 @@ $('#ayaBar').addEventListener('click', async e => {
   const wd = e.target.closest('[data-rc-word]');
   // a word got wrong, in the aya's card: its own card instead
   if (wd) { const [ai, wi] = wd.dataset.rcWord.split(':').map(Number); Recite.showWord(ai, wi, el => WordCard.open(el)); return; }
+  // «علامة»: the coloured ribbons' palette (marks.js)
+  if (typeof Marks !== 'undefined' && Marks.onBar(e)) return;
   const b = e.target.closest('[data-act]');
   if (!b || S.act == null) return;
   const i = S.act;
@@ -1327,7 +1333,7 @@ $('#ayaBar').addEventListener('click', async e => {
     try { await navigator.clipboard.writeText(`${txt} ﴿${suraName(a[0])}: ${ar(a[1])}﴾`); toast('تم النسخ'); }
     catch { toast('تعذر النسخ'); }
   }
-  if (b.dataset.act === 'bookmark') { toggleSave(i); closeActions(); }
+  if (b.dataset.act === 'bookmark' && typeof Marks === 'undefined') { toggleSave(i); closeActions(); }
   if (b.dataset.act === 'tafsir') openTafsir(i, 'tafsir');
   if (b.dataset.act === 'similar') openTafsir(i, 'similar');
   if (b.dataset.act === 'close') closeActions();
@@ -3041,7 +3047,7 @@ const PLACES = [
   ['hifz', 'الحفظ', 'احفظ آيات جديدة: استمع، ردّد، اربط، سمّع', 'حفظ احفظ تحفيظ تكرار ترديد ربط درس منزل سبق سبقي مراجعه'],
   ['recite', 'التسميع', 'سمّع من حفظك ونتابعك ونصحح', 'تسميع حفظ محفوظ مراجعه اختبار اخطاء تلاوه'],
   ['adhkar', 'الأذكار', 'الصباح والمساء والنوم وغيرها', 'اذكار ذكر ادعيه دعاء صباح مساء نوم'],
-  ['marks', 'العلامات', 'الآيات التي علّمتها', 'علامات علامه محفوظات مفضله'],
+  ['marks', 'العلامات', 'الأشرطة الملوّنة وتقدّمها، والآيات المحفوظة', 'علامات علامه محفوظات مفضله شريط اشرطه شرائط الوان لون تقدم'],
   ['lib', 'ختماتي', 'ختماتك وتقدّمك في كل منها', 'ختمه ختمات مكتبه'],
   ['settings:reciter', 'القارئ', 'اختر صوت التلاوة واستمع إلى نماذج', 'قارئ قراء قاري شيخ مشايخ صوت تلاوه استماع عفاسي سديس شريم معيقلي دوسري منشاوي حصري عبدالباسط غامدي عجمي قطامي'],
   ['settings', 'الرواية', 'حفص، ورش، قالون، وغيرها', 'روايه روايات قراءه قراءات حفص شعبه ورش قالون دوري سوسي بزي قنبل'],
@@ -3118,8 +3124,8 @@ function renderSheet() {
     html = Hifz.panelHTML();
   } else if (tab === 'marks') {
     const list = bookmarks();
-    html = khatmaRowHTML();
-    if (!list.length) html += '<div class="empty"><svg viewBox="0 0 24 24"><path d="M6.5 4.5h11v15.5l-5.5-3.8-5.5 3.8z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg><b>لا توجد علامات بعد</b>اضغط رقم آية ثم «علامة» لحفظها هنا.</div>';
+    html = khatmaRowHTML() + Marks.panelHTML() + '<div class="group-label">الآيات المحفوظة</div>';
+    if (!list.length) html += '<div class="empty sm"><svg viewBox="0 0 24 24"><path d="M12 3.8l2.5 5.2 5.6.7-4.1 3.9 1 5.6-5-2.7-5 2.7 1-5.6-4.1-3.9 5.6-.7z" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg><b>لا توجد آيات محفوظة بعد</b>اضغط رقم آية ثم «علامة» ثم «احفظها»، لتجمع هنا ما شئت من الآيات.</div>';
     else {
       html += '<div class="group">' + list.map((b, k) => {
         const name = META.riwayat.find(r => r.id === b.r)?.name || b.r;
@@ -3159,12 +3165,14 @@ $('#sheetBody').addEventListener('change', e => {
   const sel = e.target.closest('[data-pr]');
   if (sel) Prayer.onChange(sel);
   if (Extras.onChange(e)) return;
+  if (Marks.onChange(e)) return;
   if (typeof Recite !== 'undefined' && Recite.onChange(e)) return;
   Hifz.onChange(e);
 });
 $('#sheetBody').addEventListener('click', async e => {
   if (typeof Sync !== 'undefined' && e.target.closest('#syncCard') && Sync.onClick(e)) return;
   if (Extras.onClick(e)) return;
+  if (tab === 'marks' && !$('#q').value.trim() && Marks.onSheetClick(e)) return;
   const th = e.target.closest('[data-theme-set]');
   if (th) { store.set('theme', th.dataset.themeSet); applyTheme(); renderSheet(); return; }
   if (e.target.closest('[data-open-lib]')) { openLibrary(); return; }

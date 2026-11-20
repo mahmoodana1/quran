@@ -124,3 +124,20 @@ test('two devices\' recitation records merged: nothing lost, nothing taken out c
   assert.equal(cleared.ayas[8], undefined);
   assert.deepEqual(Plan.mergeDays({ a: 1, b: 2 }, { a: 2, c: 1 }), { a: 2, b: 2, c: 1 });
 });
+
+test('ribbon: new ground only, by day, a new round afresh', () => {
+  const pageOf = h => h; // (a page per aya, for the test)
+  const t = (d, h = 10) => new Date(2026, 10, 13 - d, h).getTime();
+  const log = [[10, t(9)], [20, t(3)], [18, t(3, 11)], [25, t(3, 12)], [30, t(0, 9)], [33, t(0, 10)]];
+  const r = Plan.ribbon(log, pageOf, NOW, 14);
+  assert.equal(r.page, 33);
+  assert.equal(r.today, 8);                  // 25 → 33
+  assert.equal(r.daily[13 - 3], 15);         // 10 → 25, the step back to 18 not counted twice
+  assert.equal(r.week, 23);
+  assert.equal(r.daily.length, 14);
+  assert.equal(r.daily[13 - 9], 0);          // placed: no ground yet
+  const round = Plan.ribbon([[600, t(2)], [3, t(1)], [9, t(0)]], pageOf, NOW);
+  assert.equal(round.today, 6);
+  assert.equal(round.week, 6);
+  assert.equal(Plan.ribbon([], pageOf, NOW), null);
+});

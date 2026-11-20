@@ -194,6 +194,134 @@ svg { fill: currentColor; }
 .w.end.play { color: var(--ok); -webkit-text-stroke-width: .02em; }
 .w.end.sel.play { color: var(--accent); }
 
+/* ---------- the coloured ribbons (marks.js) ---------- */
+:root {
+  --rb-red: #e63946; --rb-red-i: #c81d2a;
+  --rb-orange: #f77f00; --rb-orange-i: #c25e00;
+  --rb-yellow: #f5b700; --rb-yellow-i: #a07300;
+  --rb-green: #16a34a; --rb-green-i: #0e7c37;
+  --rb-blue: #1d7fe8; --rb-blue-i: #1462bf;
+  --rb-purple: #9d4edd; --rb-purple-i: #7a2dbd;
+  --rb-a: 20%;
+}
+:root[data-theme="dark"] {
+  --rb-red: #ff5c66; --rb-red-i: #ff7a82;
+  --rb-orange: #ff9b30; --rb-orange-i: #ffad55;
+  --rb-yellow: #ffd23f; --rb-yellow-i: #ffd23f;
+  --rb-green: #34d374; --rb-green-i: #5ee08f;
+  --rb-blue: #4ea4ff; --rb-blue-i: #74b8ff;
+  --rb-purple: #c084fc; --rb-purple-i: #cf9dfd;
+  --rb-a: 26%;
+}
+.rb-red { --mc: var(--rb-red); --mi: var(--rb-red-i); }
+.rb-orange { --mc: var(--rb-orange); --mi: var(--rb-orange-i); }
+.rb-yellow { --mc: var(--rb-yellow); --mi: var(--rb-yellow-i); }
+.rb-green { --mc: var(--rb-green); --mi: var(--rb-green-i); }
+.rb-blue { --mc: var(--rb-blue); --mi: var(--rb-blue-i); }
+.rb-purple { --mc: var(--rb-purple); --mi: var(--rb-purple-i); }
+
+/* the ribbon's aya on the page: a band of its colour on each line, a bar at the line's edge, its number in it */
+.mkb {
+  position: absolute; z-index: -1; top: 4%; bottom: 4%; border-radius: .3em; pointer-events: none;
+  background: color-mix(in srgb, var(--mc) var(--rb-a), transparent);
+  box-shadow: inset 0 -.08em 0 color-mix(in srgb, var(--mc) 80%, transparent);
+  animation: hlIn .35s ease;
+}
+.mk-edge { position: absolute; top: 10%; bottom: 10%; right: -7px; width: 4px; border-radius: 2px; pointer-events: none; }
+.w.end.mkd, .w.end.mkd.sel {
+  color: var(--mi); -webkit-text-stroke-width: .03em;
+  filter: drop-shadow(0 0 .12em color-mix(in srgb, var(--mc) 60%, transparent));
+}
+.w.end.mkd.play { color: var(--ok); }
+/* the ribbons on a page, hanging from the top of the screen into its header */
+.phead .side { align-self: stretch; }
+.rb-tags {
+  align-self: flex-start; display: flex; gap: 3px; margin-top: calc(-1 * env(safe-area-inset-top)); margin-inline-end: -8px;
+  filter: drop-shadow(0 1px 1.5px rgba(0, 0, 0, .25));
+}
+.rb-tags[hidden] { display: none; }
+.rb-tags i {
+  display: block; width: 11px; height: calc(32px + env(safe-area-inset-top)); background: var(--mc);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%);
+  animation: rbDrop .45s cubic-bezier(.2, .8, .3, 1.2);
+}
+.rb-tags i + i { height: calc(26px + env(safe-area-inset-top)); }
+@keyframes rbDrop { from { transform: translateY(-60%); } }
+
+/* the aya bar: «علامة» with a ribbon on the aya, and the palette under it */
+.acts-row button.rbd i { background: var(--mc); color: #fff; }
+.acts-row button.rbd svg path { fill: currentColor; }
+.acts-row button.open:not(.rbd) i { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+#ayaBarMk:not([hidden]) { animation: swapIn .25s ease; }
+.mk-pal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; padding: 12px 0 2px; margin-top: 10px; border-top: 1px solid var(--line); }
+.mk-pal button { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; color: var(--ink); }
+.mk-pal i {
+  position: relative; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--mc); color: #fff; transition: transform .15s ease, box-shadow .2s ease;
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--mc) 40%, transparent);
+}
+.mk-pal .rb-yellow i { color: #3a2a00; }
+.mk-pal button:active i { transform: scale(.9); }
+.mk-pal button.on i { box-shadow: 0 0 0 3px var(--surface), 0 0 0 5.5px var(--mc); }
+.mk-pal i svg { width: 20px; height: 20px; }
+.mk-pal .fav i { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); box-shadow: none; }
+.mk-pal .fav.on i { background: var(--accent); color: var(--on-accent); }
+.mk-pal .fav.on svg path { fill: currentColor; }
+.mk-pal span { font-size: 11px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mk-pal small { font-size: 9.5px; color: var(--muted); margin-top: -3px; }
+.mk-hint { margin: 6px 2px 0; font-size: 11.5px; line-height: 1.6; color: var(--muted); text-align: center; }
+
+/* the العلامات tab: the mushaf with every ribbon on it, then a card each */
+.rb-intro { font-size: 13.5px; line-height: 1.85; color: var(--muted); padding: 2px 10px 12px; }
+.rb-strip { margin: 2px 4px 16px; }
+.rb-track {
+  position: relative; height: 12px; margin: 14px 10px 6px; border-radius: 6px;
+  background: repeating-linear-gradient(to left, var(--tint-2) 0 calc(100% / 30 - 1.5px), transparent calc(100% / 30 - 1.5px) calc(100% / 30));
+}
+.rb-pin {
+  position: absolute; top: 50%; width: 20px; height: 20px; border-radius: 50%; transform: translate(50%, -50%);
+  background: var(--mc); border: 2.5px solid var(--surface); box-shadow: 0 1px 4px rgba(0, 0, 0, .3);
+}
+.rb-here { position: absolute; top: -5px; bottom: -5px; width: 2px; border-radius: 1px; background: var(--ink); opacity: .45; transform: translateX(50%); }
+.rb-ends { display: flex; justify-content: space-between; font-size: 11px; color: var(--faint); padding: 0 6px; }
+.rb-card {
+  position: relative; margin-bottom: 12px; padding: 14px 18px 12px 16px; border-radius: 18px; overflow: hidden;
+  background: linear-gradient(270deg, color-mix(in srgb, var(--mc) 11%, var(--surface)), var(--surface) 65%);
+  border: .5px solid color-mix(in srgb, var(--mc) 35%, var(--line)); box-shadow: inset -5px 0 0 var(--mc), 0 1px 2px rgba(60, 40, 10, .05);
+}
+.rb-card:active { transform: scale(.995); }
+.rb-top { display: flex; align-items: center; gap: 10px; }
+.rb-flag { flex: none; width: 13px; height: 22px; background: var(--mc); clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%); }
+.rb-name {
+  flex: 1; min-width: 0; padding: 2px 0; border: 0; border-bottom: 1.5px dashed transparent; border-radius: 0; background: none;
+  font: inherit; font-size: 16.5px; font-weight: 600; color: var(--ink); text-align: right;
+}
+.rb-name:focus { outline: none; border-bottom-color: var(--mc); }
+.rb-pct { font-size: 21px; font-weight: 700; color: var(--mi); font-variant-numeric: tabular-nums; }
+.rb-where { display: flex; flex-direction: column; gap: 2px; margin: 8px 0 10px; }
+.rb-where b { font-size: 15px; font-weight: 600; }
+.rb-where span { font-size: 12.5px; color: var(--muted); }
+.rb-bar { height: 8px; border-radius: 4px; background: var(--tint-2); overflow: hidden; }
+.rb-bar i { display: block; height: 100%; border-radius: 4px; background: var(--mc); }
+.rb-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 12px 0 10px; }
+.rb-stats span { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 7px 4px; border-radius: 12px; background: var(--tint); font-size: 11.5px; color: var(--muted); }
+.rb-stats b { font-size: 17px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.rb-stats .up b { color: var(--mi); }
+.rb-days { display: flex; align-items: flex-end; gap: 3px; height: 30px; }
+.rb-days i { flex: 1; border-radius: 3px; background: var(--tint-2); }
+.rb-days i.g { background: color-mix(in srgb, var(--mc) 65%, transparent); }
+.rb-days i.now { box-shadow: 0 0 0 1.5px var(--mc); }
+.rb-days i.now.g { background: var(--mc); }
+.rb-acts { display: flex; gap: 8px; margin-top: 12px; }
+.rb-acts button { padding: 9px 16px; border-radius: 12px; font-size: 14px; font-weight: 600; }
+.rb-acts .go { flex: 1; background: var(--mc); color: #fff; }
+.rb-yellow .rb-acts .go { color: #3a2a00; }
+.rb-acts .del { color: var(--muted); background: var(--tint); }
+.rb-free { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 4px 10px; }
+.rb-free button { display: flex; align-items: center; gap: 7px; padding: 6px 14px 6px 12px; border-radius: 16px; background: var(--tint); font-size: 13px; color: var(--ink); }
+.rb-free i { width: 12px; height: 12px; border-radius: 50%; background: var(--mc); }
+.empty.sm { padding: 22px 24px 30px; }
+
 .ln.bsm { justify-content: center; }
 .ln.bsm.qb {
   font-family: qbsml; font-size: calc(var(--fs) * 1.08);
