@@ -3499,3 +3499,63 @@ body.desk .hz-foot { bottom: 0; }
   color: var(--p-green); background: color-mix(in srgb, var(--p-green) 9%, transparent); border: 1px solid color-mix(in srgb, var(--p-green) 30%, transparent);
 }
 :root[data-theme="dark"] .ab-hz { color: #8fd3a8; }
+
+/* ---------- الحفظ, the day: two cards (revise, learn), one button each, a short list below ---------- */
+.hz2-day { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 2px 4px 10px; }
+.hz2-day b { font-size: 20px; font-weight: 900; }
+.hz2-day small { font-size: 12.5px; color: var(--muted); }
+.hz2 {
+  position: relative; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4px 12px;
+  margin-bottom: 12px; padding: 14px 14px 14px 12px; border-radius: 18px; background: var(--surface);
+  border: 1px solid var(--line); box-shadow: 0 1px 3px rgba(60, 40, 10, .05);
+}
+.hz2-n {
+  align-self: start; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; margin-top: 2px;
+  font-size: 13px; font-weight: 800; color: var(--p-on); background: var(--p-green);
+}
+.hz2-n:empty { display: none; }
+.hz2-n svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.hz2-m { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.hz2-m small { display: flex; align-items: center; gap: 8px; font-size: 12.5px; font-weight: 700; color: var(--muted); }
+.hz2-m b { font-size: 20px; font-weight: 900; line-height: 1.35; }
+.hz2-m > span { font-size: 13px; color: var(--muted); line-height: 1.5; }
+.hz2-m em { font-style: normal; font-size: 12px; color: var(--c-marks); }
+.hz2-bar { display: block; height: 5px; margin-top: 6px; border-radius: 3px; background: var(--tint-2); overflow: hidden; }
+.hz2-bar i { display: block; height: 100%; border-radius: 3px; background: var(--p-green); }
+.hz2-a { display: flex; align-items: center; gap: 8px; }
+.hz2-go {
+  display: flex; align-items: center; gap: 6px; padding: 10px 16px; border-radius: 14px; font-size: 15px; font-weight: 800;
+  color: var(--p-on); background: linear-gradient(160deg, var(--p-green), var(--p-green-2));
+}
+.hz2-go svg, .hz2-big svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.hz2-ic { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: var(--p-green); background: color-mix(in srgb, var(--p-green) 9%, transparent); }
+.hz2-ic svg { width: 17px; height: 17px; }
+.hz2-ok { padding: 10px 14px 10px 12px; background: color-mix(in srgb, var(--ok) 7%, var(--surface)); border-color: color-mix(in srgb, var(--ok) 30%, transparent); }
+.hz2-ok .hz2-n { background: var(--ok); }
+.hz2-ok .hz2-m b { font-size: 16px; }
+/* the lesson: its name large, the steps as a path, the next thing to do as the one button */
+.hz2-les { grid-template-columns: auto 1fr; }
+.hz2-les .hz2-m b { font-size: 24px; }
+.hz2-chg { display: inline-flex; align-items: center; gap: 3px; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 700; color: var(--p-green); background: color-mix(in srgb, var(--p-green) 9%, transparent); }
+.hz2-chg svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.hz2-see { margin-inline-start: 8px; font-size: 12.5px; font-weight: 700; color: var(--accent); }
+.hz2-steps { grid-column: 1 / -1; display: flex; align-items: center; gap: 4px; margin-top: 10px; }
+.hz2-steps button {
+  flex: 1; display: flex; align-items: center; justify-content: center; gap: 3px; padding: 7px 2px; border-radius: 10px;
+  font-size: 13px; font-weight: 700; color: var(--muted); background: var(--tint);
+}
+.hz2-steps button svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+.hz2-steps button.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 11%, transparent); }
+.hz2-steps button.now { color: var(--p-green); box-shadow: inset 0 0 0 1.5px var(--p-green); }
+.hz2-steps i { flex: none; width: 6px; height: 1.5px; background: var(--rule); }
+.hz2-big {
+  grid-column: 1 / -1; display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 10px; padding: 14px; border-radius: 14px;
+  font-size: 17px; font-weight: 900; color: #2a2008; background: linear-gradient(160deg, #f0dba6, #cfac62); border: 1px solid #b48e45;
+  box-shadow: 0 4px 12px rgba(120, 85, 20, .18);
+}
+.hz2-big:active, .hz2-go:active { transform: scale(.98); }
+.hz2-done .hz2-big { color: var(--p-on); background: linear-gradient(160deg, var(--p-green), var(--p-green-2)); border-color: var(--p-gold); }
+.hz2-memo { grid-column: 1 / -1; justify-self: center; margin-top: 6px; padding: 4px 8px; font-size: 12.5px; color: var(--muted); text-decoration: underline dotted; text-underline-offset: 3px; }
+:root[data-theme="dark"] .hz2-chg, :root[data-theme="dark"] .hz2-ic, :root[data-theme="dark"] .hz2-steps button.now { color: #8fd3a8; }
+.hz2-more { margin-top: 6px; }
+.hz2-more .row { min-height: 52px; }
