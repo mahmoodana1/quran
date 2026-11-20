@@ -154,3 +154,26 @@ test('ribbons from two devices: each as moved last, names as renamed last, both 
   assert.equal(m.purple.h, 1);
   assert.equal(Plan.mergeRibbons(undefined, undefined), undefined);
 });
+
+test('revision: a lesson memorized today is not today\'s revision', () => {
+  const said = { 0: NOW - DAY, 1: NOW - DAY, 2: NOW - 3600e3, 3: NOW - 3600e3 };
+  const first = { 0: NOW - DAY, 1: NOW - DAY, 2: NOW - 3600e3, 3: NOW - 3600e3 };
+  const r = Plan.revision({ ayas, said, first, now: NOW });
+  assert.deepEqual(r.near, [0, 1]);
+});
+
+test('backdate: pages known before come round a slice a day, none late at first', () => {
+  const list = Array.from({ length: 70 }, (_, i) => i);   // pages 1–7
+  const when = Plan.backdate(list, ayas, 7, NOW);
+  const first = Object.fromEntries(list.map(a => [a, 1]));
+  const r = Plan.revision({ ayas, said: when, first, days: 7, now: NOW });
+  assert.deepEqual(r.pages, [1]);
+  assert.equal(r.late, 0);
+  // a week on, revising a page a day: never late
+  const said = { ...when };
+  for (let d = 0; d < 7; d++) {
+    const now = NOW + d * DAY, rv = Plan.revision({ ayas, said, first, days: 7, now });
+    assert.equal(rv.late, 0, 'day ' + d);
+    for (const a of rv.part) said[a] = now;
+  }
+});

@@ -39,6 +39,7 @@ const Hifz = (() => {
   const log = () => store.get('recite.' + R.id, { ayas: {}, sessions: [] });
   const sizeOf = s => (R.suraStart[s + 1] ?? R.ayas.length) - R.suraStart[s];
   const ayaN = n => n === 1 ? 'آية واحدة' : n === 2 ? 'آيتان' : n <= 10 ? `${ar(n)} آيات` : `${ar(n)} آية`;
+  const wordN = n => n === 1 ? 'كلمة واحدة' : n === 2 ? 'كلمتان' : n <= 10 ? `${ar(n)} كلمات` : `${ar(n)} كلمة`;
   const times = n => n === Infinity ? 'بلا توقف' : n === 1 ? 'مرة' : n === 2 ? 'مرتين' : n <= 10 ? `${ar(n)} مرات` : `${ar(n)} مرة`;
   let view = '';
 
@@ -52,14 +53,37 @@ const Hifz = (() => {
       const a0 = R.suraStart[plan.s], n = sizeOf(plan.s);
       for (let a = a0; a < a0 + n; a++) if (!said[a]) return { a, b: Math.min(a0 + n - 1, a + (plan.per || 5) - 1) };
     }
-    return span(pageInfo(S.page).first, 5);
+    let a = pageInfo(S.page).first;
+    while (a < R.ayas.length - 1 && said[a]) a++;
+    return span(a, 5);
   }
   // n ayas from a, not past its surah
+  // (a leftover of an aya or two at the surah's end joins this lesson rather than make one of its own)
   function span(a, n) {
     const s = R.ayas[a][0], end = R.suraStart[s] + sizeOf(s) - 1;
-    return { a, b: Math.min(end, a + n - 1) };
+    let b = Math.min(end, a + n - 1);
+    if (end - b > 0 && end - b <= Math.max(2, Math.floor(n / 2))) b = end;
+    return { a, b };
   }
-  const setLesson = L => store.set('hifz.' + R.id, L.pg ? { a: L.a, b: L.b, pg: 1 } : { a: L.a, b: L.b });
+  // (dir: -1 going back through the surahs, as جزء عمّ is memorized from الناس; kept unless given)
+  function setLesson(L) {
+    const cur = store.get('hifz.' + R.id, null), dir = L.dir ?? cur?.dir, n = L.n ?? cur?.n;
+    store.set('hifz.' + R.id, { a: L.a, b: L.b, ...(L.pg ? { pg: 1 } : {}), ...(dir === -1 ? { dir } : {}), ...(n ? { n } : {}) });
+    // the plan in التسميع, if there is one, on the same surah
+    const pk = 'recite.plan.' + R.id, p = store.get(pk, null), su = R.ayas[L.a][0];
+    if (p && p.s !== su) store.set(pk, { ...p, s: su, at: Date.now() });
+  }
+  // the first aya of a surah not yet memorized (null: all of it is)
+  function firstOpen(su, said = log().said || {}) {
+    const a0 = R.suraStart[su], n = sizeOf(su);
+    for (let a = a0; a < a0 + n; a++) if (!said[a]) return a;
+    return null;
+  }
+  // the lesson in a surah: from its first aya not yet memorized, n long (the lesson's own length kept)
+  function inSura(su, n, dir) {
+    const a = firstOpen(su);
+    return a == null ? null : { ...span(a, n), ...(dir ? { dir } : {}) };
+  }
   // a page as the lesson: from aya a to the end of its page (or of its surah, if that comes first)
   function pageSpan(a) {
     let b = a;
@@ -92,7 +116,13 @@ const Hifz = (() => {
     const r = Plan.revision({ ayas: R.ayas, said, first, weak, days: o.days, skip: ai => ai >= L.a && ai <= L.b });
     const key = 'hifz.plan.' + R.id, d = today();
     let c = store.get(key, null);
-    if (c?.d !== d || c.days !== o.days) { c = { d, days: o.days, part: r.part, pages: r.pages, weakPages: r.weakPages, late: r.late }; store.set(key, c); }
+    if (c?.d !== d || c.days !== o.days) { c = { d, days: o.days, total: r.total, part: r.part, pages: r.pages, weakPages: r.weakPages, late: r.late }; store.set(key, c); }
+    else if (c.total !== r.total) {
+      // (more memorized since the day's pages were chosen — surahs marked as known: chosen again, what was chosen kept)
+      const pages = [...new Set([...c.pages, ...r.pages])].sort((x, y) => x - y);
+      c = { ...c, total: r.total, part: [...new Set([...c.part, ...r.part])].sort((x, y) => x - y), pages, weakPages: Math.max(c.weakPages || 0, r.weakPages), late: r.late };
+      store.set(key, c);
+    }
     const part = c.part.filter(ai => said[ai] && !(ai >= L.a && ai <= L.b));
     const start = Plan.dayStart(), all = [...r.near, ...part];
     const left = all.filter(ai => !(said[ai] >= start));
@@ -139,6 +169,105 @@ const Hifz = (() => {
   }
   const listText = list => list.length ? `${ayaLabel(list[0])}${list.length > 1 ? ` – ${R.ayas[list.at(-1)][0] === R.ayas[list[0]][0] ? ar(R.ayas[list.at(-1)][1]) : ayaLabel(list.at(-1))}` : ''}` : '';
 
+  // ---- the first time: what is memorized already, where to begin, how long a lesson (once; hifz.setup)
+  let undo = null; // («حفظتُ» just tapped: { L, added, t, text }, to take back)
+  const setup = { from: 'amma', n: 5 };
+  const needsSetup = () => !store.get('hifz.setup', 0) && !store.get('hifz.' + R.id, null);
+  // the first lesson from a starting point: جزء عمّ from الناس back, the mushaf from its start (both past
+  // what is memorized)
+  function startAt(from, n) {
+    // (جزء عمّ known already: on back through the mushaf, تبارك next)
+    if (from === 'amma') { for (let s = 114; s >= 1; s--) { const N = inSura(s, n, -1); if (N) return N; } return null; }
+    for (let s = 1; s <= 114; s++) { const N = inSura(s, n); if (N) return N; }
+    return null;
+  }
+  function setupHTML() {
+    const known = Object.keys(log().said || {}).length;
+    const ch = (k, v, t, sub) => `<button data-hz-su="${k}" data-v="${v}" class="${setup[k] === v ? 'on' : ''}"><b>${t}</b>${sub ? `<small>${sub}</small>` : ''}</button>`;
+    return `<div class="hz">${typeof Extras !== 'undefined' ? Extras.safetyHTML() : ''}<section class="hz-start">
+      <b class="hz-s-t">ابدأ رحلتك في الحفظ</b><small class="hz-s-sub">ثلاثة أسئلة، مرة واحدة، وتغيّرها متى شئت</small>
+      <div class="hz-s-q"><span><i>١</i>ما تحفظه من قبل</span>
+        <button class="hz-s-known" data-hz-view="known">${known ? `${ayaN(known)} محفوظة — غيّرها` : 'علّم السور التي تحفظها'}<small>${known ? 'تبدأ مراجعتها من اليوم' : 'لتُراجَع، ولا تأتيك دروسًا من جديد'}</small></button></div>
+      <div class="hz-s-q"><span><i>٢</i>من أين تبدأ؟</span><div class="hz-s-ch">
+        ${ch('from', 'amma', 'جزء عمّ', 'من الناس صعودًا')}${ch('from', 'start', 'أول المصحف', 'الفاتحة ثم البقرة')}${ch('from', 'pick', 'سورة أختارها', '')}</div></div>
+      <div class="hz-s-q"><span><i>٣</i>كم في الدرس الواحد؟</span><div class="hz-chips">
+        ${[3, 5, 7, 10].map(k => `<button data-hz-su="n" data-v="${k}" class="${setup.n === k ? 'on' : ''}">${ayaN(k)}</button>`).join('')}<button data-hz-su="n" data-v="page" class="${setup.n === 'page' ? 'on' : ''}">صفحة</button></div>
+        <small class="hz-s-note">للمبتدئ: ٣ إلى ٥ آيات، تزيد إذا ثبت حفظك</small></div>
+      <button class="hz-go" data-hz-begin><span class="hz-go-i">${IC.play}</span><span><b>ابدأ</b><small>${setup.from === 'pick' ? 'ثم اختر السورة' : 'ويظهر درسك الأول'}</small></span></button>
+      <button class="hz-s-skip" data-hz-begin="skip">تخطَّ — سأختار بنفسي</button>
+    </section>${daysHTML()}</div>`;
+  }
+  function setupClick(t) {
+    const c = t.closest('[data-hz-su]');
+    if (c) { const v = c.dataset.v; setup[c.dataset.hzSu] = /^\d+$/.test(v) ? +v : v; renderSheet(); haptic(5); return true; }
+    const b = t.closest('[data-hz-begin]');
+    if (!b) return false;
+    store.set('hifz.setup', 1);
+    if (b.dataset.hzBegin !== 'skip') {
+      const n = setup.n === 'page' ? 5 : setup.n;
+      if (setup.from === 'pick') { const N = startAt('start', n) || span(0, n); setLesson(setup.n === 'page' ? pageSpan(N.a) : { ...N, n }); view = 'edit'; }
+      else {
+        const N = startAt(setup.from, n);
+        if (!N) toast('ما شاء الله، كله محفوظ — اختر ما تراجعه');
+        else setLesson(setup.n === 'page' ? { ...pageSpan(N.a), ...(N.dir ? { dir: N.dir } : {}) } : { ...N, n });
+      }
+    }
+    renderSheet(); $('#sheetBody').scrollTop = 0; haptic(10);
+    return true;
+  }
+
+  // ---- what is memorized already, a surah at a time (or a juz of them at once); added only here (taking
+  // one out is on its page in التسميع, where it is noted for the sync)
+  let picked = new Set();
+  function knownHTML() {
+    const said = log().said || {}, full = s => firstOpen(s, said) == null, juz = s => R.ayas[R.suraStart[s]][3];
+    const part = s => { const a0 = R.suraStart[s]; let k = 0; for (let a = a0; a < a0 + sizeOf(s); a++) if (said[a]) k++; return k; };
+    const sel = [...picked], ayas = sel.reduce((t, s) => t + sizeOf(s) - part(s), 0);
+    const group = (t, list) => `<button data-hz-kg="${list.join(',')}">${t}</button>`;
+    const amma = [], tabarak = [];
+    for (let s = 1; s <= 114; s++) { if (juz(s) === 30) amma.push(s); if (juz(s) === 29) tabarak.push(s); }
+    return `<div class="pp pp-sub"><div class="pp-bar"><button class="pp-back" data-hz-view="" aria-label="رجوع">${IC.back}</button><b>ما تحفظه من قبل</b></div>
+      <div class="pp-subb hz-kn">
+        <p class="hz-hint">اختر السور التي تحفظها كلها: تُراجَع كل يوم بقدرٍ، ولا تأتيك دروسًا من جديد. وما حفظت بعضه فمن صفحة السورة في «التسميع».</p>
+        <div class="hz-chips hz-kg">${group('جزء عمّ كله', amma)}${group('جزء تبارك', tabarak)}${group('الفاتحة', [1])}${sel.length ? '<button data-hz-kg="none">لا شيء</button>' : ''}</div>
+        <div class="pp-grid hz-kgrid">${Array.from({ length: 114 }, (_, i) => i + 1).map(s => {
+          const f = full(s), k = part(s), on = picked.has(s);
+          return `<button class="pp-g${f ? ' full' : ''}${on ? ' sel' : ''}" data-hz-ks="${s}"${f ? ' disabled' : ''}><span class="pp-g-n">${ar(s)}</span><b>${suraName(s)}</b><small>${f ? 'محفوظة' : k ? `${ar(k)} من ${ar(sizeOf(s))}` : ayaN(sizeOf(s))}</small>${f || on ? `<span class="pp-g-ok">${IC.check}</span>` : ''}</button>`;
+        }).join('')}</div>
+        <div class="hz-foot"><span class="hz-sum">${sel.length ? `<b>${ar(sel.length)} ${sel.length <= 10 && sel.length > 2 ? 'سور' : 'سورة'}</b> · ${ayaN(ayas)}` : 'اختر سورة أو أكثر'}</span><button class="hz-done" data-hz-known${sel.length ? '' : ' disabled'}>احفظ</button></div>
+      </div></div>`;
+  }
+  function knownClick(t) {
+    const ks = t.closest('[data-hz-ks]');
+    if (ks) { const s = +ks.dataset.hzKs; picked.has(s) ? picked.delete(s) : picked.add(s); keepScroll(); haptic(4); return true; }
+    const kg = t.closest('[data-hz-kg]');
+    if (kg) {
+      if (kg.dataset.hzKg === 'none') picked.clear();
+      else { const said = log().said || {}; for (const s of kg.dataset.hzKg.split(',').map(Number)) if (firstOpen(s, said) != null) picked.add(s); }
+      keepScroll(); haptic(5);
+      // (the surahs just picked shown, wherever they are in the list)
+      if (kg.dataset.hzKg !== 'none') document.querySelector('.hz-kgrid .pp-g.sel')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      return true;
+    }
+    if (!t.closest('[data-hz-known]') || !picked.size) return false;
+    const l = log(), now = Date.now();
+    l.said ||= {}; l.first ||= {};
+    const add = [];
+    for (const s of picked) for (let a = R.suraStart[s]; a < R.suraStart[s] + sizeOf(s); a++) if (!l.said[a]) add.push(a);
+    const when = Plan.backdate(add, R.ayas, opts().days, now), n = add.length;
+    for (const a of add) { l.said[a] = when[a]; l.first[a] = 1; if (l.gone?.said) delete l.gone.said[a]; }
+    store.set('recite.' + R.id, l);
+    picked = new Set(); undo = null;
+    // the lesson, if it is now memorized, moves on
+    const L = store.get('hifz.' + R.id, null);
+    if (L && R.ayas[L.a] && listOf(L).every(a => l.said[a])) setLesson(nextLesson(L));
+    view = '';
+    toast(`عُلّمت ${ayaN(n)} محفوظة — تبدأ مراجعتها من اليوم`, 2800);
+    renderSheet(); $('#sheetBody').scrollTop = 0; haptic([10, 40, 10]);
+    return true;
+  }
+  const keepScroll = () => { const b = $('#sheetBody'), y = b.scrollTop; renderSheet(); b.scrollTop = y; };
+
   // ---- the page
   const IC = {
     edit: '<svg viewBox="0 0 24 24"><path d="M14.5 5.5l4 4M4.5 19.5l1-4.5L15.8 4.7a1.5 1.5 0 012.1 0l1.4 1.4a1.5 1.5 0 010 2.1L9 18.5z"/></svg>',
@@ -167,17 +296,21 @@ const Hifz = (() => {
   function panelHTML() {
     if (view === 'edit') return editHTML();
     if (view === 'way') return wayHTML();
+    if (view === 'known') return knownHTML();
+    if (needsSetup()) return setupHTML();
     const L = lesson(), o = opts(), list = listOf(L), said = log().said || {};
     const done = stepsDone(L), have = list.filter(a => said[a]).length, all = have === list.length;
     const words = list.reduce((t, a) => t + R.text[a].split(' ').length - 1, 0);
     const on = STEPS.filter(([k]) => o.steps[k]), plays = on.filter(([k]) => k !== 'recite');
     const allPlayed = plays.length && plays.every(([k]) => done[k]);
     const pr = PRESETS.find(p => p[0] === presetOf(o));
+    const un = undo && Date.now() - undo.t < 10 * 60e3 ? undo : null;
     let h = `<div class="hz">${typeof Extras !== 'undefined' ? Extras.safetyHTML() : ''}
+      ${un ? `<div class="hz-undo"><span>سُجّل حفظ ${un.text}</span><button data-hz-undo>تراجع</button><button data-hz-undo-x aria-label="إخفاء">×</button></div>` : ''}
       <section class="hz-lesson">
         <div class="hz-l-top"><small>درسك</small><button class="hz-edit" data-hz-view="edit" aria-label="غيّر الدرس">${IC.edit}<span>غيّر</span></button></div>
         <b class="hz-l-name">${rangeText(L)}</b>
-        <span class="hz-l-sub">${ayaN(list.length)} · ${ar(words)} كلمة · صفحة ${ar(R.ayas[L.a][2])}${R.ayas[L.b][2] !== R.ayas[L.a][2] ? '–' + ar(R.ayas[L.b][2]) : ''}${have ? ` · حفظت ${ar(have)} منها` : ''}</span>
+        <span class="hz-l-sub">${ayaN(list.length)} · ${wordN(words)} · صفحة ${ar(R.ayas[L.a][2])}${R.ayas[L.b][2] !== R.ayas[L.a][2] ? '–' + ar(R.ayas[L.b][2]) : ''}${have ? ` · حفظت ${ar(have)} منها` : ''}</span>
         <div class="hz-l-acts"><button class="hz-show" data-hz-show>${IC.book}<span>في المصحف</span></button><button class="hz-show" data-hz-reciter>${IC.listen}<span>${esc(reciterFull(R.id))}</span></button></div>
       </section>`;
     // one tap for the whole routine (the listening steps, one after the other), then the recitation
@@ -188,7 +321,7 @@ const Hifz = (() => {
         return `<li><button class="hz-step${ok ? ' ok' : ''}" data-hz-go="${k}"><span class="hz-n">${ok ? IC.check : ar(on.findIndex(x => x[0] === k) + 1)}</span>
           <span class="hz-st"><b>${t}</b><small>${sub(o)}</small></span><span class="hz-ic">${[IC.listen, IC.repeat, IC.link, IC.mic][i]}</span></button></li>`;
       }).join('')}</ol>
-      <button class="hz-done${all ? ' ok' : ''}" data-hz-memo>${all ? 'حفظتَه، ما شاء الله — إلى الدرس التالي' : 'حفظتُ هذا الدرس — إلى التالي'}</button>
+      <button class="hz-done${all ? ' ok' : ''}${!all && !Object.keys(done).length ? ' quiet' : ''}" data-hz-memo>${all ? 'حفظتَه، ما شاء الله — إلى الدرس التالي' : 'حفظتُ هذا الدرس — إلى التالي'}</button>
       <button class="hz-way" data-hz-view="way">${IC.tune}<span><b>طريقتك في الحفظ</b><small>${pr ? pr[1] : 'مخصّصة'} · ${ar(on.length)} ${on.length <= 2 ? (on.length === 1 ? 'خطوة' : 'خطوتان') : 'خطوات'} · ${o.rate === 1 ? 'سرعة عادية' : o.rate < 1 ? 'أبطأ' : 'أسرع'}</small></span>${IC.back.replace('M9.5 6l6 6-6 6', 'M14.5 6l-6 6 6 6')}</button>`;
     if (o.review) {
       const rv = review(L);
@@ -198,7 +331,7 @@ const Hifz = (() => {
         const pg = rv.pages.length, st = new Set(rv.left);
         const nearDone = rv.near.length && rv.near.every(a => !st.has(a)), farDone = rv.part.length && rv.part.every(a => !st.has(a));
         h += `<div class="group hz-rev${rv.done ? ' ok' : ''}">
-        ${revRow('near', 'القريب', rv.near.length ? `ما حفظته هذا الأسبوع · ${ayaN(rv.near.length)}` : 'لا جديد هذا الأسبوع', rv.near, nearDone)}
+        ${revRow('near', 'القريب', rv.near.length ? `ما حفظته هذا الأسبوع · ${ayaN(rv.near.length)}` : Object.values(log().first || {}).some(t => t >= Plan.dayStart()) ? 'ما حفظته اليوم يأتي هنا من الغد' : 'لا جديد هذا الأسبوع', rv.near, nearDone)}
         ${revRow('far', 'المنزل', rv.part.length ? `${pg === 1 ? 'صفحة واحدة' : pg === 2 ? 'صفحتان' : `${ar(pg)} صفحات`}${rv.weakPages ? `، ${rv.weakPages === 1 ? 'إحداها' : ar(rv.weakPages)} فيها مواضع ضعف` : ''}</span><span class="s hz-pg">${rv.pages.length === 1 ? 'الصفحة' : 'الصفحات'} ${Plan.pageRuns(rv.pages, ar)}` : 'لا قديم بعد', rv.part, farDone)}
       </div>`;
         if (rv.late) h += `<p class="hz-late">تأخّرت ${ar(rv.late)} ${rv.late <= 10 && rv.late > 2 ? 'صفحات' : 'صفحة'} عن موعد مراجعتها، وستأتي أولًا في الأيام القادمة.</p>`;
@@ -206,6 +339,7 @@ const Hifz = (() => {
     }
     h += daysHTML();
     h += typeof Extras !== 'undefined' ? Extras.remindRowHTML('hifz') : '';
+    h += `<button class="hz-more" data-hz-view="known">${IC.check.replace('<svg', '<svg class="hz-k-i"')}<span>علّم ما تحفظه من قبل</span></button>`;
     h += `<button class="hz-more" data-hz-recite>خطة الحفظ، وتقدّمك، ومواضع ضعفك في التسميع ${IC.back.replace('M9.5 6l6 6-6 6', 'M14.5 6l-6 6 6 6')}</button></div>`;
     return h;
   }
@@ -250,7 +384,7 @@ const Hifz = (() => {
   // what it comes to stays in view at the bottom, and the ayas are shown first and last, not all of them
   const sumText = L => {
     const list = listOf(L), words = list.reduce((t, a) => t + R.text[a].split(' ').length - 1, 0), p0 = R.ayas[L.a][2], p1 = R.ayas[L.b][2];
-    return `<b>${ayaN(list.length)}</b> · ${ar(words)} كلمة · ${p1 > p0 ? `الصفحات ${ar(p0)}–${ar(p1)}` : `صفحة ${ar(p0)}`}`;
+    return `<b>${ayaN(list.length)}</b> · ${wordN(words)} · ${p1 > p0 ? `الصفحات ${ar(p0)}–${ar(p1)}` : `صفحة ${ar(p0)}`}`;
   };
   function previewHTML(L) {
     const list = listOf(L), aya = a => `<span>${esc(R.text[a])}</span>`;
@@ -272,6 +406,7 @@ const Hifz = (() => {
           <button data-hz-quick="page">الصفحة التي تقرؤها</button>
           <button data-hz-quick="wpage" class="${L.pg ? 'on' : ''}">صفحة صفحة</button>
           <button data-hz-quick="next">الآيات التالية</button>
+          <button data-hz-quick="amma">جزء عمّ من الناس</button>
           ${[3, 5, 7, 10, 15, 20].filter(k => k < n).map(k => `<button data-hz-len="${k}" class="${list.length === k ? 'on' : ''}">${ayaN(k)}</button>`).join('')}
           <button data-hz-len="${n}" class="${list.length === n ? 'on' : ''}">السورة كلها</button>
         </div></div>
@@ -337,12 +472,25 @@ const Hifz = (() => {
 
   function onClick(e) {
     const t = e.target;
+    if (t.closest('[data-hz-undo]') && undo) {
+      // «حفظتُ» taken back: those ayas not memorized (noted, so a synced copy doesn't bring them back), the lesson as it was
+      const l = log(), now = Date.now();
+      for (const a of undo.added) { delete l.said?.[a]; delete l.first?.[a]; ((l.gone ||= {}).said ||= {})[a] = now; }
+      store.set('recite.' + R.id, l);
+      setLesson(undo.L);
+      undo = null;
+      toast('تراجعتَ: الدرس كما كان');
+      renderSheet(); haptic(8);
+      return true;
+    }
+    if (t.closest('[data-hz-undo-x]')) { undo = null; renderSheet(); return true; }
+    if (setupClick(t) || knownClick(t)) return true;
     const v = t.closest('[data-hz-view]');
     if (v) { view = v.dataset.hzView; renderSheet(); $('#sheetBody').scrollTop = 0; haptic(5); return true; }
     const L = lesson(), o = opts(), list = listOf(L);
     if (t.closest('[data-hz-all]')) {
       const ks = STEPS.map(([k]) => k).filter(k => o.steps[k] && k !== 'recite');
-      play(list, { seq: ks.map(k => stepPlay(k, o)), rate: o.rate }, () => {
+      play(list, { seq: ks.map((k, i) => { const x = stepPlay(k, o); return ks.length > 1 ? { ...x, name: `${x.name} (${ar(i + 1)} من ${ar(ks.length)})` } : x; }), rate: o.rate }, () => {
         const s = { ...stepsDone(L) };
         ks.forEach(k => { s[k] = 1; });
         store.set('hifz.day', { d: today(), k: lessonKey(L), s });
@@ -366,9 +514,11 @@ const Hifz = (() => {
     if (t.closest('[data-hz-memo]')) {
       const l = log();
       l.said ||= {}; l.first ||= {};
-      for (const a of list) if (!l.said[a]) { l.said[a] = Date.now(); l.first[a] = Date.now(); }
+      const added = list.filter(a => !l.said[a]);
+      for (const a of added) { l.said[a] = Date.now(); l.first[a] = Date.now(); }
       store.set('recite.' + R.id, l);
       mark(1);
+      undo = { L, added, t: Date.now(), text: rangeText(L) };
       setLesson(nextLesson(L));
       toast('بارك الله لك — هذا درسك التالي');
       haptic([10, 40, 10]);
@@ -416,6 +566,9 @@ const Hifz = (() => {
         let a = L.a;
         while (a > 0 && R.ayas[a - 1][2] === R.ayas[L.a][2] && R.ayas[a - 1][0] === R.ayas[L.a][0]) a--;
         setLesson(pageSpan(a));
+      } else if (q.dataset.hzQuick === 'amma') {
+        const N = startAt('amma', L.b - L.a + 1);
+        if (N) setLesson(N); else toast('جزء عمّ كله محفوظ، ما شاء الله');
       } else setLesson(nextLesson(L));
       renderSheet(); haptic(5);
       return true;
@@ -423,18 +576,24 @@ const Hifz = (() => {
     const ln = t.closest('[data-hz-len]');
     if (ln) {
       const n = +ln.dataset.hzLen, s = R.ayas[L.a][0];
-      setLesson(n >= sizeOf(s) ? { a: R.suraStart[s], b: R.suraStart[s] + sizeOf(s) - 1 } : span(L.a, n));
+      setLesson(n >= sizeOf(s) ? { a: R.suraStart[s], b: R.suraStart[s] + sizeOf(s) - 1 } : { ...span(L.a, n), n });
       renderSheet(); haptic(5);
       return true;
     }
     return false;
   }
   // as many ayas after this lesson, in its surah (or the next surah from its start)
+  // what is memorized already skipped; after the last surah of the way, the other way (الناس: back to الفلق)
   function nextLesson(L) {
-    if (L.pg) return L.b + 1 < R.ayas.length ? pageSpan(L.b + 1) : L;
-    const n = L.b - L.a + 1, s = R.ayas[L.a][0], end = R.suraStart[s] + sizeOf(s) - 1;
-    if (L.b < end) return span(L.b + 1, n);
-    return s < 114 ? span(R.suraStart[s + 1], n) : L;
+    const said = log().said || {};
+    if (L.pg) { let a = L.b + 1; while (a < R.ayas.length && said[a]) a++; return a < R.ayas.length ? pageSpan(a) : L; }
+    const n = L.n || store.get('hifz.' + R.id, null)?.n || L.b - L.a + 1, s = R.ayas[L.a][0], end = R.suraStart[s] + sizeOf(s) - 1;
+    let a = L.b + 1;
+    while (a <= end && said[a]) a++;
+    if (a <= end) return span(a, n);
+    const dir = L.dir || store.get('hifz.' + R.id, null)?.dir || (s === 114 ? -1 : 1);
+    for (const d of [dir, -dir]) for (let t = s + d; t >= 1 && t <= 114; t += d) { const N = inSura(t, n, d); if (N) return N; }
+    return L;
   }
   function onChange(e) {
     const num = e.target.closest('[data-hz-num]');
@@ -453,6 +612,7 @@ const Hifz = (() => {
   }
   function mounted() {
     check();
+    if (document.querySelector('.hz-kn')) footAt();
     const ed = document.querySelector('.hz-ed');
     if (ed) {
       footAt();
@@ -468,10 +628,17 @@ const Hifz = (() => {
     const a0 = R.suraStart[su], n = sizeOf(su), said = log().said || {}, L = lesson();
     let a = a0;
     while (a < a0 + n - 1 && said[a]) a++;
-    setLesson(span(a, Math.min(L.b - L.a + 1, 10)));
+    store.set('hifz.setup', 1);
+    setLesson({ ...span(a, Math.min(L.b - L.a + 1, 10)), dir: 0 });
     openSheet('hifz');
     if (a > a0) toast(`تابع ${suraName(su)} من الآية ${ar(R.ayas[a][1])}`);
   }
 
-  return { check, panelHTML, onClick, onChange, mounted, reset, learnSura, view: view0, setView: v => { view = v; } };
+  // the plan chosen in التسميع: the lesson in that surah, from its first aya not memorized
+  function fromPlan(su) {
+    const L = store.get('hifz.' + R.id, null), n = L?.n || (L && R.ayas[L.a] ? Math.min(L.b - L.a + 1, 10) : 5), N = inSura(su, n);
+    if (N) { store.set('hifz.setup', 1); setLesson({ ...N, dir: 0, n }); }
+  }
+
+  return { fromPlan, check, panelHTML, onClick, onChange, mounted, reset, learnSura, view: view0, setView: v => { view = v; } };
 })();

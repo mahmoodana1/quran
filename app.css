@@ -3424,3 +3424,46 @@ body.desk .hz-foot { bottom: 0; }
 .tt .hz-o { border-top: 0; padding: 0; }
 .w.rc-veil { visibility: hidden; }
 .page.rc-veiled .ln.sura, .page.rc-veiled .ln.bsm { opacity: .25; }
+
+/* ---------- الحفظ: the first time, what is memorized already, «حفظتُ» taken back ---------- */
+#plReciter.lab { text-decoration: none; color: var(--accent); font-weight: 700; }
+.hz-start {
+  display: flex; flex-direction: column; gap: 14px; margin: 4px 0 20px; padding: 18px 16px 14px; border-radius: 16px;
+  background: var(--surface); border: 1px solid color-mix(in srgb, var(--p-gold) 55%, var(--line)); box-shadow: 0 6px 18px rgba(60, 40, 10, .08);
+}
+.hz-s-t { font-size: 21px; font-weight: 900; text-align: center; }
+.hz-s-sub { margin-top: -10px; font-size: 12.5px; color: var(--muted); text-align: center; }
+.hz-s-q { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px dotted var(--p-rule); }
+.hz-s-q > span { display: flex; align-items: center; gap: 8px; font-size: 14.5px; font-weight: 800; }
+.hz-s-q > span i { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-size: 12px; color: var(--p-on); background: var(--p-green); }
+.hz-s-known {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; padding: 11px 14px; border-radius: 12px; text-align: start;
+  font-size: 15px; font-weight: 800; color: var(--p-green); background: color-mix(in srgb, var(--p-green) 7%, transparent); border: 1px dashed color-mix(in srgb, var(--p-green) 45%, transparent);
+}
+:root[data-theme="dark"] .hz-s-known { color: #8fd3a8; }
+.hz-s-known small, .hz-s-note { font-size: 12px; font-weight: 500; color: var(--muted); }
+.hz-s-ch { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.hz-s-ch button {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; min-height: 58px; padding: 8px 6px; border-radius: 12px;
+  font-size: 14px; color: var(--ink); background: var(--tint); border: 1px solid transparent; text-align: center;
+}
+.hz-s-ch button small { font-size: 11px; color: var(--muted); }
+.hz-s-ch button.on { background: color-mix(in srgb, var(--p-green) 12%, var(--surface)); border-color: var(--p-green); box-shadow: 0 0 0 1px var(--p-green); }
+.hz-start .hz-go { margin: 4px 0 0; }
+.hz-s-skip { align-self: center; padding: 4px 10px; font-size: 13px; color: var(--muted); }
+.hz-kn .hz-kg { margin: 2px 0 12px; }
+.hz-kgrid .pp-g { border: 1px solid transparent; }
+.hz-kgrid .pp-g.sel { border-color: var(--p-green); background: color-mix(in srgb, var(--p-green) 10%, var(--surface)); }
+.hz-kgrid .pp-g:disabled { opacity: .6; }
+.hz-kn .hz-foot { margin-top: 12px; }
+.hz-kn .hz-done:disabled { opacity: .45; }
+.hz-undo {
+  display: flex; align-items: center; gap: 10px; margin: 0 0 12px; padding: 9px 12px 9px 8px; border-radius: 12px; font-size: 13.5px;
+  background: color-mix(in srgb, var(--ok) 10%, var(--surface)); border: 1px solid color-mix(in srgb, var(--ok) 30%, transparent); animation: fadeIn .3s ease both;
+}
+.hz-undo span { flex: 1; min-width: 0; }
+.hz-undo [data-hz-undo] { padding: 5px 14px; border-radius: 9px; font-weight: 800; color: var(--ok); background: var(--surface); border: 1px solid color-mix(in srgb, var(--ok) 40%, transparent); }
+.hz-undo [data-hz-undo-x] { width: 26px; height: 26px; border-radius: 50%; color: var(--muted); font-size: 17px; }
+.hz-done.quiet { color: var(--p-green); background: none; box-shadow: none; border: 1px dashed color-mix(in srgb, var(--p-green) 50%, transparent); font-size: 14px; padding: 10px 14px; }
+:root[data-theme="dark"] .hz-done.quiet { color: #8fd3a8; }
+.hz-more .hz-k-i { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2.2; }

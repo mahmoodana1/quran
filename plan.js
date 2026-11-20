@@ -18,11 +18,12 @@ const Plan = (() => {
   // recently recited first, weak pages coming back three times as often; as many pages a day as keeps
   // that pace, so a day missed is not lost: what was due stays first.
   function revision({ ayas, said = {}, first = {}, weak = new Set(), skip = () => false, days = 7, now = Date.now() }) {
-    const week = now - 7 * DAY, near = [], byPage = new Map();
+    const week = now - 7 * DAY, near = [], byPage = new Map(), t0 = dayStart(now);
     for (const k of Object.keys(said)) {
       const ai = +k;
       if (!ayas[ai] || skip(ai)) continue;
       const t = first[k] > 1e9 ? first[k] : said[k];
+      if (first[k] > 1e9 && first[k] >= t0) continue; // (memorized today: today's lesson, revised from tomorrow)
       if (t >= week && first[k] !== 1) { near.push(ai); continue; }
       const p = ayas[ai][2];
       if (!byPage.has(p)) byPage.set(p, { page: p, ayas: [], last: Infinity, weak: 0 });
@@ -281,7 +282,17 @@ const Plan = (() => {
     return out;
   }
 
-  return { DAY, dayKey, mergeRibbons, mergeRecite, mergeDays, dayNo, dayStart, revision, ribbon, pageRuns, streak, lastDays, ward, hijri, MONTHS, OCCASIONS, occasions, month, ics };
+  // ayas memorized before (marked so by hand) given a last revision each, so they come round a slice a day:
+  // their pages in order, the first due today and the last at the end of the cycle (days); not all
+  // "revised today", nor all late at once. ayas: the riwaya's [[sura, aya, page], …]; returns { ai: when }
+  function backdate(list, ayas, days = 7, now = Date.now()) {
+    const pages = [...new Set(list.map(ai => ayas[ai][2]))].sort((a, b) => a - b), rank = new Map(pages.map((p, i) => [p, i]));
+    const out = {};
+    for (const ai of list) out[ai] = Math.round(now - days * DAY * (1 - rank.get(ayas[ai][2]) / pages.length));
+    return out;
+  }
+
+  return { DAY, dayKey, mergeRibbons, backdate, mergeRecite, mergeDays, dayNo, dayStart, revision, ribbon, pageRuns, streak, lastDays, ward, hijri, MONTHS, OCCASIONS, occasions, month, ics };
 })();
 
 if (typeof module !== 'undefined') module.exports = Plan;

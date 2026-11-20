@@ -3102,6 +3102,8 @@ const Recite = (() => {
   function setPlan(s) {
     if (!R.suraStart[s] && R.suraStart[s] !== 0) return;
     store.set(planKey(), { s, per: store.get(planKey(), null)?.per || 5, at: Date.now() });
+    // (الحفظ's lesson on the same surah: one thing being memorized, not two)
+    if (typeof Hifz !== 'undefined') Hifz.fromPlan(s);
     store.set('recite.view', '');
     renderSheet();
     toast(`خطتك: ${suraName(s)}`);
@@ -3172,7 +3174,9 @@ const Recite = (() => {
       }
       suraEdit = null;
       const l = log(); l.said ||= {}; l.first ||= {};
-      for (const a of on) { l.said[a] = Date.now(); l.first[a] = 1; }
+      // (marked by hand: come round in the revision a slice a day, not all "revised today")
+      const when = Plan.backdate(on, R.ayas, store.get('hifz.o', {}).days || 7);
+      for (const a of on) { l.said[a] = when[a]; l.first[a] = 1; }
       for (const a of off) { delete l.said[a]; delete l.first[a]; gone(l, 'said', a); }
       store.set(key(), l); weakMap = null; rerender();
       toast('حُفظت التغييرات'); haptic(15);

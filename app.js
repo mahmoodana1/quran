@@ -1798,8 +1798,9 @@ audio.addEventListener('pause', () => { $('#player').classList.add('paused'); cl
 audio.addEventListener('error', () => { if (P.ai != null) toast('تعذر تحميل الصوت'); });
 
 function showPlayer() {
-  $('#plTitle').textContent = ayaLabel(P.ai) + (P.lab ? ` · ${P.lab}` : '');
-  $('#plReciter').textContent = `الشيخ ${reciterFull(R.id)}`;
+  $('#plTitle').textContent = ayaLabel(P.ai);
+  $('#plReciter').textContent = P.lab || `الشيخ ${reciterFull(R.id)}`;
+  $('#plReciter').classList.toggle('lab', !!P.lab);
   show($('#player'));
   if (S.act == null) hide($('#ayaBar'));
   if ('mediaSession' in navigator) {
