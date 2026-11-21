@@ -1943,6 +1943,45 @@ async function similarHTML(ai) {
       <p style="font-family:${R.font}">${differ(me, ayaWords(x.ai))}</p></button>`).join('')}
     ${n > list.length ? `<p class="sm-more">وآيات أخرى تشبهها (${ar(n)} في المجموع)، أقربها ما سبق</p>` : ''}`;
 }
+// ---- the tafsir read: as-Sa'di's from the app's own files (a surah each), the others an aya at a
+// time from spa5k/tafsir_api (MIT; GitHub's CDN), each kept on the device once read (sw.js: TAFSIR_MORE),
+// the next aya's asked for at once so going on is instant. Chosen from the sheet's subtitle (store 'tafsir')
+const TAFASIR = [
+  ['muyassar', 'التفسير الميسر', 'مجمع الملك فهد', 'موجز', 'ar-tafsir-muyassar'],
+  ['mukhtasar', 'المختصر في التفسير', 'مركز تفسير', 'موجز', 'ar-tafsir-al-mukhtasar'],
+  ['jalalayn', 'تفسير الجلالين', 'المحلي والسيوطي', 'موجز', 'ar-tafsir-al-jalalayn'],
+  ['saadi', 'تفسير السعدي', 'ت ١٣٧٦هـ', 'متوسط', null],
+  ['baghawi', 'تفسير البغوي', 'ت ٥١٦هـ', 'متوسط', 'ar-tafsir-al-baghawi'],
+  ['wasit', 'التفسير الوسيط', 'محمد سيد طنطاوي', 'متوسط', 'ar-tafsir-al-wasit'],
+  ['ibnkathir', 'تفسير ابن كثير', 'ت ٧٧٤هـ', 'مطوّل', 'ar-tafsir-ibn-kathir'],
+  ['tabari', 'تفسير الطبري', 'ت ٣١٠هـ', 'مطوّل', 'ar-tafsir-al-tabari'],
+  ['qurtubi', 'تفسير القرطبي', 'ت ٦٧١هـ', 'مطوّل', 'ar-tafseer-al-qurtubi'],
+  ['tahrir', 'التحرير والتنوير', 'ابن عاشور', 'مطوّل', 'ar-tafseer-tahrir-al-tanwir'],
+];
+const tafsirNow = () => TAFASIR.find(t => t[0] === store.get('tafsir', 'saadi')) || TAFASIR[3];
+const TF_BASE = 'https://raw.githubusercontent.com/spa5k/tafsir_api/main/tafsir/';
+const moreFiles = new Map();
+function moreTafsir(slug, s, n) {
+  const k = `${slug}/${s}/${n}`;
+  if (!moreFiles.has(k)) moreFiles.set(k, fetch(`${TF_BASE}${k}.json`).then(r => { if (!r.ok) throw new Error(r.status); return r.text(); })
+    .then(t => { try { return (JSON.parse(t).text || '').trim(); } catch { return ''; } })
+    .catch(e => { moreFiles.delete(k); throw e; }));
+  return moreFiles.get(k);
+}
+// its text: paragraphs, the Quran quoted ﴿…﴾ marked, the editions' page marks out, their notes small
+function moreHTML(t) {
+  return t.replace(/صفحة [٠-٩0-9]+\n?/g, '').replace(/\(p-[٠-٩0-9]+\)/g, '').split(/\n+/).filter(x => x.trim()).map(par =>
+    '<p>' + esc(par).replace(/﴿([^﴾]+)﴾/g, '<span class="q">﴿$1﴾</span>').replace(/\[\[([^\]]+)\]\]/g, '<small class="tf-fn">$1</small>') + '</p>').join('');
+}
+// an aya's text in a tafsir that comments on several ayas together: found on the first of them
+async function moreFor(slug, s, n) {
+  for (let m = n; m >= Math.max(1, n - 12); m--) {
+    const t = await moreTafsir(slug, s, m);
+    if (t) return { t, from: m };
+  }
+  return { t: '', from: n };
+}
+
 let tfMode = 'tafsir';
 $('#tfSeg').onclick = e => { const b = e.target.closest('[data-tf]'); if (b && tfAya != null) openTafsir(tfAya, b.dataset.tf); };
 $('#tfBody').addEventListener('click', e => {
@@ -1951,11 +1990,16 @@ $('#tfBody').addEventListener('click', e => {
 });
 
 async function openTafsir(ai, mode = tfMode) {
+  // (the causes of revelation are at the head of the tafsir now: asked for, it opens there with them unfolded)
+  const whyOpen = mode === 'asbab';
+  if (whyOpen) mode = 'tafsir';
   tfMode = mode;
+  closeTfMenu();
   document.querySelectorAll('#tfSeg [data-tf]').forEach(b => b.classList.toggle('on', b.dataset.tf === mode));
-  $('#tfSub').textContent = mode === 'similar' ? 'الآيات المتشابهة' : mode === 'asbab' ? 'سبب النزول' : 'تفسير السعدي';
+  const tn = tafsirNow();
+  $('#tfSub').textContent = mode === 'similar' ? 'الآيات المتشابهة' : tn[1];
+  $('#tfSub').classList.toggle('on', mode === 'tafsir');
   similarOf(ai).then(l => { if (tfAya !== ai) return; const k = $('#tfSimN'); k.hidden = !l.n; k.textContent = ar(l.n); });
-  asbabOf(R.ayas[ai]).then(l => { if (tfAya !== ai) return; const k = $('#tfAsN'); k.hidden = !l.n; k.textContent = ar(l.n); }).catch(() => {});
   tfAya = ai;
   S.act = ai; S.focus = ai; paintMarks();
   const a = R.ayas[ai];
@@ -1972,11 +2016,38 @@ async function openTafsir(ai, mode = tfMode) {
     if (tfAya === ai && tfMode === 'similar') { body.innerHTML = html; body.scrollTop = 0; }
     return;
   }
-  if (mode === 'asbab') {
-    let html;
-    try { html = asbabHTML(await asbabOf(a)); }
-    catch { html = '<div class="tf-wait">تعذّر تحميل أسباب النزول — تحقق من الاتصال أو حمّلها من الإعدادات («تحميل الكل»)</div>'; }
-    if (tfAya === ai && tfMode === 'asbab') { body.innerHTML = html; body.scrollTop = 0; }
+  // the causes of revelation, at the head: folded where there are some, a quiet line where there are none;
+  // filled in when they come, never holding the tafsir back
+  const why = document.createElement('div');
+  why.className = 'tf-why-slot';
+  asbabOf(a).then(w => {
+    if (tfAya !== ai) return;
+    why.innerHTML = w.n
+      ? `<details class="tf-why"${whyOpen ? ' open' : ''}><summary><span class="tf-why-ic"><svg viewBox="0 0 24 24"><path d="M12 3.5l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L4.8 8.8l5-.7z"/></svg></span><b>سبب النزول</b><small>${w.n > 1 ? `${ar(w.n)} روايات` : 'رواية واحدة'}</small></summary><div class="tf-why-in">${asbabHTML(w)}</div></details>`
+      : '<p class="tf-why-none">لا سبب نزول لهذه الآية</p>';
+  }).catch(() => {});
+  if (tn[4]) {
+    // another tafsir: an aya at a time
+    try {
+      let html = '', last = null;
+      for (let h = a[5]; h <= a[6]; h++) {
+        const [hs, hn] = META.hafs[h];
+        const { t, from } = await moreFor(tn[4], hs, hn);
+        if (!t || t === last) continue;
+        last = t;
+        html += (from !== hn ? `<div class="tf-group">من تفسير الآية ${ar(from)}، وهذه الآية فيه</div>` : '') + moreHTML(t);
+      }
+      if (tfAya !== ai || tfMode !== 'tafsir') return;
+      body.replaceChildren(why);
+      body.insertAdjacentHTML('beforeend', html || `<div class="tf-wait">لم يتكلم ${tn[1]} على هذه الآية بعينها</div>`);
+      body.insertAdjacentHTML('beforeend', `<p class="si-src">${tn[1]} · ${tn[2]}</p>`);
+      body.scrollTop = 0;
+      // the next aya's, asked for now: going on is instant
+      const nx = R.ayas[ai + 1];
+      if (nx) { const [ns, nn] = META.hafs[nx[5]]; moreTafsir(tn[4], ns, nn).catch(() => {}); }
+    } catch {
+      if (tfAya === ai) body.innerHTML = `<div class="tf-wait">تعذّر تحميل ${tn[1]} — تحقق من الاتصال، أو اختر تفسير السعدي (محفوظ مع التطبيق)</div>`;
+    }
     return;
   }
   try {
@@ -1996,14 +2067,9 @@ async function openTafsir(ai, mode = tfMode) {
       const label = to > from ? `تفسير الآيات ${ar(from)}–${ar(to)}` : '';
       html += (label ? `<div class="tf-group">${label}</div>` : '') + tafsirHTML(e);
     }
-    // where a cause of revelation is known, a word of it above the tafsir: a tap to its tab
-    let why = '';
-    try {
-      const w = await asbabOf(a);
-      if (w.n) why = `<button class="tf-why-go" data-tf-go="asbab"><b>لهذه الآية سبب نزول</b><small>${w.n > 1 ? `${ar(w.n)} روايات` : 'رواية'}</small></button>`;
-    } catch {}
-    if (tfAya !== ai) return;
-    body.innerHTML = why + (html || '<div class="tf-wait">لا يوجد تفسير لهذه الآية</div>');
+    if (tfAya !== ai || tfMode !== 'tafsir') return;
+    body.replaceChildren(why);
+    body.insertAdjacentHTML('beforeend', html || '<div class="tf-wait">لا يوجد تفسير لهذه الآية</div>');
     body.scrollTop = 0;
   } catch {
     if (tfAya === ai) body.innerHTML = '<div class="tf-wait">تعذّر تحميل التفسير — تحقق من الاتصال أو حمّله من الإعدادات</div>';
@@ -2065,7 +2131,31 @@ function asbabHTML(w) {
   return html + '<p class="si-src">المصادر: صحيح أسباب النزول (دراسة حديثية) لإبراهيم محمد العلي · الموسوعة القرآنية quranpedia.net</p>';
 }
 
+// the tafsirs to choose from: under the sheet's subtitle, by length, the one read ticked
+function openTfMenu() {
+  if (tfMode !== 'tafsir') return;
+  if ($('#tfMenu')) return closeTfMenu();
+  const cur = tafsirNow()[0];
+  const groups = ['موجز', 'متوسط', 'مطوّل'].map(g => `<div class="tfm-g">${g}</div>` + TAFASIR.filter(t => t[3] === g).map(t =>
+    `<button class="tfm-r${t[0] === cur ? ' on' : ''}" data-tfm="${t[0]}" role="option" aria-selected="${t[0] === cur}"><span><b>${t[1]}</b><small>${t[2]}</small></span>${t[0] === cur ? '<i>✓</i>' : ''}</button>`).join('')).join('');
+  const m = document.createElement('div');
+  m.id = 'tfMenu'; m.setAttribute('role', 'listbox');
+  m.innerHTML = groups + '<p class="tfm-note">السعدي محفوظ مع التطبيق؛ والبقية تُحمَّل آيةً آية وتبقى على جهازك بعد قراءتها</p>';
+  $('#tafsir').append(m);
+  m.addEventListener('click', e => {
+    const b = e.target.closest('[data-tfm]');
+    if (!b) return;
+    store.set('tafsir', b.dataset.tfm);
+    closeTfMenu();
+    if (tfAya != null) openTafsir(tfAya, 'tafsir');
+  });
+}
+function closeTfMenu() { $('#tfMenu')?.remove(); }
+$('#tfSub').addEventListener('click', e => { e.stopPropagation(); openTfMenu(); });
+$('#tfBody').addEventListener('pointerdown', closeTfMenu);
+
 function closeTafsir() {
+  closeTfMenu();
   // (the similar ayas: the one gone to stays lit on its page once the sheet is away, to be found
   // at a glance; the next tap on the page clears it, as any lit aya)
   const keep = tfMode === 'similar' ? tfAya : null;
