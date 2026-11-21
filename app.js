@@ -2443,8 +2443,10 @@ function settingsHTML() {
       <span class="rw-dl" data-dl="rw" data-rid="${r.id}" role="button" hidden></span></button>`;
   }).join('');
   const v = voice(R.id), n = voices(R.id).length, rname = META.riwayat.find(r => r.id === R.id)?.name || '';
-  const nav = [['set-audio', 'التلاوة'], ['set-hifz', 'الحفظ'], ['set-look', 'المظهر'], ['set-off', 'دون اتصال'], ['set-data', 'بياناتك'], ['set-app', 'التطبيق'], ['set-rw', 'الرواية']]
-    .map(([id, t]) => `<button data-set-jump="${id}">${t}</button>`).join('');
+  // the sections, a chip each with its mark; the one being read lit (setNavSpy)
+  const nav = [['set-audio', 'audio', 'التلاوة'], ['set-hifz', 'hifz', 'الحفظ'], ['set-look', 'look', 'المظهر'], ['set-khatma', 'khatma', 'الختمة'],
+    ['set-off', 'off', 'دون اتصال'], ['set-data', 'data', 'بياناتك'], ['set-app', 'app', 'التطبيق'], ['set-rw', 'riwaya', 'الرواية']]
+    .map(([id, ic, t], i) => `<button data-set-jump="${id}"${i ? '' : ' class="on"'}><svg viewBox="0 0 24 24">${SET_ICO[ic]}</svg>${t}</button>`).join('');
   // a section: its head (a green mark, its name, what it is for in a line), then its body
   const sec = (id, ic, t, sub, body) => `<section class="set-sec"${id ? ` id="${id}"` : ''}>
     <header class="set-h"><span class="set-ic"><svg viewBox="0 0 24 24">${SET_ICO[ic]}</svg></span><span class="set-ht"><b>${t}</b><small>${sub}</small></span></header>
@@ -2472,7 +2474,7 @@ function settingsHTML() {
     ${sec('set-look', 'look', 'المظهر', 'ألوان الصفحات، وما يريح هاتفك', `<div class="themes">${themes}</div>
       <div class="group">${switchRow('lite', 'مظهر خفيف', 'بلا ضبابية خلف الأشرطة ولا حركات مستمرة: أسلس على الهواتف المتوسطة والقديمة')}${S.desk ? '' : switchRow('norotate', 'إيقاف التدوير التلقائي', IOS ? 'على iPhone وiPad لا يسمح النظام لتطبيق ويب بتثبيت الاتجاه: ثبّته من «قفل اتجاه الشاشة» في مركز التحكم' : `تبقى الشاشة ${rotLockName()} ولو أدرت الهاتف`)}</div>`)}
 
-    ${sec('', 'khatma', 'الختمة', 'ختماتك وتقدّمك في كل منها', `<div class="group"><button class="row" data-open-lib><span class="mini-cover">${coverHTML(K, true)}</span>
+    ${sec('set-khatma', 'khatma', 'الختمة', 'ختماتك وتقدّمك في كل منها', `<div class="group"><button class="row" data-open-lib><span class="mini-cover">${coverHTML(K, true)}</span>
       <span class="main"><span class="t">ختماتي</span><span class="s">${esc(K.name)} · ${ar(khatmaPct(K))}٪ · صفحة ${ar(K.page)}${KH.length > 1 ? ` · ${ar(KH.length)} ختمات` : ''}</span></span>${go}</button></div>`)}
 
     ${sec('set-off', 'off', 'دون اتصال', 'ما تحفظه على جهازك ليعمل بلا إنترنت', `${allCardHTML()}
@@ -2501,6 +2503,34 @@ function settingsHTML() {
     ${sec('set-rw', 'riwaya', 'الرواية', 'اختيار الرواية يغيّر المصحف كله: رسمه وضبطه ووقفه وتلاوته', `<div class="group">${riwayat}</div>
       <p class="note">التلاوات سورةً سورة من mp3quran.net مع مواضع آياتها، وبعض قرّاء حفص آيةً آية من everyayah.com.</p>`)}`;
 }
+
+// the settings' chips: the section being read lit, and its chip brought into view in the row
+let navLock = 0, navRaf = 0;
+function setNavOn(id) {
+  const nav = $('.set-nav');
+  if (!nav) return;
+  let on = null;
+  for (const b of nav.querySelectorAll('[data-set-jump]')) { const is = b.dataset.setJump === id; b.classList.toggle('on', is); if (is) on = b; }
+  if (on) {
+    const r = on.getBoundingClientRect(), n = nav.getBoundingClientRect();
+    if (r.left < n.left + 12 || r.right > n.right - 12) nav.scrollTo({ left: on.offsetLeft - nav.clientWidth / 2 + on.offsetWidth / 2, behavior: 'smooth' });
+  }
+}
+function setNavSpy() {
+  if (tab !== 'settings' || setView || Date.now() < navLock) return;
+  const nav = $('.set-nav'), body = $('#sheetBody');
+  if (!nav || !body) return;
+  const line = nav.getBoundingClientRect().bottom + 40;
+  let id = null;
+  for (const sec of body.querySelectorAll('.set-sec[id]')) { if (sec.getBoundingClientRect().top <= line) id = sec.id; }
+  // (at the very end: the last section, however short it is)
+  if (body.scrollTop + body.clientHeight >= body.scrollHeight - 4) id = body.querySelector('.set-sec[id]:last-of-type')?.id || id;
+  setNavOn(id || 'set-audio');
+}
+$('#sheetBody').addEventListener('scroll', () => {
+  if (tab !== 'settings' || navRaf) return;
+  navRaf = requestAnimationFrame(() => { navRaf = 0; setNavSpy(); });
+}, { passive: true });
 
 // the settings' sections' marks
 const SET_ICO = {
@@ -3418,7 +3448,14 @@ $('#sheetBody').addEventListener('click', async e => {
   const sv = e.target.closest('[data-set-view]');
   if (sv) { stopPreview(); setView = sv.dataset.setView; renderSheet(); $('#sheetBody').scrollTop = 0; haptic(5); return; }
   const jump = e.target.closest('[data-set-jump]');
-  if (jump) { const el = $('#' + jump.dataset.setJump), nav = $('.set-nav'); if (el) $('#sheetBody').scrollTo({ top: el.offsetTop - (nav?.offsetHeight || 0) - 14, behavior: 'smooth' }); return; }
+  if (jump) {
+    const el = $('#' + jump.dataset.setJump), nav = $('.set-nav');
+    if (el) {
+      setNavOn(jump.dataset.setJump); navLock = Date.now() + 900; // (lit at once; not moved by the scroll it starts)
+      $('#sheetBody').scrollTo({ top: el.offsetTop - (nav?.offsetHeight || 0) - 14, behavior: 'smooth' });
+    }
+    return;
+  }
   const vp = e.target.closest('[data-vc-play]');
   if (vp) { e.stopPropagation(); playPreview(vp); return; }
   const vc = e.target.closest('[data-voice]');
