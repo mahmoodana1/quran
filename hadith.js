@@ -278,8 +278,8 @@ const Hadith = (() => {
         ${chains.length > 1 ? `<details class="hd-more-c"><summary>${chains.length === 2 ? 'طريق آخر' : `${ar(chains.length - 1)} طرق أخرى`} في هذا الموضع</summary>${chains.slice(1).map(c => chainHTML(c, names, h)).join('')}</details>` : ''}
 </section>` : ''}
       ${others.length ? `<section class="hd-sec"><h3>روايات أخرى للحديث<small>${h.on > others.length ? `${ar(h.on)} رواية، أولها:` : 'في الكتب الثلاثة'}</small></h3>
-        <div class="group">${others.map(([b2, k2, j2, l, same]) => `<button class="row" data-hd-go="${b2}:${k2}:${j2}">
-          <span class="main"><span class="t">${BOOKS[b2]} · ${ar(l)}</span><span class="s">${same ? 'عن الصحابي نفسه' : 'عن صحابي آخر أو بلفظ آخر'}</span></span>
+        <div class="group">${others.map(([b2, k2, j2, l, same]) => `<button class="row hd-orow" data-hd-go="${b2}:${k2}:${j2}"><span class="num hd-bn">${SHORT[b2]}<b>${ar(l)}</b></span>
+          <span class="main"><span class="t">${BOOKS[b2]}</span><span class="s">${same ? 'عن الصحابي نفسه' : 'عن صحابي آخر أو بلفظ آخر'}</span></span>
           ${same && b2 !== b && b2 !== 'abudawud' && b !== 'abudawud' ? '<span class="tag hd-agree">متفق عليه</span>' : ''}${IC.go}</button>`).join('')}</div></section>` : ''}
     </article>`;
   }
