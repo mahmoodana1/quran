@@ -2626,7 +2626,7 @@ const Recite = (() => {
         <span class="tq-go-v" style="font-family:${R.font}">${esc(ayaTokens(at).slice(0, 5).join(' '))} …</span></span>${ICONS.go}</button>
       <div class="tq-sw" role="group" aria-label="السورة">
         <button data-rc-sw="${R.ayas[at][0] - 1}" aria-label="السورة السابقة"${R.ayas[at][0] <= 1 ? ' disabled' : ''}>${ICONS.go.replace('M15 6l-6 6 6 6', 'M9 6l6 6-6 6')}</button>
-        <select data-rc-sws aria-label="اختر سورة">${META.suras.map((x, i) => sizes[i + 1] ? `<option value="${i + 1}"${i + 1 === R.ayas[at][0] ? ' selected' : ''}>${ar(i + 1)}. ${x[0]}${got[i + 1] ? (got[i + 1] >= sizes[i + 1] ? ' ✓' : ` · ${ar(got[i + 1])}/${ar(sizes[i + 1])}`) : ''}</option>` : '').join('')}</select>
+        <select data-rc-sws aria-label="اختر سورة">${META.suras.map((x, i) => sizes[i + 1] ? `<option value="${i + 1}"${i + 1 === R.ayas[at][0] ? ' selected' : ''}>${isDev() ? '' : `${ar(i + 1)}. `}${x[0]}${got[i + 1] ? (got[i + 1] >= sizes[i + 1] ? ' ✓' : ` · ${ar(got[i + 1])}/${ar(sizes[i + 1])}`) : ''}</option>` : '').join('')}</select>
         <button data-rc-sw="${R.ayas[at][0] + 1}" aria-label="السورة التالية"${R.ayas[at][0] >= 114 ? ' disabled' : ''}>${ICONS.go}</button>
         <button class="tq-sw0" data-rc-sw0="${R.ayas[at][0]}">من أولها</button>
       </div>
@@ -2642,7 +2642,7 @@ const Recite = (() => {
       const met = hz.newToday.length > 0, st = Object.keys(hz.steps).length;
       rows.push({ c: 'green', icon: ICONS.seed, k: 'حفظ جديد', t: met ? `حفظت اليوم ${ayaCount(hz.newToday.length)}` : hz.text,
         s: met ? `والتالي: ${hz.text}` : st ? `بدأت درسك · ${ar(st)} ${st === 1 ? 'خطوة' : st === 2 ? 'خطوتان' : 'خطوات'}` : `درسك · ${ayaCount(hz.n)} · استمع ثم ردّد ثم سمّع`, done: met, act: 'data-rc-hifz' });
-    } else if (hz?.setup) rows.push({ c: 'green', icon: ICONS.seed, k: 'حفظ جديد', t: 'ابدأ رحلة حفظ', s: 'من أين تبدأ، وكم في الدرس — في «الحفظ»', act: 'data-rc-hifz', add: true });
+    } else if (hz?.setup) rows.push({ c: 'green', icon: ICONS.seed, k: 'حفظ جديد', t: isDev() ? 'لم تبدأ الحفظ بعد' : 'ابدأ رحلة حفظ', s: isDev() ? 'ثلاثة أسئلة في «الحفظ»، ويظهر درسك هنا' : 'من أين تبدأ، وكم في الدرس — في «الحفظ»', act: 'data-rc-hifz', add: true });
     else if (pl && !pl.finished) {
       const met = pl.todayN >= pl.per, a0 = pl.portion[0], a1 = pl.portion[pl.portion.length - 1];
       rows.push({ c: 'green', icon: ICONS.seed, k: 'حفظ جديد', t: suraName(pl.s), s: met ? `أتممت ورد اليوم · ${ayaCount(pl.todayN)}` : `الآيات ${ar(R.ayas[a0][1])}${a1 !== a0 ? '–' + ar(R.ayas[a1][1]) : ''} · ${ar(pl.todayN)} من ${ar(pl.per)}`, f: Math.min(1, pl.todayN / pl.per), done: met, act: 'data-rc-new', edit: pl.s });
@@ -2656,7 +2656,7 @@ const Recite = (() => {
     else if (revs.length) rows.push({ c: 'amber', icon: ICONS.review, k: 'مراجعة', t: 'لا شيء مستحق اليوم', s: `التالية: ${suraName(revs[0].s)} ${dueText(revs[0])}`, done: true, act: `data-rc-rev="${revs[0].s}"`, edit: revs[0].s });
     if (weak.length) rows.push({ c: 'coral', icon: ICONS.fix, k: 'تثبيت', t: weak.length === 1 ? 'موضع ضعف واحد' : weak.length === 2 ? 'موضعا ضعف' : `${ar(weak.length)} ${weak.length <= 10 ? 'مواضع' : 'موضعًا'} ضعف`, s: 'آيات أخطأت فيها، سمّعها حتى تثبت', act: 'data-rc-review' });
     const doneN = rows.filter(x => x.done).length;
-    h += `<div class="pp-h"><b>ورد اليوم</b><small>${ar(doneN)} من ${ar(rows.length)}</small></div>
+    h += `<div class="pp-h"><b>ورد اليوم</b><small>${isDev() && hz?.setup && !doneN ? '' : `${ar(doneN)} من ${ar(rows.length)}`}</small></div>
       <div class="group tq-wird">${rows.map(x => `<button class="row tq-row ${x.c}${x.done ? ' done' : ''}" ${x.act}>${x.edit ? pen(x.edit) : ''}
         <span class="tq-ri">${x.done ? ICONS.check : x.icon}</span>
         <span class="main"><span class="tq-rk">${x.k}</span><span class="t">${x.t}</span><span class="s">${x.s}</span>

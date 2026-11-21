@@ -1,0 +1,446 @@
+/* =====================================================================
+   dev mode: the redesign being tried (index.html loads this only with
+   q.ui.dev on; dev.js is its other half). Every rule starts :root.dev so
+   it outranks the app's own and touches no one else.
+
+   One system: warm paper with a real grain, ink, one accent (the
+   mushaf's emerald, wherever the app once used blue), gold only for fine
+   lines and numbers. An 8-point spacing, three radii (12 · 16 · 22), two
+   shadows, one type scale (34 · 22 · 17 · 15 · 13 · 11).
+   ===================================================================== */
+
+/* ---------------------------------------------------------------- tokens */
+:root.dev {
+  --paper: #f8f4ec; --paper-hi: #fcfaf5; --paper-lo: #f2ece1;
+  --ink: #1d1a16; --muted: #6c655b; --faint: #a0978a; --rule: #cfc6b8; --chip: #e9e2d6;
+  --surface: #fffdf9; --card: #fffdf9;
+  --line: rgba(74, 56, 28, .11); --tint: rgba(74, 56, 28, .055); --tint-2: rgba(74, 56, 28, .11);
+  --accent: #1f5a47; --on-accent: #fbf6ea; --sel: rgba(31, 90, 71, .11);
+  --p-green: #215c48; --p-green-2: #123a2d; --p-ink: #1f5a47; --p-gold: #b3945c; --gold-ink: #7a6034; --p-rule: rgba(140, 115, 70, .26);
+  --c-suras: #1f5a47; --danger: #b0372b; --ok: #2b7a55;
+  --dv-tabbar: 54px;
+  --dv-on-g: #fbf6ea; /* text and icons on the green, whatever the theme */
+  --dv-r1: 12px; --dv-r2: 16px; --dv-r3: 22px;
+  --dv-sh1: 0 1px 1px rgba(60, 42, 14, .04), 0 2px 8px -2px rgba(60, 42, 14, .07);
+  --dv-sh2: 0 1px 2px rgba(40, 28, 8, .06), 0 14px 40px -10px rgba(40, 28, 8, .26);
+  --dv-ease: cubic-bezier(.2, .9, .3, 1);
+  --dv-hair: .5px solid var(--line);
+  /* a paper grain: fine, warm, barely there */
+  --dv-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .35 0 0 0 0 .27 0 0 0 0 .15 0 0 0 .055 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+:root.dev[data-theme="sepia"] {
+  --paper: #f0e6cf; --paper-hi: #f5eddb; --paper-lo: #e7dbbf;
+  --ink: #33271a; --muted: #75654d; --faint: #a3927a; --surface: #f7efdc; --card: #f7efdc;
+  --line: rgba(90, 62, 22, .15); --tint: rgba(90, 62, 22, .07); --tint-2: rgba(90, 62, 22, .14);
+  --accent: #3d5c30; --on-accent: #f7f0dc; --sel: rgba(61, 92, 48, .14);
+  --p-green: #3d5c30; --p-green-2: #263b1d; --p-ink: #3d5c30; --c-suras: #3d5c30;
+}
+:root.dev[data-theme="dark"] {
+  --paper: #14120f; --paper-hi: #191612; --paper-lo: #100e0b;
+  --ink: #ece5d6; --muted: #a39b8b; --faint: #776f63; --rule: #463f35; --chip: #2a261f;
+  --surface: #1c1915; --card: #1c1915;
+  --line: rgba(255, 240, 210, .09); --tint: rgba(255, 240, 210, .06); --tint-2: rgba(255, 240, 210, .12);
+  --accent: #7cc3a3; --on-accent: #0c2219; --sel: rgba(124, 195, 163, .15);
+  --p-green: #24624e; --p-green-2: #123a2c; --p-ink: #8fcfb2; --c-suras: #7cc3a3;
+  --dv-sh1: 0 1px 2px rgba(0, 0, 0, .3);
+  --dv-sh2: 0 1px 2px rgba(0, 0, 0, .4), 0 16px 44px -10px rgba(0, 0, 0, .7);
+  --dv-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 .95 0 0 0 0 .85 0 0 0 .035 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+/* ---------------------------------------------------------------- paper */
+:root.dev .page,
+:root.dev #sheet, :root.dev #library, :root.dev #adhkar {
+  background: var(--dv-grain), radial-gradient(140% 95% at 50% 40%, var(--paper-hi) 0%, var(--paper) 62%, var(--paper-lo) 100%);
+}
+:root.dev.lite .page, :root.dev.lite #sheet, :root.dev.lite #library, :root.dev.lite #adhkar { background: var(--paper); }
+:root.dev body { font-feature-settings: "kern"; -webkit-font-smoothing: antialiased; }
+
+/* ---------------------------------------------------------------- the reader's head */
+:root.dev .phead { font-size: 15px; padding-inline: 6px; }
+:root.dev .phead .sura-btn { gap: 6px; padding: 8px 6px; border-radius: 10px; font-weight: 700; letter-spacing: -.1px; }
+:root.dev .phead .sura-btn:active { background: var(--tint); }
+:root.dev .phead .chev { width: 16px; height: 16px; border-radius: 0; background: none; color: var(--p-gold); transform: rotate(90deg); }
+:root.dev .phead .chev svg { width: 12px; height: 12px; }
+:root.dev .phead .pnum { font-size: 13.5px; font-weight: 700; color: color-mix(in srgb, var(--ink) 62%, transparent); min-width: 0; padding: 0 8px; }
+:root.dev .phead .side { gap: 12px; }
+:root.dev .phead .juz { font-size: 13px; font-weight: 600; color: var(--muted); }
+:root.dev .phead .bm-btn { color: var(--faint); padding: 6px; }
+:root.dev .phead .bm-btn svg { width: 19px; height: 22px; }
+:root.dev .phead .bm-btn.on { color: var(--p-gold); }
+:root.dev .w.say, :root.dev .w.end.sel { color: var(--accent); }
+
+/* ---------------------------------------------------------------- the tab bar */
+:root.dev body:not(.desk) #dock.dv-dock {
+  height: calc(var(--dv-tabbar) + env(safe-area-inset-bottom));
+  grid-template-columns: 1fr 1fr 124px 1fr 1fr;
+  --dock-bg: var(--paper); --dock-line: .5px solid var(--line);
+  --my: 50%; --nr: 0px;
+}
+:root.dev #dock.dv-dock::before { -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: 0 -6px 18px -12px rgba(40, 28, 8, .18); }
+:root.dev .dv-micl {
+  position: absolute; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 7px); transform: translateX(-50%); white-space: nowrap; pointer-events: none;
+  font-size: 10.5px; font-weight: 600; color: var(--faint); line-height: 1; transition: opacity .2s ease; display: none;
+}
+:root.dev .rc-on .dv-micl, :root.dev .mic-away .dv-micl { opacity: 0; }
+:root.dev body.desk .dv-micl { display: none; }
+:root.dev #dock .dv-tab {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  padding-top: 2px; opacity: 1; color: var(--faint); border: 0 !important; background: none;
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0; transition: color .2s ease;
+}
+:root.dev #dock .dv-tab svg { width: 23px; height: 23px; transition: transform .25s var(--dv-ease); }
+:root.dev #dock .dv-tab span { line-height: 1; }
+:root.dev #dock .dv-tab.on { color: var(--accent); font-weight: 700; }
+:root.dev #dock .dv-tab.on svg g, :root.dev #dock .dv-tab.on svg path { stroke-width: 2; }
+:root.dev #dock .dv-tab:active { background: none; }
+:root.dev #dock .dv-tab:active svg { transform: scale(.88); }
+:root.dev #dock .dv-tab + .dv-tab { border: 0; }
+:root.dev #dockMic { width: auto; height: 38px; padding: 0 14px 0 12px; gap: 6px; display: flex; align-items: center; border-radius: 19px; top: calc((var(--dv-tabbar) - 2px) / 2); font-size: 13px; font-weight: 700; white-space: nowrap; box-shadow: 0 0 0 1px color-mix(in srgb, var(--p-gold) 80%, transparent), 0 8px 20px -4px rgba(18, 58, 45, .45), 0 1px 2px rgba(18, 58, 45, .3); }
+/* (the mic stays in its place with the panels up: the bar is one, wherever the reader is) */
+:root.dev .sheet-up:not(.rc-on):not(.mic-away) #dockMic { transform: translate(-50%, -50%) scale(1); opacity: 1; pointer-events: auto; }
+:root.dev .sheet-up:not(.rc-on):not(.mic-away) #dock { --nr: 0px; }
+:root.dev #dock.dv-dock .dock-mid::before { display: none; }
+:root.dev #dockArrow { top: 38%; }
+:root.dev #dockMic svg { width: 18px; height: 18px; flex: none; }
+:root.dev #dockArrow { top: 50%; }
+
+/* ---------------------------------------------------------------- floating bars */
+:root.dev .bar {
+  bottom: calc(var(--dv-tabbar) + 12px + env(safe-area-inset-bottom));
+  border-radius: var(--dv-r3); border: var(--dv-hair);
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  -webkit-backdrop-filter: blur(28px) saturate(1.6); backdrop-filter: blur(28px) saturate(1.6);
+  box-shadow: var(--dv-sh2);
+}
+:root.dev .x-btn { width: 30px; height: 30px; background: var(--tint); color: var(--muted); }
+:root.dev .acts { padding: 14px 14px 14px; gap: 14px; }
+:root.dev .acts-title { gap: 10px; font-size: 16px; }
+:root.dev .acts-title b { font-weight: 800; letter-spacing: -.1px; }
+:root.dev .acts-title small { color: var(--muted); font-size: 12.5px; }
+:root.dev .acts-title .dot { width: 7px; height: 7px; background: var(--p-gold); box-shadow: 0 0 0 3.5px color-mix(in srgb, var(--p-gold) 22%, transparent); }
+:root.dev .ab-hz {
+  font-size: 12px; font-weight: 700; color: var(--accent); padding: 5px 11px; border-radius: 99px;
+  background: var(--sel); border: 0; box-shadow: none;
+}
+:root.dev .acts-row { gap: 4px; }
+:root.dev .acts-row button { gap: 7px; font-size: 11px; font-weight: 600; color: var(--muted); }
+:root.dev .acts-row i {
+  width: 46px; height: 46px; border-radius: 15px; color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface)); box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+:root.dev .acts-row svg { width: 21px; height: 21px; }
+:root.dev .acts-row button:first-child i { color: var(--dv-on-g); background: linear-gradient(160deg, var(--p-green), var(--p-green-2)); box-shadow: 0 4px 10px -3px rgba(18, 58, 45, .5); }
+:root.dev .acts-row button.on i { background: var(--p-gold); color: #fff; box-shadow: none; }
+:root.dev .acts-row button:active i { transform: scale(.92); }
+:root.dev .acts-row button.dim { opacity: .4; }
+
+/* the surah's card: its main action the one green button */
+:root.dev .sb-row button i { border-radius: 15px; }
+:root.dev .sb-row button.main i, :root.dev .sb-row .main i { background: linear-gradient(160deg, var(--p-green), var(--p-green-2)); color: var(--dv-on-g); }
+:root.dev .sb-row button.main span { color: var(--accent); font-weight: 700; }
+
+/* the player */
+:root.dev .mini { padding: 12px 14px 14px 12px; }
+:root.dev .pl-info b { font-weight: 800; }
+:root.dev .pl-main { background: linear-gradient(160deg, var(--p-green), var(--p-green-2)); color: var(--dv-on-g); box-shadow: 0 6px 14px -4px rgba(18, 58, 45, .5); }
+:root.dev .pl-track { left: 26px; right: 26px; bottom: 6px; height: 3px; }
+:root.dev .pl-track i { background: var(--p-gold); }
+:root.dev #plReciter { color: var(--accent); font-weight: 600; }
+
+/* the toast: ink on paper's opposite, a little smaller and quieter */
+:root.dev #toast { background: color-mix(in srgb, var(--ink) 90%, transparent); color: var(--paper); font-size: 13.5px; font-weight: 600; border-radius: 14px; padding: 10px 16px; }
+
+/* ---------------------------------------------------------------- the panels */
+:root.dev body:not(.desk) #sheet { animation: dvSheet .34s var(--dv-ease); }
+@keyframes dvSheet { from { transform: translateY(18px); opacity: 0; } }
+/* head: a large title at the start; no rail button, no «تم» (the tab bar is the way round) */
+:root.dev body:not(.desk) #sheet .sheet-head {
+  display: flex; flex-direction: column; align-items: stretch; gap: 0; min-height: 0; padding: 10px 20px 4px;
+}
+:root.dev body:not(.desk) #sheet .sheet-head > .rail-btn,
+:root.dev body:not(.desk) #sheet .head-tools { display: none; }
+:root.dev body:not(.desk) #sheet .sheet-title { align-items: flex-start; padding: 0; margin: 2px 0 0; }
+:root.dev body:not(.desk) #sheet .sheet-head h1 { font-size: 32px; font-weight: 800; letter-spacing: -.4px; line-height: 1.25; }
+:root.dev body:not(.desk) #sheet .sheet-title small { display: none; }
+:root.dev body:not(.desk) #sheet[data-dv-t="suras"] .sheet-title small { display: block; font-size: 13px; margin-top: 2px; color: var(--muted); }
+:root.dev .dv-back {
+  align-self: flex-start; display: flex; align-items: center; gap: 2px; margin: 0 -6px 0 0; padding: 4px 4px;
+  color: var(--accent); font-size: 15px; font-weight: 600;
+}
+:root.dev .dv-back svg { width: 20px; height: 20px; }
+:root.dev .dv-back[hidden] { display: none; }
+:root.dev body.desk .dv-back { display: none; }
+/* the search: only where it is the way in */
+:root.dev body:not(.desk) #sheet:not(.dv-find) .search { display: none; }
+:root.dev #sheet .search {
+  margin: 8px 16px 6px; padding: 0 12px; border-radius: var(--dv-r1); color: var(--faint);
+  background: color-mix(in srgb, var(--ink) 5.5%, var(--paper)); box-shadow: inset 0 0 0 .5px var(--line);
+}
+:root.dev #sheet .search input { font-size: 16px; padding: 10px 0; }
+:root.dev #sheet .search:focus-within { background: var(--surface); box-shadow: 0 0 0 1.5px var(--accent), 0 6px 16px -6px color-mix(in srgb, var(--accent) 30%, transparent); color: var(--accent); }
+:root.dev body:not(.desk) #sheet .rail, :root.dev body:not(.desk) #sheet .rail-veil { display: none; }
+:root.dev body:not(.desk) #sheetBody { padding: 10px 16px calc(var(--dv-tabbar) + 36px + env(safe-area-inset-bottom)); }
+
+/* sections: one card style, one label style */
+:root.dev #sheet .group, :root.dev #library .group {
+  background: var(--surface); border: var(--dv-hair); border-radius: var(--dv-r2); box-shadow: var(--dv-sh1); margin-bottom: 14px;
+}
+:root.dev #sheet .group-label {
+  margin: 24px 4px 8px; font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: 0;
+}
+:root.dev #sheet .group-label::after { display: none; }
+:root.dev #sheet .row { min-height: 56px; padding: 10px 16px; gap: 14px; }
+:root.dev #sheet .row + .row::before { border-top: var(--dv-hair); left: 0; right: 16px; }
+:root.dev #sheet .row .num + .main, :root.dev #sheet .row + .row:has(.num)::before { }
+:root.dev #sheet .row .t { font-size: 16.5px; font-weight: 600; }
+:root.dev #sheet .row .s { font-size: 12.5px; color: var(--muted); }
+:root.dev #sheet .row:active { background: var(--tint); }
+:root.dev #sheet .row.here, :root.dev #sheet .row.best { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+:root.dev #sheet .row.here .t::after { color: var(--accent); font-weight: 700; }
+:root.dev #sheet .row .tag { color: var(--gold-ink); background: color-mix(in srgb, var(--p-gold) 14%, transparent); border-radius: 99px; font-weight: 700; }
+:root.dev #sheet .row .go { stroke: var(--faint); width: 16px; height: 16px; }
+:root.dev #sheet .row .meta { color: var(--faint); font-size: 12.5px; }
+:root.dev #sheet .row .check { background: var(--accent); color: var(--on-accent); }
+:root.dev #sheet .note { color: var(--muted); }
+:root.dev .empty svg { color: var(--p-gold); }
+
+/* the juz above the surahs: quiet numbers, the one being read in green */
+:root.dev .juz-strip { background: none; }
+:root.dev .jz { border-radius: 99px; font-weight: 700; color: var(--muted); background: var(--surface); box-shadow: inset 0 0 0 .5px var(--line); }
+:root.dev .jz.on { color: var(--on-accent); background: var(--accent); box-shadow: none; }
+
+/* switches: green when on */
+:root.dev .tog.on { background: var(--accent); }
+
+/* buttons: one primary (green), one quiet */
+:root.dev .actions button.primary, :root.dev .dl-actions button.primary, :root.dev .pr-btn {
+  background: linear-gradient(160deg, var(--p-green), var(--p-green-2)); color: var(--dv-on-g); border-radius: var(--dv-r1);
+}
+:root.dev .txt-btn { color: var(--accent); }
+
+/* الحفظ: its start a green button, as every first action (no gold slab) */
+:root.dev .hz-go {
+  color: var(--dv-on-g); border: 0; border-radius: var(--dv-r2);
+  background: var(--p-pattern) 0 0 / 22px 22px, linear-gradient(160deg, var(--p-green), var(--p-green-2));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p-gold) 40%, transparent), 0 10px 22px -10px rgba(18, 58, 45, .6);
+}
+:root.dev .hz-go-i { color: var(--p-green-2); background: var(--p-on); box-shadow: none; }
+:root.dev .hz-go small { opacity: .8; }
+:root.dev .hz-go.ok { color: var(--ink); background: var(--surface); box-shadow: inset 0 0 0 .5px var(--line); }
+:root.dev .hz-start { background: none; border: 0; box-shadow: none; padding: 4px 2px 0; }
+:root.dev .hz-s-t { text-align: start; font-size: 22px; font-weight: 800; }
+:root.dev .hz-s-sub { text-align: start; margin-top: -10px; }
+:root.dev .hz-s-q { border-top: var(--dv-hair); }
+:root.dev .hz-s-q > span i { background: var(--sel); color: var(--accent); }
+:root.dev .hz-s-known { background: var(--surface); border: var(--dv-hair) !important; border-radius: var(--dv-r1); box-shadow: var(--dv-sh1); }
+:root.dev .hz-s-ch button { background: var(--surface); border: .5px solid var(--line); border-radius: var(--dv-r1); box-shadow: var(--dv-sh1); }
+:root.dev .hz-chips { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+:root.dev .hz-chips button { padding: 9px 0; border-radius: var(--dv-r1); white-space: nowrap; font-size: 13.5px; background: var(--surface); border: .5px solid var(--line); box-shadow: var(--dv-sh1); }
+:root.dev .hz-s-ch button.on, :root.dev .hz-chips button.on {
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, var(--surface)); border-color: transparent; box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+:root.dev .hz-s-ch button.on small { color: var(--accent); }
+
+/* التسميع: its colours brought into the app's (green, gold; red only for a mistake) */
+:root.dev .pp {
+  --g1: #2f8a68; --g2: #1f5a47; --a1: #d0ad69; --a2: #a9843f; --c1: #d0675a; --c2: #a83e33;
+  --s1: #4c8f96; --s2: #2f6a72; --v1: #8b7fb0; --v2: #635692; --k1: #5d564c; --k2: #3b352d;
+}
+:root.dev .pp-flame:not(.cold) { background: linear-gradient(135deg, #d8b26a, #a9843f); box-shadow: 0 6px 14px -4px rgba(140, 100, 30, .45); }
+:root.dev .pp-flame.cold { color: var(--muted); background: var(--tint); box-shadow: inset 0 0 0 .5px var(--line); }
+:root.dev .pp-flame.cold svg { fill: var(--faint); }
+:root.dev .pp-flame { padding: 5px 12px 5px 10px; animation: none; }
+:root.dev .pp-flame b { font-size: 15px; }
+:root.dev .pp-flame b::after { content: " أيام"; font-size: 12px; font-weight: 700; }
+:root.dev .pp-flame svg { width: 17px; height: 17px; }
+
+/* settings: the chips */
+:root.dev .set-nav button { box-shadow: inset 0 0 0 .5px var(--line); background: var(--surface); }
+:root.dev .set-nav button.on { color: var(--dv-on-g); background: linear-gradient(160deg, var(--p-green), var(--p-green-2)); box-shadow: none; }
+
+/* the khatmas and the forms */
+:root.dev .fields { border-radius: var(--dv-r2); border: var(--dv-hair); background: var(--surface); }
+:root.dev .modal .card { border-radius: 26px 26px 0 0; }
+@media (min-width: 600px) { :root.dev .modal .card { border-radius: 26px; } }
+
+/* the tafsir: clear of the tab bar */
+:root.dev body:not(.desk) #tafsir { z-index: 37; padding-bottom: calc(10px + env(safe-area-inset-bottom)); }
+/* the settings' chips, held at the top as the page goes under them */
+:root.dev .set-navw { top: -10px; background: var(--paper); padding: 2px 0 8px; box-shadow: 0 .5px 0 var(--line); }
+:root.dev .set-navw::before, :root.dev .set-navw::after { background-image: none !important; width: 28px; }
+:root.dev .set-navw::before { background: linear-gradient(270deg, var(--paper), transparent) !important; }
+:root.dev .set-navw::after { background: linear-gradient(90deg, var(--paper), transparent) !important; }
+:root.dev #sheetBody .set-sec[id^="set-"] { scroll-margin-top: 92px; }
+:root.dev .set-ic { width: 34px; height: 34px; border-radius: 10px; color: var(--accent); background: var(--sel); box-shadow: none; }
+:root.dev .set-ic svg { width: 19px; height: 19px; }
+:root.dev .set-h b { font-size: 19px; }
+:root.dev .rc-set .tog:not(.on) { background: color-mix(in srgb, var(--ink) 16%, var(--paper)); }
+:root.dev #tafsir { border-radius: 24px 24px 0 0; box-shadow: 0 -10px 40px -12px rgba(40, 28, 8, .3); }
+:root.dev .tf-seg { border-radius: var(--dv-r1); }
+/* the adhkar's reader: a page of its own, the tab bar away under it */
+:root.dev body:not(.desk) #dock.dv-dock { transition: --nr .32s cubic-bezier(.2,.9,.3,1), transform .3s var(--dv-ease); }
+:root.dev body.dv-immersive:not(.desk) #dock.dv-dock { transform: translateY(calc(100% + 44px)); pointer-events: none; }
+:root.dev .tf-seg button.on { color: var(--accent); font-weight: 800; }
+:root.dev .tf-pick { color: var(--accent); background: var(--sel); }
+
+/* ---------------------------------------------------------------- المزيد */
+:root.dev .dv-hub { display: flex; flex-direction: column; padding-top: 4px; }
+:root.dev .dv-cont {
+  display: flex; align-items: center; gap: 14px; width: 100%; text-align: start; padding: 12px 16px 12px 14px; margin: 4px 0 18px;
+  border-radius: var(--dv-r3); color: var(--p-on);
+  background: var(--p-pattern) 0 0 / 24px 24px, linear-gradient(155deg, var(--p-green), var(--p-green-2));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p-gold) 42%, transparent), 0 14px 30px -14px rgba(18, 58, 45, .7);
+  transition: transform .2s var(--dv-ease);
+}
+:root.dev .dv-cont:active { transform: scale(.985); }
+:root.dev .dv-cover { flex: none; width: 40px; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .3)); }
+:root.dev .dv-cover > * { width: 100%; }
+:root.dev .dv-cm { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+:root.dev .dv-cm small { font-size: 12px; font-weight: 700; color: color-mix(in srgb, var(--p-on) 70%, transparent); }
+:root.dev .dv-cm b { font-size: 17px; font-weight: 800; line-height: 1.35; color: #fff; }
+:root.dev .dv-pct { flex: none; font-size: 15px; font-weight: 800; color: #e9cf92; font-variant-numeric: tabular-nums; }
+:root.dev .dv-cs { font-size: 12.5px; color: color-mix(in srgb, var(--p-on) 82%, transparent); }
+:root.dev .dv-bar { display: block; height: 4px; margin: 6px 0 0; border-radius: 2px; background: rgba(255, 255, 255, .15); overflow: hidden; }
+:root.dev .dv-bar i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #e9cf92, #c9a55c); }
+:root.dev .dv-sec { margin: 22px 4px 10px; font-size: 13px; font-weight: 700; color: var(--muted); }
+:root.dev .dv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 18px; }
+:root.dev .dv-tile {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px; padding: 14px 14px 14px; text-align: start;
+  border-radius: var(--dv-r2); background: var(--surface); border: var(--dv-hair); box-shadow: var(--dv-sh1);
+  transition: transform .2s var(--dv-ease), background-color .2s ease;
+}
+:root.dev .dv-tile:active { transform: scale(.97); background: color-mix(in srgb, var(--accent) 5%, var(--surface)); }
+:root.dev .dv-ti {
+  width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; margin-bottom: 8px;
+  color: var(--accent); background: var(--sel);
+}
+:root.dev .dv-ti svg { width: 21px; height: 21px; }
+:root.dev .dv-tile b { font-size: 16px; font-weight: 800; color: var(--ink); }
+:root.dev .dv-tile small { font-size: 12px; color: var(--muted); line-height: 1.45; }
+:root.dev .dv-row .dv-ri {
+  flex: none; width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; color: var(--muted); background: var(--tint);
+}
+:root.dev .dv-row .dv-ri svg { width: 19px; height: 19px; }
+:root.dev .dv-go { flex: none; color: var(--faint); display: grid; }
+:root.dev .dv-go svg { width: 16px; height: 16px; }
+
+@media (prefers-reduced-motion: reduce) {
+  :root.dev body:not(.desk) #sheet { animation: none; }
+  :root.dev .dv-tile, :root.dev .dv-cont, :root.dev #dock .dv-tab svg { transition: none; }
+}
+
+/* ---------------------------------------------------------------- the large title, collapsing
+   a page scrolled: the title goes small and to the middle, a hairline under the head (iOS) */
+:root.dev body:not(.desk) #sheet .sheet-head { position: relative; transition: padding .28s var(--dv-ease); }
+:root.dev body:not(.desk) #sheet .sheet-head::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: .5px; background: var(--line); opacity: 0; transition: opacity .2s ease;
+}
+:root.dev body:not(.desk) #sheet .sheet-head h1 { transform-origin: right center; transition: font-size .28s var(--dv-ease), transform .28s var(--dv-ease); }
+:root.dev body:not(.desk) #sheet.dv-up .sheet-head { padding-top: 6px; padding-bottom: 6px; }
+:root.dev body:not(.desk) #sheet.dv-up .sheet-head::after { opacity: 1; }
+:root.dev body:not(.desk) #sheet.dv-up .sheet-head h1 { font-size: 19px; }
+:root.dev body:not(.desk) #sheet.dv-up .sheet-title small { display: none; }
+:root.dev body:not(.desk) #sheet.dv-up .sheet-head { flex-direction: row; align-items: center; gap: 8px; }
+:root.dev body:not(.desk) #sheet.dv-up .dv-back { margin: 0; }
+
+/* ---------------------------------------------------------------- الحفظ | التسميع
+   one tab, the two side by side in a segmented control under its title */
+:root.dev .dv-seg { position: relative; display: grid; grid-template-columns: 1fr 1fr; margin: 10px 0 2px; padding: 3px; border-radius: var(--dv-r1);
+  background: color-mix(in srgb, var(--ink) 6%, var(--paper)); }
+:root.dev .dv-seg[hidden] { display: none; }
+:root.dev .dv-seg button { position: relative; z-index: 1; padding: 7px 0; font-size: 14.5px; font-weight: 600; color: var(--muted); transition: color .2s ease; }
+:root.dev .dv-seg button.on { color: var(--ink); font-weight: 800; }
+:root.dev .dv-seg i { position: absolute; top: 3px; bottom: 3px; right: 3px; width: calc(50% - 3px); border-radius: 9px; background: var(--surface);
+  box-shadow: 0 1px 3px rgba(40, 28, 8, .12), 0 0 0 .5px var(--line); transition: transform .3s var(--dv-ease); }
+:root.dev .dv-seg[data-on="recite"] i { transform: translateX(-100%); }
+:root.dev body:not(.desk) #sheet.dv-up .dv-seg { display: none; }
+:root.dev body.desk .dv-seg { display: none; }
+/* the collapsed head keeps «المزيد» named */
+:root.dev body:not(.desk) #sheet.dv-up .dv-back span { display: inline; }
+
+/* الحديث: its books on the one card style */
+:root.dev .hd-book { border: var(--dv-hair); box-shadow: var(--dv-sh1); background: var(--surface); }
+
+/* ---------------------------------------------------------------- round 3 */
+/* the mic pill: a soft ring of its own, no notch */
+:root.dev #dockMic { box-shadow: 0 0 0 1px color-mix(in srgb, var(--p-gold) 70%, transparent), 0 4px 10px -3px rgba(18, 58, 45, .45); }
+:root.dev #dockMic:active { transform: translate(-50%, -50%) scale(.95); }
+/* the segment chosen, plain in the dark too */
+:root.dev[data-theme="dark"] .dv-seg i { background: #2d2923; box-shadow: 0 0 0 .5px rgba(255, 240, 210, .14), 0 1px 3px rgba(0, 0, 0, .4); }
+/* the chosen theme: ringed in the accent, whatever the theme */
+:root.dev .theme.on .th { box-shadow: 0 0 0 2px var(--paper), 0 0 0 4px var(--accent), 0 6px 12px rgba(40, 28, 8, .18); }
+/* التسميع: its card one button (no chevron); «ابحث بصوتك» is the tab bar's now */
+:root.dev .tq-go > svg:last-child { display: none; }
+:root.dev .tq-quick [data-rc-find] { display: none; }
+/* الحفظ: «علّم السور» plainly a button */
+:root.dev .hz-s-known { position: relative; padding-inline-end: 40px; }
+:root.dev .hz-s-known::after { content: "+"; position: absolute; inset-inline-end: 14px; top: 50%; transform: translateY(-50%); width: 24px; height: 24px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 17px; font-weight: 700; color: var(--accent); background: var(--sel); }
+/* ختماتي: no stray rule under the title, a menu button big enough to hit */
+:root.dev .lib-title::after { display: none; }
+:root.dev #library .dots { min-width: 40px; min-height: 40px; }
+/* the ribbons' colours, brought nearer the paper */
+:root.dev { --c-r0: #4d7593; --c-r1: #3d7c77; --c-r2: #b77d44; --c-r3: #4a7e60; --c-r4: #7a6b98; --c-r5: #a2607a; }
+:root.dev[data-theme="dark"] { --c-r0: #7fa9cc; --c-r1: #6bb3ad; --c-r2: #dba36c; --c-r3: #7cb894; --c-r4: #a898cf; --c-r5: #d48ea4; }
+
+/* ---------------------------------------------------------------- round 4 */
+/* the voice search: tinted, not the loudest thing on the page */
+:root.dev body:not(.desk) #dock.dv-dock { grid-template-columns: repeat(2, minmax(0, 1fr)) 116px repeat(2, minmax(0, 1fr)); }
+:root.dev #dock #dockMic {
+  height: 36px; padding: 0 12px 0 11px; gap: 5px; border-radius: 18px; font-size: 12.5px; font-weight: 700;
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 11%, var(--paper));
+  box-shadow: inset 0 0 0 .5px color-mix(in srgb, var(--accent) 30%, transparent);
+}
+:root.dev #dock #dockMic svg { width: 17px; height: 17px; }
+:root.dev #dock #dockMic svg g { stroke-width: 1.8; }
+:root.dev .rc-find #dock #dockMic { color: var(--dv-on-g); background: linear-gradient(160deg, var(--p-green), var(--p-green-2)); }
+/* the streak: shown once there is one */
+:root.dev .pp-flame.cold { display: none; }
+/* التسميع's surah: one quiet row (the arrows and «من أولها» lighter than the tools under it) */
+:root.dev .tq-sw select { border: 0; background: var(--tint); font-size: 15px; }
+:root.dev .tq-sw button { border: 0; background: none; color: var(--accent); width: 36px; }
+:root.dev .tq-sw .tq-sw0 { background: none; color: var(--accent); padding: 0 6px; font-size: 13px; white-space: nowrap; width: auto; }
+/* the misbaha: the hub's tile, not a gold disc */
+:root.dev .xs-bead { width: 36px; height: 36px; border-radius: 11px; background: var(--sel) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%231f5a47' stroke-width='1.7'%3E%3Ccircle cx='12' cy='5' r='1.6'/%3E%3Ccircle cx='17.5' cy='7.3' r='1.6'/%3E%3Ccircle cx='19.6' cy='12.6' r='1.6'/%3E%3Ccircle cx='17.5' cy='17.8' r='1.6'/%3E%3Ccircle cx='6.5' cy='7.3' r='1.6'/%3E%3Ccircle cx='4.4' cy='12.6' r='1.6'/%3E%3Ccircle cx='6.5' cy='17.8' r='1.6'/%3E%3Cpath d='M12 19.5v2.5'/%3E%3C/svg%3E") center / 21px no-repeat; box-shadow: none; }
+:root.dev[data-theme="dark"] .xs-bead { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237cc3a3' stroke-width='1.7'%3E%3Ccircle cx='12' cy='5' r='1.6'/%3E%3Ccircle cx='17.5' cy='7.3' r='1.6'/%3E%3Ccircle cx='19.6' cy='12.6' r='1.6'/%3E%3Ccircle cx='17.5' cy='17.8' r='1.6'/%3E%3Ccircle cx='6.5' cy='7.3' r='1.6'/%3E%3Ccircle cx='4.4' cy='12.6' r='1.6'/%3E%3Ccircle cx='6.5' cy='17.8' r='1.6'/%3E%3Cpath d='M12 19.5v2.5'/%3E%3C/svg%3E"); }
+:root.dev .xs-bead::before, :root.dev .xs-bead::after { display: none; }
+/* the ribbons: a hairline round each dot, so they sit on the paper */
+:root.dev .mk-pal button i, :root.dev .rb-dot { box-shadow: inset 0 0 0 .5px rgba(0, 0, 0, .12); }
+
+/* ---------------------------------------------------------------- round 5 */
+/* the bar: one size of type; the pill a little narrower */
+:root.dev body:not(.desk) #dock.dv-dock { grid-template-columns: repeat(2, minmax(0, 1fr)) 108px repeat(2, minmax(0, 1fr)); }
+:root.dev #dock .dv-tab { font-size: 11.5px; color: color-mix(in srgb, var(--ink) 50%, transparent); }
+:root.dev #dock .dv-tab.on { color: var(--accent); }
+:root.dev #dock #dockMic { font-size: 12px; padding: 0 11px 0 10px; }
+/* the segment chosen: its label in the accent, plain in both themes */
+:root.dev .dv-seg button.on { color: var(--accent); }
+:root.dev[data-theme="dark"] .dv-seg { background: rgba(255, 240, 210, .06); }
+:root.dev[data-theme="dark"] .dv-seg i { background: #36312a; box-shadow: 0 0 0 .5px rgba(255, 240, 210, .18), 0 2px 6px rgba(0, 0, 0, .45); }
+/* التسميع's surah row: one capsule */
+:root.dev .tq-sw { gap: 0; padding: 3px; border-radius: var(--dv-r1); background: var(--tint); }
+:root.dev .tq-sw select { background: var(--surface); box-shadow: 0 1px 2px rgba(40, 28, 8, .08), 0 0 0 .5px var(--line); border-radius: 9px; padding: 8px 12px; }
+:root.dev .tq-sw button { height: 36px; }
+:root.dev .tq-sw .tq-sw0 { padding: 0 10px; }
+/* a card that opens somewhere: a chevron, not a «+» */
+:root.dev .tq-rgo:not(:has(svg)):not(:empty) { font-size: 0; background: none; }
+:root.dev .tq-rgo:not(:has(svg)):not(:empty)::after { content: ""; width: 8px; height: 8px; border: solid var(--faint); border-width: 0 0 2px 2px; transform: rotate(45deg); margin-inline-start: 4px; }
+:root.dev .hz-s-known::after { content: ""; width: 8px; height: 8px; border-radius: 0; background: none; border: solid var(--faint); border-width: 0 0 2px 2px; transform: translateY(-50%) rotate(45deg); }
+/* الأذكار: the three small chapters one row of chips under the two covers */
+:root.dev .dk-tiles { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin-inline: -16px; padding: 2px 16px 4px; }
+:root.dev .dk-tiles::-webkit-scrollbar { display: none; }
+:root.dev .dk-tile { flex: none; flex-direction: row; align-items: center; gap: 7px; padding: 9px 14px 9px 12px; border-radius: 99px; background: var(--surface); border: var(--dv-hair); box-shadow: var(--dv-sh1); }
+:root.dev .dk-tile .dk-ico { width: 18px; height: 18px; margin: 0; color: var(--accent); }
+:root.dev .dk-tile b { font-family: var(--ui); font-size: 14px; font-weight: 700; line-height: 1.2; }
+:root.dev .dk-tile small { font-size: 12px; }
+:root.dev .dk-tile small { color: var(--muted); }
+:root.dev .dk-tiles + * , :root.dev .dk-tiles ~ .group-label { margin-top: 18px; }
+:root.dev .dk-tile .dk-part { display: none; }
+/* الحديث: where its texts come from, set apart */
+:root.dev .hd-cite { margin-top: 28px !important; padding-top: 14px; border-top: var(--dv-hair); font-size: 11.5px; color: var(--faint); }
+
+/* الأذكار's chips: a soft edge where the row goes on */
+:root.dev .dk-tiles { -webkit-mask-image: linear-gradient(270deg, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(270deg, #000 calc(100% - 28px), transparent); }
+/* the surah picker raised in the dark too; الحفظ's step numbers sized to their headings */
+:root.dev[data-theme="dark"] .tq-sw select { background: #36312a; box-shadow: 0 0 0 .5px rgba(255, 240, 210, .18), 0 1px 3px rgba(0, 0, 0, .4); }
+:root.dev .hz-s-q > span i { width: 22px; height: 22px; font-size: 12.5px; font-weight: 800; }

@@ -36,7 +36,8 @@
   } catch (e) {}
   // dev mode (the foot of the settings): this device only, never synced or backed up; html.dev
   // is what the app's own experiments key on (isDev() in app.js)
-  try { if (JSON.parse(localStorage.getItem('q.ui.dev'))) document.documentElement.classList.add('dev'); } catch (e) {}
+  // (and its own styles, dev.css, after the app's: nothing of it is fetched for anyone else)
+  try { if (JSON.parse(localStorage.getItem('q.ui.dev'))) { document.documentElement.classList.add('dev'); document.write('<link rel="stylesheet" href="dev.css">'); } } catch (e) {}
   // what the first page needs, asked for now, side by side, while the styles and scripts are
   // still coming (app.js: loadJSON takes the data from here): the surahs' list, the mushaf of
   // the khatma open, its font and the glyph font of the page it is at
@@ -496,5 +497,6 @@
 <script src="desk.js"></script>
 <script src="sync.js"></script>
 <script src="extras.js"></script>
+<script>if (document.documentElement.classList.contains('dev')) document.write('<script src="dev.js"><\/script>');</script>
 </body>
 </html>

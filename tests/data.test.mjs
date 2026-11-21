@@ -46,7 +46,9 @@ test('the service worker caches files that exist, and the page loads them', () =
   const html = read('index.html');
   for (const [, f] of html.matchAll(/<script src="([^"]+)"/g)) {
     assert.ok(existsSync(new URL(f, root)), f);
-    if (!f.startsWith('http')) assert.ok(shell.includes(f), `${f} not cached by sw.js`);
+    // (dev.js and dev.css: dev mode's only, fetched on a device with it on and kept then, never
+    // downloaded for anyone else, so not in the shell)
+    if (!f.startsWith('http') && f !== 'dev.js') assert.ok(shell.includes(f), `${f} not cached by sw.js`);
   }
 });
 

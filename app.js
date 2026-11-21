@@ -468,7 +468,7 @@ function measure() {
     S.lh = S.fs * 1.95;
   } else {
     S.availW = W - padL - padR;
-    S.linesH = H - insetT - insetB - 46 - 40 - 4;
+    S.linesH = H - insetT - insetB - 46 - (isDev() ? 54 : 40) - 4; // (dev: a taller dock, its tabs named)
     S.fs = Math.min(S.availW / em, S.linesH / 15 * 0.74);
     S.lh = Math.min(S.linesH / 15, S.fs * LINE_RATIO);
   }
