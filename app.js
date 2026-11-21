@@ -2455,7 +2455,7 @@ function settingsHTML() {
   const link = (attr, t, sub2) => `<button class="row" ${attr}><span class="main"><span class="t">${t}</span><span class="s">${sub2}</span></span>${go}</button>`;
   return `
     ${typeof Install !== 'undefined' ? Install.settingsHTML() : ''}
-    <nav class="set-nav" aria-label="أقسام الإعدادات">${nav}</nav>
+    <div class="set-navw"><nav class="set-nav" aria-label="أقسام الإعدادات">${nav}</nav></div>
 
     ${sec('set-audio', 'audio', 'التلاوة', `${rname} · ${n > 1 ? `${ar(n)} ${n <= 10 ? 'قرّاء' : 'قارئًا'} تختار منهم` : `بصوت ${v.name}`}`, `<div class="group">
       <button class="row vc-cur" data-set-view="reciter">${voiceBadge(v)}
@@ -2513,9 +2513,27 @@ function setNavOn(id) {
   for (const b of nav.querySelectorAll('[data-set-jump]')) { const is = b.dataset.setJump === id; b.classList.toggle('on', is); if (is) on = b; }
   if (on) {
     const r = on.getBoundingClientRect(), n = nav.getBoundingClientRect();
-    if (r.left < n.left + 12 || r.right > n.right - 12) nav.scrollTo({ left: on.offsetLeft - nav.clientWidth / 2 + on.offsetWidth / 2, behavior: 'smooth' });
+    if (r.left < n.left + 44 || r.right > n.right - 44) nav.scrollTo({ left: on.offsetLeft - nav.clientWidth / 2 + on.offsetWidth / 2, behavior: 'smooth' });
   }
+  setNavEdges();
 }
+// the row of chips scrolls: a soft fade and a small arrow at a side where more of it is, and once,
+// the first time, the row slid a little way and back to show it moves
+function setNavEdges() {
+  const nav = $('.set-nav'), w = nav?.parentElement;
+  if (!nav) return;
+  const max = nav.scrollWidth - nav.clientWidth, x = Math.abs(nav.scrollLeft);
+  w.classList.toggle('more-end', max > 2 && x < max - 2);  // (the chips after: to the left)
+  w.classList.toggle('more-start', x > 2);                  // (the chips before: to the right)
+}
+function setNavHint() {
+  setNavEdges();
+  const nav = $('.set-nav');
+  if (!nav || store.get('set.navHint', false) || nav.scrollWidth <= nav.clientWidth) return;
+  store.set('set.navHint', true);
+  setTimeout(() => { nav.scrollBy({ left: -70, behavior: 'smooth' }); setTimeout(() => nav.scrollTo({ left: 0, behavior: 'smooth' }), 650); }, 500);
+}
+$('#sheetBody').addEventListener('scroll', e => { if (e.target.classList?.contains('set-nav')) setNavEdges(); }, { capture: true, passive: true });
 function setNavSpy() {
   if (tab !== 'settings' || setView || Date.now() < navLock) return;
   const nav = $('.set-nav'), body = $('#sheetBody');
@@ -3393,7 +3411,7 @@ function renderSheet() {
     const here = body.querySelector('.row.here');
     if (here) here.scrollIntoView({ block: 'center' }); else if (tab !== 'adhkar') body.scrollTop = 0;
   }
-  if (tab === 'settings' && !q.trim()) { if (setView) paintVoiceSaved(); else { refreshAudioPanel(); refreshMushafCard(); refreshHadithCards(); refreshAppInfo(); } }
+  if (tab === 'settings' && !q.trim()) { if (setView) paintVoiceSaved(); else { refreshAudioPanel(); refreshMushafCard(); refreshHadithCards(); refreshAppInfo(); setNavHint(); } }
   if (tab === 'prayer' && !q.trim()) Prayer.mount();
   if (tab === 'recite' && !q.trim()) Recite.mounted();
   if (tab === 'hifz' && !q.trim()) Hifz.mounted();
