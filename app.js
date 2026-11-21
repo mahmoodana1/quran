@@ -1,7 +1,8 @@
 'use strict';
 
-// bump when data/ or fonts/ change so phones fetch the new files
-const DATA_VERSION = 7;
+// bump when data/ or fonts/ change so phones fetch the new files (and the same number in
+// index.html's first script, which starts the opening's downloads)
+const DATA_VERSION = 8;
 // Each riwaya is heard from a reciter who recites it, chosen in the settings
 // (store 'voice.<riwaya>'). Hafs: one file per aya (everyayah.com), any of
 // HAFS_VOICES. The others: one file per surah (mp3quran.net) and when each aya
@@ -109,7 +110,7 @@ const ORNAMENT = (() => {
 const SURA_GLYPH = s => String.fromCharCode(0xF100 + s - 1);
 const BASMALA_GLYPHS = '\uFAD0\uFAD1\uFAD2\uFAD3';
 
-let META;            // suras, hafs aya keys, emlaey text
+let META;            // suras, hafs aya keys
 let R;               // current riwaya data
 const cache = {};    // riwaya id -> data
 const S = {          // ui state
@@ -309,19 +310,51 @@ function loadKhatmas() {
 // ---------------------------------------------------------------- data
 
 async function loadJSON(url) {
-  const r = await fetch(url);
+  // started already by index.html's first script, before the scripts had come
+  const pre = self.PRE?.[url];
+  if (pre) delete self.PRE[url];
+  const r = await (pre ? pre.catch(() => fetch(url)) : fetch(url));
   if (!r.ok) throw new Error(url + ' ' + r.status);
   return r.json();
 }
+
+// resolved once the first page is on the screen (boot): what isn't needed to draw it waits for that
+let firstPainted;
+const firstPaint = new Promise(r => { firstPainted = r; });
+// a tap in the moment before Hafs's texts have come (on a first visit, a second or so after the
+// page is shown; else a few milliseconds): held, and made once they are here, so that nothing
+// acts on a text not there yet
+addEventListener('click', e => {
+  if (!R || R.hasText || !e.isTrusted) return;
+  const el = e.target.closest('button, a, [data-act], [role=button], label');
+  if (!el) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  toast('لحظة…', 900);
+  R.textReady.then(() => el.click());
+}, true);
+
+// the imla'i text, for search only: fetched when first searched (and in the background once
+// the app has opened, so search is instant and works offline); renderSheet again once here
+let emlaey = null, emlaeyP = null;
+const loadEmlaey = () => emlaeyP ||= loadJSON(`data/emlaey.json?v=${DATA_VERSION}`)
+  .then(t => { emlaey = t; }, e => { emlaeyP = null; throw e; });
 
 async function loadRiwaya(id) {
   if (!cache[id]) {
     const d = await loadJSON(`data/${id}.json?v=${DATA_VERSION}`);
     d.id = id;
     d.font = 'rw-' + id;
-    // per-aya text and the hafs -> riwaya index used by search and audio
-    d.text = d.utext || new Array(d.ayas.length).fill('');
-    if (!d.utext) for (const pg of d.pages) for (const ln of pg) {
+    // per-aya text and the hafs -> riwaya index used by search and audio. Hafs's glyph pages
+    // don't need its texts to be drawn: they come in a file of their own once the first page
+    // is shown (firstPaint), into this same array; until then R.textReady is pending
+    // (a tap meanwhile waits for them: textGate)
+    d.text = new Array(d.ayas.length).fill('');
+    d.hasText = !d.glyph;
+    if (d.glyph) {
+      const url = `data/${id}-text.json?v=${DATA_VERSION}`;
+      const get = () => loadJSON(url).catch(() => new Promise(r => setTimeout(r, 3000)).then(get));
+      d.textReady = firstPaint.then(get).then(t => { t.forEach((x, i) => { d.text[i] = x; }); d.hasText = true; });
+    } else for (const pg of d.pages) for (const ln of pg) {
       if (!Array.isArray(ln) || typeof ln[0] === 'string') continue;
       for (const [ai, t] of ln) d.text[ai] = d.text[ai] ? d.text[ai] + ' ' + t : t;
     }
@@ -329,6 +362,7 @@ async function loadRiwaya(id) {
     d.ayas.forEach((a, i) => {
       for (let h = a[5]; h <= a[6]; h++) if (d.fromHafs[h] < 0) d.fromHafs[h] = i;
     });
+    if (!d.glyph) d.textReady = Promise.resolve();
     for (let h = 1; h < d.fromHafs.length; h++) if (d.fromHafs[h] < 0) d.fromHafs[h] = d.fromHafs[h - 1];
     d.suraStart = {};
     d.ayas.forEach((a, i) => { if (!(a[0] in d.suraStart)) d.suraStart[a[0]] = i; });
@@ -1217,6 +1251,10 @@ $('#siVeil').onclick = closeSuraInfo;
 // loaded again (recite.js: the session that was about to start)
 const UPD = {
   stale: false,
+  // a first visit: the service worker came, but the page was loaded before it, so without the
+  // headers that let recitation use several cores; loaded again only when a recitation starts
+  // (recite.js), not while it is being read
+  iso: false,
   busy: () => document.body.classList.contains('rc-on') || document.body.classList.contains('rc-find') || (typeof Mu !== 'undefined' && Mu.listening()),
 };
 function applyUpdate(resume) {
@@ -2141,6 +2179,7 @@ const MQ = { running: false, done: 0, total: 0, failed: 0, stop: false };
 const mushafTasks = () => [
   { cache: MUSHAF_CACHE, url: new URL(`data/meta.json?v=${DATA_VERSION}`, location.href).href },
   ...META.riwayat.map(r => ({ cache: MUSHAF_CACHE, url: new URL(`data/${r.id}.json?v=${DATA_VERSION}`, location.href).href })),
+  ...['hafs-text', 'emlaey'].map(f => ({ cache: MUSHAF_CACHE, url: new URL(`data/${f}.json?v=${DATA_VERSION}`, location.href).href })),
   // when each aya starts in the recitations (the audio itself is saved apart)
   ...META.riwayat.filter(r => r.id !== 'hafs').map(r => ({ cache: MUSHAF_CACHE, url: new URL(`data/audio/${r.id}.json?v=${AUDIO_DATA_VERSION}`, location.href).href })),
   // (and of the further reciters of a riwaya, and Hafs's continuous ones)
@@ -2850,8 +2889,10 @@ function wordSim(q, w) {
 
 let IDX;
 function buildIndex() {
-  if (IDX) return IDX;
-  const ayas = META.emlaey.map(t => {
+  if (IDX?.ayas) return IDX;
+  // (the ayas' words once their text is here: surahs, pages and numbers are found meanwhile)
+  if (!emlaey) loadEmlaey().then(() => { if ($('#q').value.trim() && !$('#sheet').hidden) renderSheet(); }).catch(() => {});
+  const ayas = emlaey && emlaey.map(t => {
     const n = norm(t);
     return { str: n, words: n.split(/\s+/).filter(Boolean) };
   });
@@ -2914,6 +2955,7 @@ function ayaScore(q) {
     return score;
   };
   const out = [];
+  if (!IDX.ayas) return out;
   IDX.ayas.forEach((a, h) => {
     let score = scoreWords(a.words, a.str);
     // a phrase can run across into the next aya (e.g. الرحمن علم القرآن)
@@ -3147,6 +3189,7 @@ function renderSheet() {
       });
       quran += '</div>';
     }
+    if (!IDX.ayas && /[^\d\s:：.,،\-]/.test(q)) quran += '<div class="tf-wait">جارٍ تحميل نص القرآن للبحث…</div>';
     const app = jz + go;
     const parts = [
       app && ['في التطبيق', app],
@@ -3155,7 +3198,7 @@ function renderSheet() {
     ].filter(Boolean);
     // the adhkar first when searching from their tab; the app's places first unless a surah or aya is a sure match
     if (tab === 'adhkar' && dk) parts.sort((a, b) => (b[0] === 'الأذكار') - (a[0] === 'الأذكار'));
-    else if (app && quran && res[0].score >= 1.3) parts.sort((a, b) => (b[0] === 'القرآن') - (a[0] === 'القرآن'));
+    else if (app && quran && res[0]?.score >= 1.3) parts.sort((a, b) => (b[0] === 'القرآن') - (a[0] === 'القرآن'));
     html = parts.length ? parts.map(([t, h]) => (parts.length > 1 ? `<div class="group-label">${t}</div>` : '') + h).join('')
       : '<div class="empty"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M15.5 15.5L21 21" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg><b>لا توجد نتائج</b>جرّب اسم سورة، أو رقم صفحة، أو كلمة من آية أو ذكر.</div>';
   } else if (tab === 'suras') {
@@ -3605,18 +3648,26 @@ $('#doneLater').onclick = () => hide($('#done'));
     normalizeBookmarks();
     renderAll();
     hide($('#loading'));
+    // the page shown, the rest comes: its glyph font first (it was asked for already), then
+    // Hafs's texts (loadRiwaya), and what was open put back once they are here
+    const pf = pageFonts[S.page]?.promise;
+    await Promise.race([pf, new Promise(r => setTimeout(r, 1500))]).catch(() => {});
+    firstPainted();
+    await R.textReady;
     Recite.restore(); // a session cut off by a reload
     restoreUI();      // and what was open
     Recite.prepResume(); // a recitation being prepared when an update was applied
     if (typeof Sync !== 'undefined') Sync.start(); // signed in: what the other devices have
     Extras.boot();
+    // and the search's text, when the phone is idle (so search is instant, and works offline)
+    (self.requestIdleCallback || setTimeout)(() => loadEmlaey().catch(() => {}), { timeout: 4000 });
   } catch (err) {
     $('#loading').textContent = 'تعذر التحميل — تحقق من الاتصال';
     console.error(err);
   }
   if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-    // reload once when an updated service worker takes over, so updates show up;
-    // on the first visit too, as its headers are what let recitation use several cores.
+    // reload once when an updated service worker takes over, so updates show up
+    // (on the first visit only as a recitation starts: UPD.iso).
     // Never in the middle of something: at once if the app wasn't touched yet, or
     // else as it leaves the screen or comes back to it, with no recitation going.
     // An app brought back from the background looks for an update then too (phones
@@ -3634,7 +3685,7 @@ $('#doneLater').onclick = () => hide($('#done'));
       navigator.serviceWorker.getRegistration().then(r => r?.update()).catch(() => {});
     });
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (!hadController && self.crossOriginIsolated) return;
+      if (!hadController) { if (!self.crossOriginIsolated) UPD.iso = true; return; }
       UPD.stale = true;
       if (!touched) applyUpdate();
       else offerUpdate();

@@ -3,7 +3,7 @@
 # run from the repo root: python3 tools/similar.py
 # out: data/similar-hafs.json  {h: [[h2, closeness %, longest shared run of words], ...]} (h: Hafs aya index)
 import json, re, collections, time
-U = json.load(open('data/hafs.json'))['utext']
+U = json.load(open('data/hafs-text.json'))
 def norm(t):
     t = re.sub(r'\s*[٠-٩]+\s*$', '', t)
     t = re.sub(r'[ً-ٰٟۖ-ۭـ]', '', t)

@@ -40,7 +40,7 @@ const Recite = (() => {
   // all a recitation needs, done (prep): no update waiting, the microphone allowed, the
   // model loaded and prepared for every window it will read
   let micOk = false;
-  const prepared = () => MU() ? Mu.ready() && Mu.warmed() && micOk && !UPD.stale : Listen.ready();
+  const prepared = () => MU() ? Mu.ready() && Mu.warmed() && micOk && !UPD.stale && !UPD.iso : Listen.ready();
 
   // the session: words in order { ai, p, n (word on its page), wi (word in its aya), of (aya length), nt (normalised) },
   // idx 'page:n' -> word, pos = next word to say, errs[k] = type, gone = mistakes taken back
@@ -249,8 +249,8 @@ const Recite = (() => {
       setTimeout(() => location.reload(), 200);
       return;
     }
-    if (UPD.stale) {
-      prepStep('update', 'doing', 'نسخة جديدة جاهزة — تُطبَّق الآن ثم نكمل'); reveal();
+    if (UPD.stale || (UPD.iso && MU())) {
+      prepStep('update', 'doing', UPD.stale ? 'نسخة جديدة جاهزة — تُطبَّق الآن ثم نكمل' : 'نُهيّئ التطبيق للتسميع ثم نكمل'); reveal();
       await new Promise(r => setTimeout(r, 900));
       if (!live()) return;
       return applyUpdate(intent ? { prep: intent } : { prep: {} });

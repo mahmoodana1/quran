@@ -15,6 +15,7 @@ import gzip, json, os, re, sys, collections
 
 HAFS, MEAN, MORPH, OUT = sys.argv[1:5]
 d = json.load(open(HAFS))
+U = json.load(open(HAFS.replace('.json', '-text.json')))  # its aya texts (tools/build.py)
 mean = json.load(gzip.open(MEAN))
 morph = json.load(gzip.open(MORPH))
 BOOKS = [491, 1424, 208, 327]  # السراج first: the plainest; then مخلوف, ابن الجوزي, ابن الهائم
@@ -28,7 +29,7 @@ def skel(t):
     return re.sub('[اويءؤئ]', '', t)
 
 def words_of(ai):
-    t = re.sub(r'\s*[٠-٩]+$', '', d['utext'][ai].strip()).split(' ')
+    t = re.sub(r'\s*[٠-٩]+$', '', U[ai].strip()).split(' ')
     return [x for x in t if x]
 
 M = {(x['surah'], x['ayah']): x['morphology']['words'] for x in morph['data']}

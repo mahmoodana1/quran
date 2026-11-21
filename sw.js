@@ -1,9 +1,13 @@
-// App files (html/css/js) are network-first so updates show up right away,
-// falling back to the cache offline. Data and fonts are cache-first; app.js
+// App files (html/css/js) come from the copy saved with this version, at once,
+// with no wait on the network (the app opens as fast with a poor connection as
+// with none). An update is a new sw.js (VERSION bumped with every change): the
+// browser looks for one each time the app is opened or comes back, and the new
+// worker saves the new files before it takes over, the page then loaded again
+// (app.js: controllerchange). Data and fonts are cache-first; app.js
 // requests data with ?v=N, so bumping DATA_VERSION there fetches new copies.
 // Hafs page fonts (verses.quran.foundation) are cached as pages are opened.
 // Recitation audio: see audioResponse below.
-const VERSION = 'quran-v192';
+const VERSION = 'quran-v193';
 const TAFSIR = 'tafsir-saadi';
 // recitation files saved by the app (or while listening); kept across versions.
 // Hafs: aya files from everyayah.com; the other riwayat: surah files from
@@ -27,7 +31,8 @@ const SHELL = ['./', 'index.html', 'app.css', 'desk.css', 'app.js', 'desk.js', '
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION)
-    .then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'reload' }))))
+    // ('no-cache': asked of the server again, but a file that has not changed is not sent again)
+    .then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'no-cache' }))))
     .then(() => self.skipWaiting()));
 });
 
@@ -93,13 +98,14 @@ self.addEventListener('fetch', e => {
       if (res.ok) c.put(e.request, res.clone());
       return res;
     }
+    const hit = await c.match(e.request, { ignoreSearch: true });
+    if (hit) return isolate(hit);
     try {
       const res = await fetch(e.request, { cache: 'no-cache' });
       if (res.ok) c.put(e.request, res.clone());
       return isolate(res);
     } catch {
-      const hit = await c.match(e.request, { ignoreSearch: true });
-      return hit ? isolate(hit) : Response.error();
+      return Response.error();
     }
   }));
 });

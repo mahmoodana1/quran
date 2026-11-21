@@ -34,6 +34,26 @@
     if (l == null) { l = (navigator.deviceMemory || 8) <= 4 || (navigator.hardwareConcurrency || 8) <= 4; localStorage.setItem('q.lite', JSON.stringify(l)); }
     if (l) document.documentElement.classList.add('lite');
   } catch (e) {}
+  // what the first page needs, asked for now, side by side, while the styles and scripts are
+  // still coming (app.js: loadJSON takes the data from here): the surahs' list, the mushaf of
+  // the khatma open, its font and the glyph font of the page it is at
+  try {
+    var V = 8; // = DATA_VERSION in app.js
+    var pre = window.PRE = {}, head = document.head;
+    var font = function (u) {
+      var l = document.createElement('link');
+      l.rel = 'preload'; l.as = 'font'; l.type = 'font/woff2'; l.crossOrigin = 'anonymous'; l.href = u;
+      head.appendChild(l);
+    };
+    var kh = JSON.parse(localStorage.getItem('q.khatmas')) || [], cur = JSON.parse(localStorage.getItem('q.kh.current'));
+    var k = kh.filter(function (x) { return x.id === cur; })[0] || kh[0];
+    var rw = (k && k.riwaya) || JSON.parse(localStorage.getItem('q.riwaya')) || 'hafs';
+    if (!/^[a-z]+$/.test(rw)) rw = 'hafs';
+    ['data/meta.json?v=' + V, 'data/' + rw + '.json?v=' + V].forEach(function (u) { pre[u] = fetch(u); });
+    font('fonts/' + rw + '.woff2');
+    var p = (k && k.page) || JSON.parse(localStorage.getItem('q.page.' + rw)) || 1;
+    if (rw === 'hafs' && p >= 1 && p <= 604) font('https://verses.quran.foundation/fonts/quran/hafs/v2/woff2/p' + p + '.woff2');
+  } catch (e) {}
 })();
 </script>
 </head>

@@ -289,6 +289,10 @@ index = []
 for r, name in RIWAYAT:
     d = build_riwaya(r)
     d['id'] = r
+    # Hafs's aya texts (search, copying, التسميع; not needed to draw its glyph pages) in a file of
+    # their own, loaded once the first page is shown (app.js: loadRiwaya), so the app opens sooner
+    if 'utext' in d:
+        json.dump(d.pop('utext'), open(f'{OUT}/{r}-text.json', 'w'), ensure_ascii=False, separators=(',', ':'))
     json.dump(d, open(f'{OUT}/{r}.json', 'w'), ensure_ascii=False, separators=(',', ':'))
     index.append({'id': r, 'name': name, 'ayas': len(d['ayas']), 'pages': len(d['pages'])})
     if 'em' in d: print(r, 'em', d['em'], 'min', min(w for row in d['lw'][2:] for w in row if w), 'max', max(max(row) for row in d['lw']))
@@ -299,7 +303,8 @@ meta = {
     'suras': [[c['name_arabic'], c['name_simple'], c['translated_name']['name'], c['verses_count'],
                c['revelation_place'], c['pages'][0]] for c in chapters],
     'hafs': [[m[0], m[1]] for m in hafs_meta],
-    'emlaey': hafs_emlaey,
 }
 json.dump(meta, open(f'{OUT}/meta.json', 'w'), ensure_ascii=False, separators=(',', ':'))
+# the imla'i text, for search only: loaded when first searched (app.js: buildIndex)
+json.dump(hafs_emlaey, open(f'{OUT}/emlaey.json', 'w'), ensure_ascii=False, separators=(',', ':'))
 print('meta', os.path.getsize(f'{OUT}/meta.json') // 1024, 'KB')

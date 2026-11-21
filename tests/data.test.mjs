@@ -63,3 +63,12 @@ test('surah info and causes of revelation', () => {
     assert.ok(nar.length && nar.every(ps => ps.length && ps.every(p => typeof p === 'string' && p && !/[{}]|<(?!\/?q>)/.test(p))), `${s}:${l}`);
   }
 });
+
+test("index.html's first script asks for the data app.js will (DATA_VERSION), and Hafs's texts are apart", () => {
+  const v = read('app.js').match(/const DATA_VERSION = (\d+);/)?.[1], w = read('index.html').match(/var V = (\d+); \/\/ = DATA_VERSION/)?.[1];
+  assert.ok(v && v === w, `app.js ${v}, index.html ${w}`);
+  const h = json('data/hafs.json'), t = json('data/hafs-text.json'), e = json('data/emlaey.json');
+  assert.ok(!h.utext && !meta.emlaey, 'the texts are not in the files the first page waits for');
+  assert.equal(t.length, h.ayas.length);
+  assert.equal(e.length, meta.hafs.length);
+});
