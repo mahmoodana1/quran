@@ -85,6 +85,7 @@ const Hadith = (() => {
     paint(false, top().y);
   }
   async function paint(fwd, y = 0) {
+    dropCanvas();
     if (!root?.isConnected) return;
     const id = ++run, p = top();
     const pending = setTimeout(() => { if (id === run) root.innerHTML = (p.v === 'home' ? '' : bar('')) + wait; }, 120);
@@ -174,12 +175,16 @@ const Hadith = (() => {
       if (T?.key !== key) { T = buildTree(ways, names, h.ty == null || h.ty === 0); if (T) T.key = key; }
       if (!T) return bar('شجرة الإسناد') + '<div class="empty"><b>لا إسناد لهذا الحديث هنا</b></div>';
       const t = T, n = got.length;
-      return bar('شجرة الإسناد', `${n === 1 ? 'رواية واحدة' : n === 2 ? 'روايتان' : `${ar(n)} ${n <= 10 ? 'روايات' : 'رواية'}`}، ${ar(t.people)} ${t.people <= 10 ? 'رواة' : 'راويًا'}`) + `
-        <p class="hd-tnote">من النبي ﷺ إلى أصحاب الكتب. حيث يتفرّع الطريق فهو راوٍ حمل الحديث إلى أكثر من تلميذ. اضغط على راوٍ لترجمته، وعلى الكتاب لروايته.${all > refs.length ? ` (أول ${ar(refs.length)} من ${ar(all)} رواية)` : ''}</p>
-        <div class="hd-tlegend">${['sh', 'th', 'sd', 'mq', 'dh', 'mt'].map(r => `<span class="r-${r}"><i></i>${RK_WORD[r]}</span>`).join('')}<span class="own"><i></i>طريق هذا الحديث</span></div>
-        <div class="hd-twrap">${treeLayout()}</div>`;
+      after = initCanvas;
+      const sub = `${n === 1 ? 'رواية واحدة' : n === 2 ? 'روايتان' : `${ar(n)} ${n <= 10 ? 'روايات' : 'رواية'}`}، ${ar(t.people)} ${t.people <= 10 ? 'رواة' : 'راويًا'}${all > refs.length ? ` (أول ${ar(refs.length)} من ${ar(all)})` : ''}`;
+      return bar('شجرة الإسناد', sub) + `<div class="hd-cv">
+        <div class="hd-cvbar"><button class="hd-cvx" data-hd-back aria-label="رجوع">${IC.back}</button>
+          <span class="hd-cvt"><b>شجرة الإسناد</b><small>${sub}</small></span>
+          <span class="hd-cvz"><button data-cvz="-" aria-label="تصغير">−</button><button data-cvz="fit" aria-label="الشجرة كلها"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button><button data-cvz="+" aria-label="تكبير">+</button></span></div>
+        <div class="hd-cvv">${treeLayout()}</div>
+        <div class="hd-cvlg">${['sh', 'th', 'sd', 'mq', 'dh', 'mt'].map(r => `<span class="r-${r}"><i></i>${RK_WORD[r]}</span>`).join('')}<span class="own"><i></i>طريق هذا الحديث</span></div>
+        <div class="hd-cvhint">اسحب في أي اتجاه، وقرّب أو بعّد بإصبعين · اضغط على راوٍ لترجمته</div></div>`;
     },
-
     async rawi({ id }) {
       const r = await rawi(id);
       if (!r) return bar('الراوي') + '<div class="empty"><b>لا ترجمة له هنا</b>لم تُذكر له ترجمة في المصدر.</div>';
@@ -317,34 +322,102 @@ const Hadith = (() => {
     byKey.forEach(n => { n.routes = leaves(n); });
     return { root, byKey, open, sel: null, names, marfu, people };
   }
-  // drawn as an open tree down the page, like a file tree: a straight run of narrators one under the
-  // other, and only where the way parts its branches set in, each under a line from the narrator
-  // they part from; every narrator a tap to his page, every book a tap to its narration
+  // drawn on a canvas of its own, over the whole screen: a circle per narrator (his standing's colour,
+  // the first letter of his name), his name and standing under it, curved lines down to his students,
+  // each parent over the middle of his branches; dragged any way with a finger (or the mouse),
+  // pinched (or ctrl+wheel, a trackpad's pinch) to make it smaller or larger; − ⤢ + for the same
   function treeLayout() {
     const { root, names, marfu } = T;
+    const CW = 100, RH = 132, NW = 96, LB = 86;
     const kidsOf = n => [...n.kids.values()].sort((a, b) => (b.own - a.own) || (b.routes - a.routes));
-    const row = n => {
-      const [nm, rk] = names[n.id] || ['', 0], r = RK(rk), leaf = !n.kids.size;
-      return `<li class="ht-n r-${r}${n.own ? ' own' : ''}"><button class="ht-b" data-hd-rawi="${n.id}"><i class="hd-tc">${esc(initial(nm))}</i>
-        <span class="ht-t"><b>${esc(nm || '—')}</b><small>${leaf ? 'المصنِّف' : RK_WORD[r]}</small></span>${IC.go}</button>
-        ${leaf && n.refs.length ? `<span class="ht-refs">${n.refs.map(x => `<button class="hd-tref${x.own ? ' own' : ''}" data-hd-go="${x.b}:${x.k}:${x.j}">${SHORT[x.b]} ${ar(x.l)}</button>`).join('')}</span>` : ''}</li>`;
+    let col = 0, depth = 0, maxRefs = 0;
+    const place = (n, d) => {
+      depth = Math.max(depth, d);
+      const ks = kidsOf(n);
+      if (!ks.length) { maxRefs = Math.max(maxRefs, n.refs.length); n.x = col++ * CW + CW / 2; n.d = d; return; }
+      ks.forEach(x => place(x, d + 1));
+      n.x = (ks[0].x + ks[ks.length - 1].x) / 2; n.d = d;
     };
-    // a branch: its run down to where it parts (or ends), then its branches
-    const branch = n => {
-      let out = '', m = n;
-      for (;;) {
-        out += row(m);
-        if (m.kids.size !== 1) break;
-        m = [...m.kids.values()][0];
+    place(root, 0);
+    // (the first branch, the way opened from, on the right: x counted from the right)
+    const W = Math.max(col * CW, CW) + 40, L = xr => W - 20 - xr, y0 = marfu ? 0 : -RH, yOf = d => d * RH + y0 + 20;
+    const H = yOf(depth) + LB + 26 * maxRefs + 40;
+    const nodes = [], lines = [];
+    const walk = (n, parent) => {
+      if (n !== root) {
+        const [nm, rk] = names[n.id] || ['', 0], r = RK(rk), leaf = !n.kids.size;
+        nodes.push(`<div class="hd-tn r-${r}${n.own ? ' own' : ''}" style="left:${L(n.x) - NW / 2}px;top:${yOf(n.d)}px">
+          <button class="hd-tnb" data-hd-rawi="${n.id}" aria-label="${esc(nm)}"><i class="hd-tc">${esc(initial(nm))}</i><span class="hd-tname">${esc(nm || '—')}</span><small>${leaf ? 'المصنِّف' : RK_WORD[r]}</small></button>
+          ${leaf && n.refs.length ? `<span class="hd-trefs">${n.refs.map(x => `<button class="hd-tref${x.own ? ' own' : ''}" data-hd-go="${x.b}:${x.k}:${x.j}">${SHORT[x.b]} ${ar(x.l)}</button>`).join('')}</span>` : ''}</div>`);
+        if (parent !== root || marfu) {
+          const x1 = L(parent.x), y1 = yOf(parent.d) + (parent === root ? 62 : LB), x2 = L(n.x), y2 = yOf(n.d) + 1, my = (y1 + y2) / 2;
+          lines.push(`<path class="${n.own ? 'own' : ''}" d="M${x1} ${y1}C${x1} ${my} ${x2} ${my} ${x2} ${y2}"/>`);
+        }
       }
-      const ks = kidsOf(m);
-      return `<ol class="ht-run${n.own ? ' own' : ''}">${out}</ol>${ks.length ? fork(ks) : ''}`;
+      kidsOf(n).forEach(x => walk(x, n));
     };
-    const fork = ks => `<div class="ht-fork"><span class="ht-fk">يتفرّع إلى ${ar(ks.length)} ${ks.length === 2 ? 'طريقين' : ks.length <= 10 ? 'طرق' : 'طريقًا'}</span>
-      ${ks.map(k => `<div class="ht-br${k.own ? ' own' : ''}">${branch(k)}</div>`).join('')}</div>`;
-    const top = kidsOf(root);
-    return `<div class="ht">${marfu ? `<div class="ht-root"><i class="hd-tc">ﷺ</i><b>النبي ﷺ</b></div>` : ''}
-      ${top.length === 1 ? `<div class="ht-br own">${branch(top[0])}</div>` : fork(top)}</div>`;
+    walk(root, null);
+    const top = marfu ? `<div class="hd-tn hd-troot" style="left:${L(root.x) - NW / 2}px;top:${yOf(0)}px"><i class="hd-tc">ﷺ</i><span class="hd-tname">النبي ﷺ</span></div>` : '';
+    return `<div class="hd-cvi hd-tree" data-w="${W}" data-h="${H}" data-rx="${L(root.x)}" style="width:${W}px;height:${H}px">
+      <svg class="hd-tlines" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${lines.join('')}</svg>${top}${nodes.join('')}</div>`;
+  }
+  // the canvas: lifted out of the panel over everything (the panel's own motion would carry it),
+  // gone again with the next page
+  const dropCanvas = () => document.querySelectorAll('body > .hd-cv').forEach(x => x.remove());
+  function initCanvas() {
+    const cv = root?.querySelector('.hd-cv');
+    if (!cv) return;
+    document.body.append(cv);
+    new MutationObserver((_, mo) => { if ($('#sheet').hidden || !cv.isConnected) { cv.remove(); mo.disconnect(); } }).observe($('#sheet'), { attributes: true, attributeFilter: ['hidden'] });
+    const vp = cv.querySelector('.hd-cvv'), inn = cv.querySelector('.hd-cvi');
+    const W = +inn.dataset.w, H = +inn.dataset.h, rx = +inn.dataset.rx;
+    const fitS = () => Math.min(1, (vp.clientWidth - 16) / W, (vp.clientHeight - 16) / H);
+    const minS = () => Math.min(.5, fitS() * .8), maxS = 2.6;
+    let s, x, y;
+    const apply = () => { inn.style.transform = `translate3d(${x}px,${y}px,0) scale(${s})`; T.view = { s, x, y }; };
+    const zoomAt = (k, px, py) => { const s2 = Math.min(maxS, Math.max(minS(), s * k)); k = s2 / s; x = px - (px - x) * k; y = py - (py - y) * k; s = s2; };
+    const fit = () => { s = fitS(); x = (vp.clientWidth - W * s) / 2; y = Math.max(8, (vp.clientHeight - H * s) / 2); };
+    if (T.view) ({ s, x, y } = T.view);
+    else { s = Math.max(.75, Math.min(1, vp.clientWidth / 420)); x = vp.clientWidth / 2 - rx * s; y = 10; }
+    apply();
+    // fingers (or the mouse): one drags, two pinch about their middle; a tap stays a tap
+    const pts = new Map();
+    let moved = 0;
+    const local = e => { const r = vp.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+    vp.addEventListener('pointerdown', e => { if (e.button > 0) return; pts.set(e.pointerId, local(e)); if (pts.size === 1) moved = 0; cv.classList.add('grab'); });
+    const move = e => {
+      if (!pts.has(e.pointerId)) return;
+      const p = local(e), before = [...pts.values()];
+      if (pts.size === 1) { const o = pts.get(e.pointerId); x += p.x - o.x; y += p.y - o.y; moved += Math.abs(p.x - o.x) + Math.abs(p.y - o.y); }
+      pts.set(e.pointerId, p);
+      if (pts.size === 2) {
+        const [a0, b0] = before, [a1, b1] = [...pts.values()];
+        const d0 = Math.hypot(a0.x - b0.x, a0.y - b0.y) || 1, d1 = Math.hypot(a1.x - b1.x, a1.y - b1.y) || 1;
+        const m0 = { x: (a0.x + b0.x) / 2, y: (a0.y + b0.y) / 2 }, m1 = { x: (a1.x + b1.x) / 2, y: (a1.y + b1.y) / 2 };
+        x += m1.x - m0.x; y += m1.y - m0.y; zoomAt(d1 / d0, m1.x, m1.y); moved += 99;
+      }
+      apply();
+    };
+    const up = e => { pts.delete(e.pointerId); if (!pts.size) cv.classList.remove('grab'); };
+    addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+    const off = new MutationObserver(() => { if (!cv.isConnected) { removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up); off.disconnect(); } });
+    off.observe(document.body, { childList: true });
+    vp.addEventListener('wheel', e => {
+      e.preventDefault();
+      const p = local(e);
+      if (e.ctrlKey) zoomAt(Math.exp(-e.deltaY * .01), p.x, p.y); else { x -= e.deltaX; y -= e.deltaY; }
+      apply();
+    }, { passive: false });
+    for (const ev of ['gesturestart', 'gesturechange']) cv.addEventListener(ev, e => e.preventDefault()); // (Safari's own pinch)
+    cv.addEventListener('click', e => {
+      if (moved > 8 && e.target.closest('.hd-cvv')) { e.preventDefault(); e.stopPropagation(); moved = 0; return; }
+      const z = e.target.closest('[data-cvz]');
+      if (z) { const k = z.dataset.cvz; if (k === 'fit') fit(); else zoomAt(k === '+' ? 1.3 : 1 / 1.3, vp.clientWidth / 2, vp.clientHeight / 2); inn.classList.add('ease'); apply(); setTimeout(() => inn.classList.remove('ease'), 260); return; }
+      if (e.target.closest('[data-hd-back]')) { back(); return; }
+      const rw = e.target.closest('[data-hd-rawi]'); if (rw) { push({ v: 'rawi', id: +rw.dataset.hdRawi }); return; }
+      const go = e.target.closest('[data-hd-go]'); if (go) { const [b, k, j] = go.dataset.hdGo.split(':'); push({ v: 'hadith', b, k: +k, j: +j }); }
+    }, true);
+    addEventListener('keydown', function esc(e) { if (!cv.isConnected) return removeEventListener('keydown', esc); if (e.key === 'Escape') { e.stopPropagation(); back(); } }, true);
   }
 
   function readerHTML(b, h, names, kt) {

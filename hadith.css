@@ -379,3 +379,46 @@ body.desk .hd-tcard { bottom: 12px; }
 .ht-fork > .ht-br.own::before { background: var(--ht-own); }
 .ht > .ht-br { margin-bottom: 0; }
 .ht > .ht-fork { margin-inline-start: 26px; }
+
+/* =====================================================================
+   شجرة الإسناد as a canvas over the whole screen: dragged any way, pinched larger or smaller
+   ===================================================================== */
+#sheetBody .hd-cv { display: none; } /* (until lifted to the page's body: hadith.js initCanvas) */
+body > .hd-cv { position: fixed; inset: 0; z-index: 48; display: flex; flex-direction: column; direction: rtl;
+  background: var(--dv-grain, none), radial-gradient(140% 95% at 50% 40%, var(--paper-hi) 0%, var(--paper) 62%, var(--paper-lo) 100%); animation: hdCv .25s ease; }
+@keyframes hdCv { from { opacity: 0; } }
+.hd-cvbar { flex: none; display: flex; align-items: center; gap: 10px; padding: calc(env(safe-area-inset-top) + 8px) 12px 8px; border-bottom: .5px solid var(--line);
+  background: color-mix(in srgb, var(--paper) 92%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); position: relative; z-index: 2; }
+.hd-cvx, .hd-cvz button { flex: none; width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; color: var(--p-ink);
+  background: var(--card); border: 1px solid var(--p-rule); font: 700 20px/1 var(--ui); }
+.hd-cvx svg, .hd-cvz svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.hd-cvt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.hd-cvt b { font-size: 17px; font-weight: 800; }
+.hd-cvt small { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hd-cvz { display: flex; gap: 6px; }
+.hd-cvz button:active, .hd-cvx:active { transform: scale(.94); }
+.hd-cvv { position: relative; flex: 1; overflow: hidden; touch-action: none; cursor: grab; -webkit-user-select: none; user-select: none; }
+.grab .hd-cvv { cursor: grabbing; }
+.hd-cvv .hd-cvi { position: absolute; top: 0; left: 0; transform-origin: 0 0; direction: ltr; will-change: transform; }
+.hd-cvv .hd-cvi.ease { transition: transform .25s cubic-bezier(.2, .9, .3, 1); }
+.hd-cvv .hd-cvi .hd-tn { direction: rtl; }
+.hd-cvv .hd-tree .hd-tn { width: 96px; }
+.hd-cvv .hd-tree .hd-tname { max-width: 96px; font-size: 12px; }
+.hd-cvlg { position: absolute; z-index: 2; left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom) + 10px); display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 10px;
+  padding: 7px 12px; border-radius: 14px; font-size: 11px; color: var(--muted); background: color-mix(in srgb, var(--card) 92%, transparent); border: .5px solid var(--line);
+  box-shadow: 0 4px 14px -6px rgba(40, 28, 8, .25); pointer-events: none; }
+.hd-cvlg span { display: inline-flex; align-items: center; gap: 4px; }
+.hd-cvlg i { width: 10px; height: 10px; border-radius: 50%; box-sizing: border-box; border: 2px solid var(--p-green); background: var(--card); }
+.hd-cvlg .r-sh i { background: var(--p-green); border-color: var(--p-gold); }
+.hd-cvlg .r-th i { background: var(--p-green); }
+.hd-cvlg .r-sd i { background: color-mix(in srgb, var(--p-green) 18%, var(--card)); }
+.hd-cvlg .r-mq i { border-color: var(--muted); }
+.hd-cvlg .r-dh i { border-color: #c27a2c; }
+.hd-cvlg .r-mt i { border-color: var(--danger); }
+.hd-cvlg .own i { width: 16px; height: 3px; border: 0; border-radius: 2px; background: var(--p-green); }
+.hd-cvhint { position: absolute; z-index: 2; left: 50%; top: calc(env(safe-area-inset-top) + 66px); transform: translateX(-50%); width: max-content; max-width: calc(100% - 32px);
+  padding: 7px 14px; border-radius: 99px; font-size: 12px; font-weight: 600; color: var(--paper); background: color-mix(in srgb, var(--ink) 82%, transparent);
+  pointer-events: none; animation: hdHint 4s ease forwards; }
+@keyframes hdHint { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { body > .hd-cv, .hd-cvhint { animation: none; } .hd-cvhint { display: none; } }
+.hd-cvhint { top: auto; bottom: calc(env(safe-area-inset-bottom) + 76px); }
