@@ -2437,15 +2437,17 @@ const Recite = (() => {
   function testHTML() {
     const o = testO(), said = log().said || {}, sizes = suraSizes();
     const mine = new Set(Object.keys(said).map(k => R.ayas[+k]?.[0]).filter(Boolean));
+    // (nothing recited yet: no «random from what you know» to start from; a surah, chosen)
+    if (!mine.size && o.from === 'all') o.from = 'sura';
     const opts = Array.from({ length: 114 }, (_, i) => i + 1).filter(x => sizes[x]).map(x => `<option value="${x}"${x === o.s ? ' selected' : ''}>${ar(x)}. ${suraName(x)}${mine.has(x) ? ' ✓' : ''}</option>`).join('');
-    const chip = (k, v, t) => `<button data-rc-to="${k}" data-v="${v}" class="${String(o[k]) === String(v) ? 'on' : ''}">${t}</button>`;
+    const chip = (k, v, t, off) => `<button data-rc-to="${k}" data-v="${v}" class="${String(o[k]) === String(v) ? 'on' : ''}"${off ? ' disabled' : ''}>${t}</button>`;
     return `<div class="tt">
       <div class="tt-rules"><b>اختبار حقيقي</b>
         <p>تُخفى الصفحة كلها إلا الآية التي قبل موضع الاختبار، لتبدأ منها. لا تظهر الكلمة إلا بعد أن تقرأها، ولا تلميح ولا إظهار. وفي آخره نتيجتك.</p></div>
-      <div class="hz-o"><span>من أين؟</span><div class="hz-chips">${chip('from', 'all', `موضع عشوائي من محفوظك${mine.size ? '' : ' (لا محفوظ بعد)'}`)}${chip('from', 'sura', 'من سورة أختارها')}</div></div>
+      <div class="hz-o"><span>من أين؟</span><div class="hz-chips">${mine.size ? chip('from', 'all', 'موضع عشوائي من محفوظك') + chip('from', 'sura', 'من سورة أختارها') : chip('from', 'sura', 'من سورة أختارها') + chip('from', 'all', 'موضع عشوائي من محفوظك', true)}</div>${mine.size ? '' : '<small class="tt-off">«موضع عشوائي» يأتي بعد أن تسمّع شيئًا من حفظك</small>'}</div>
       ${o.from === 'sura' ? `<label class="hz-sel"><span>السورة (✓ ما حفظت منها)</span><select data-rc-tsura>${opts}</select></label>` : ''}
       <div class="hz-o"><span>كم آية؟</span><div class="hz-chips">${[1, 3, 5, 10, 20].map(k => chip('n', k, ayaCount(k))).join('')}</div></div>
-      <button class="tq-go tt-go" data-rc-test-go><span class="tq-go-i">${ICONS.test}</span><span class="tq-go-t"><b>ابدأ الاختبار</b><small>${o.from === 'sura' && o.s ? `من سورة ${suraName(o.s)}` : 'موضع لا تعرفه حتى يبدأ'} · ${ayaCount(o.n)}</small></span>${ICONS.go}</button>
+      <button class="tq-go tt-go" data-rc-test-go><span class="tq-go-i">${ICONS.test}</span><span class="tq-go-t"><b>ابدأ الاختبار</b><small>${o.from === 'sura' && o.s ? `من سورة ${suraName(o.s)}` : 'موضع لا تعرفه حتى يبدأ'}، ${ayaCount(o.n)}</small></span>${ICONS.go}</button>
     </div>`;
   }
   // the reader's place moved to a surah: its first aya not yet recited (or its start)
@@ -2626,7 +2628,7 @@ const Recite = (() => {
         <span class="tq-go-v" style="font-family:${R.font}">${esc(ayaTokens(at).slice(0, 5).join(' '))} …</span></span>${ICONS.go}</button>
       <div class="tq-sw" role="group" aria-label="السورة">
         <button data-rc-sw="${R.ayas[at][0] - 1}" aria-label="السورة السابقة"${R.ayas[at][0] <= 1 ? ' disabled' : ''}>${ICONS.go.replace('M15 6l-6 6 6 6', 'M9 6l6 6-6 6')}</button>
-        <select data-rc-sws aria-label="اختر سورة">${META.suras.map((x, i) => sizes[i + 1] ? `<option value="${i + 1}"${i + 1 === R.ayas[at][0] ? ' selected' : ''}>${isDev() ? '' : `${ar(i + 1)}. `}${x[0]}${got[i + 1] ? (got[i + 1] >= sizes[i + 1] ? ' ✓' : ` · ${ar(got[i + 1])}/${ar(sizes[i + 1])}`) : ''}</option>` : '').join('')}</select>
+        <select data-rc-sws aria-label="اختر سورة">${META.suras.map((x, i) => sizes[i + 1] ? `<option value="${i + 1}"${i + 1 === R.ayas[at][0] ? ' selected' : ''}>${x[0]}${got[i + 1] ? (got[i + 1] >= sizes[i + 1] ? ' ✓' : ` · ${ar(got[i + 1])}/${ar(sizes[i + 1])}`) : ''}</option>` : '').join('')}</select>
         <button data-rc-sw="${R.ayas[at][0] + 1}" aria-label="السورة التالية"${R.ayas[at][0] >= 114 ? ' disabled' : ''}>${ICONS.go}</button>
         <button class="tq-sw0" data-rc-sw0="${R.ayas[at][0]}">من أولها</button>
       </div>
@@ -2642,7 +2644,7 @@ const Recite = (() => {
       const met = hz.newToday.length > 0, st = Object.keys(hz.steps).length;
       rows.push({ c: 'green', icon: ICONS.seed, k: 'حفظ جديد', t: met ? `حفظت اليوم ${ayaCount(hz.newToday.length)}` : hz.text,
         s: met ? `والتالي: ${hz.text}` : st ? `بدأت درسك · ${ar(st)} ${st === 1 ? 'خطوة' : st === 2 ? 'خطوتان' : 'خطوات'}` : `درسك · ${ayaCount(hz.n)} · استمع ثم ردّد ثم سمّع`, done: met, act: 'data-rc-hifz' });
-    } else if (hz?.setup) rows.push({ c: 'green', icon: ICONS.seed, k: 'حفظ جديد', t: isDev() ? 'لم تبدأ الحفظ بعد' : 'ابدأ رحلة حفظ', s: isDev() ? 'ثلاثة أسئلة في «الحفظ»، ويظهر درسك هنا' : 'من أين تبدأ، وكم في الدرس — في «الحفظ»', act: 'data-rc-hifz', add: true });
+    } else if (hz?.setup) rows.push({ c: 'green', icon: ICONS.seed, k: 'حفظ جديد', t: 'لم تبدأ الحفظ بعد', s: 'ثلاثة أسئلة في «الحفظ»، ويظهر درسك هنا', act: 'data-rc-hifz', add: true });
     else if (pl && !pl.finished) {
       const met = pl.todayN >= pl.per, a0 = pl.portion[0], a1 = pl.portion[pl.portion.length - 1];
       rows.push({ c: 'green', icon: ICONS.seed, k: 'حفظ جديد', t: suraName(pl.s), s: met ? `أتممت ورد اليوم · ${ayaCount(pl.todayN)}` : `الآيات ${ar(R.ayas[a0][1])}${a1 !== a0 ? '–' + ar(R.ayas[a1][1]) : ''} · ${ar(pl.todayN)} من ${ar(pl.per)}`, f: Math.min(1, pl.todayN / pl.per), done: met, act: 'data-rc-new', edit: pl.s });
@@ -2656,7 +2658,7 @@ const Recite = (() => {
     else if (revs.length) rows.push({ c: 'amber', icon: ICONS.review, k: 'مراجعة', t: 'لا شيء مستحق اليوم', s: `التالية: ${suraName(revs[0].s)} ${dueText(revs[0])}`, done: true, act: `data-rc-rev="${revs[0].s}"`, edit: revs[0].s });
     if (weak.length) rows.push({ c: 'coral', icon: ICONS.fix, k: 'تثبيت', t: weak.length === 1 ? 'موضع ضعف واحد' : weak.length === 2 ? 'موضعا ضعف' : `${ar(weak.length)} ${weak.length <= 10 ? 'مواضع' : 'موضعًا'} ضعف`, s: 'آيات أخطأت فيها، سمّعها حتى تثبت', act: 'data-rc-review' });
     const doneN = rows.filter(x => x.done).length;
-    h += `<div class="pp-h"><b>ورد اليوم</b><small>${isDev() && hz?.setup && !doneN ? '' : `${ar(doneN)} من ${ar(rows.length)}`}</small></div>
+    h += `<div class="pp-h"><b>ورد اليوم</b><small>${hz?.setup && !doneN ? '' : `${ar(doneN)} من ${ar(rows.length)}`}</small></div>
       <div class="group tq-wird">${rows.map(x => `<button class="row tq-row ${x.c}${x.done ? ' done' : ''}" ${x.act}>${x.edit ? pen(x.edit) : ''}
         <span class="tq-ri">${x.done ? ICONS.check : x.icon}</span>
         <span class="main"><span class="tq-rk">${x.k}</span><span class="t">${x.t}</span><span class="s">${x.s}</span>

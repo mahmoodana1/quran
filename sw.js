@@ -7,7 +7,7 @@
 // requests data with ?v=N, so bumping DATA_VERSION there fetches new copies.
 // Hafs page fonts (verses.quran.foundation) are cached as pages are opened.
 // Recitation audio: see audioResponse below.
-const VERSION = 'quran-v210';
+const VERSION = 'quran-v211';
 const TAFSIR = 'tafsir-saadi';
 // the other tafsirs (app.js: TAFASIR), an aya at a time from GitHub, kept once read, across versions
 const TAFSIR_MORE = 'tafsir-more';
@@ -29,7 +29,7 @@ const MUSHAF = 'mushaf-data';
 // mu-worker.js keeps Muaalem in 'muaalem-lab' (shared with the lab in
 // quran-models, on the same site); they must outlive app updates too
 const MODELS = ['transformers-cache', 'muaalem-lab'];
-const SHELL = ['./', 'index.html', 'app.css', 'desk.css', 'app.js', 'desk.js', 'sync.js', 'plan.js', 'extras.js', 'marks.js', 'prayer.js', 'adhkar.js', 'hadith.js', 'hadith.css', 'hadith-worker.js', 'listen.js', 'recite.js', 'hifz.js', 'word.js', 'asr-worker.js', 'match.js', 'mu.js', 'mu-worker.js', 'ctc.js', 'fbank.js', 'capture.js', 'install.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png'];
+const SHELL = ['./', 'index.html', 'app.css', 'desk.css', 'app.js', 'desk.js', 'sync.js', 'plan.js', 'extras.js', 'marks.js', 'prayer.js', 'adhkar.js', 'hadith.js', 'hadith.css', 'hadith-worker.js', 'listen.js', 'recite.js', 'hifz.js', 'word.js', 'asr-worker.js', 'match.js', 'mu.js', 'mu-worker.js', 'ctc.js', 'fbank.js', 'capture.js', 'install.js', 'ui.css', 'ui.js', 'manifest.webmanifest', 'icons/icon-180.png', 'icons/icon-192.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION)
