@@ -538,3 +538,41 @@
 :root.ui .hz-chips button:disabled { opacity: .4; }
 :root.ui .tt-off { display: block; margin-top: 6px; font-size: 12px; color: var(--muted); }
 :root.ui .hz-presets button.on b { color: var(--accent); }
+
+/* =====================================================================
+   the bar's chevron inside the bar (its last column, at the end); the bar away: wholly, and a
+   small handle in the strip kept for it at the foot of the page (never over the text). The mic's
+   name placed from the bar's own row, not the phone's home-indicator strip under it
+   ===================================================================== */
+:root.ui body:not(.desk) #dock.dv-dock { grid-template-columns: repeat(2, minmax(0, 1fr)) 84px repeat(2, minmax(0, 1fr)) 30px; }
+:root.ui #dock .dv-micl { bottom: 5px; }
+:root.ui #dock .dv-hide {
+  position: static; width: auto; height: auto; border-radius: 0; background: none; box-shadow: none;
+  display: grid; place-items: center; color: var(--faint); padding: 0 2px 0 0; opacity: 1;
+}
+:root.ui #dock .dv-hide svg { width: 18px; height: 18px; transform: none; }
+:root.ui #dock .dv-hide:active { color: var(--accent); }
+:root.ui body.dv-barless:not(.desk) #dock.dv-dock { transform: translateY(100%); }
+:root.ui .dv-show {
+  position: fixed; z-index: 34; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 14px); width: 52px; height: 26px; border-radius: 13px;
+  display: grid; place-items: center; color: var(--muted); background: var(--paper);
+  box-shadow: 0 0 0 .5px var(--line), 0 4px 12px -4px rgba(40, 28, 8, .3);
+  transform: translate(-50%, 12px); opacity: 0; pointer-events: none; transition: transform .3s var(--dv-ease), opacity .2s ease;
+}
+:root.ui .dv-show svg { width: 18px; height: 18px; }
+:root.ui .dv-show svg g { stroke-width: 2.2; }
+:root.ui body.dv-barless:not(.desk):not(.sheet-up):not(.rc-on) .dv-show { transform: translate(-50%, 0); opacity: 1; pointer-events: auto; }
+:root.ui body:has(#ayaBar:not([hidden]), #wordBar:not([hidden]), #suraBar:not([hidden]), #recWord:not([hidden]), #player:not([hidden])) .dv-show { opacity: 0; pointer-events: none; }
+:root.ui body.desk .dv-show, :root.ui.landscape .dv-show, :root.ui .landscape .dv-show { display: none; }
+:root.ui body.dv-barless .bar { bottom: calc(14px + env(safe-area-inset-bottom)); }
+/* (in the panels the bar is always there: it is the way round them) */
+:root.ui body.dv-barless.sheet-up:not(.desk) #dock.dv-dock { transform: none; }
+/* the mic inside the bar, at its full height: round and green, nothing of it over the page */
+:root.ui #dock #dockMic {
+  width: 46px; height: 46px; top: calc(var(--dv-tabbar) / 2);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--p-gold) 55%, transparent), 0 4px 10px -3px rgba(18, 58, 45, .45);
+}
+:root.ui #dock #dockMic svg { width: 22px; height: 22px; }
+:root.ui #dock .dv-micl { display: none; }
+:root.ui #dock #dockArrow { top: 50%; }
+:root.ui body.sheet-up #dock .dv-hide { visibility: hidden; }

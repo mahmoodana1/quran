@@ -47,16 +47,21 @@
   micL.className = 'dv-micl'; micL.textContent = 'بحث بالصوت';
   mid.append(micL);
   // the bar's tab: puts the bar away (the page alone) and brings it back; remembered
+  // (a chevron in the bar itself, at its end; the bar away, a small handle brings it back, in the
+  // strip at the foot that is kept for the bar, so it never lies over the text)
   const hideB = document.createElement('button');
-  hideB.className = 'dv-hide';
+  hideB.className = 'dv-hide'; hideB.setAttribute('aria-label', 'أخفِ الشريط');
   hideB.innerHTML = svg('<path d="M7 10l5 5 5-5"/>');
+  const showB = document.createElement('button');
+  showB.className = 'dv-show'; showB.setAttribute('aria-label', 'أظهر الشريط');
+  showB.innerHTML = svg('<path d="M7 14l5-5 5 5"/>');
+  document.body.append(showB);
   const barless = on => {
     document.body.classList.toggle('dv-barless', on);
-    hideB.setAttribute('aria-label', on ? 'أظهر الشريط' : 'أخفِ الشريط');
-    hideB.setAttribute('aria-expanded', String(!on));
     store.set('dv.barless', on);
   };
-  hideB.onclick = () => { haptic(8); barless(!document.body.classList.contains('dv-barless')); };
+  hideB.onclick = () => { haptic(8); barless(true); };
+  showB.onclick = () => { haptic(8); barless(false); };
   barless(!!store.get('dv.barless', false));
   // (in the bar's order, right to left)
   dock.replaceChildren(tQuran, tIndex, mid, tHifz, tMore, hideB);
