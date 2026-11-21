@@ -35,6 +35,8 @@ const Hadith = (() => {
   }
   const cite = (b, h) => `رواه ${SHORT[b]} (${nums(num(b, h))})`;
   const nHadith = n => n === 1 ? 'حديث واحد' : n === 2 ? 'حديثان' : n <= 10 ? `${ar(n)} أحاديث` : `${ar(n)} حديثًا`;
+  // a hadith's number in the app's star, sized to its digits (the star was made for a surah's 1–3)
+  const star = n => `<b class="hd-star" data-d="${String(n).length}">${ar(n)}</b>`;
   const nKitab = n => n <= 10 ? `${ar(n)} كتب` : `${ar(n)} كتابًا`;
   const nTimes = n => n === 1 ? 'مرة' : n === 2 ? 'مرتين' : n <= 10 ? `${ar(n)} مرات` : `${ar(n)} مرة`;
   // a narrator's standing (Ibn Hajar's twelve grades, rank 1–12): its colour
@@ -173,7 +175,7 @@ const Hadith = (() => {
     async saved() {
       const list = store.get('hd.saved', []);
       return bar('المحفوظة', nHadith(list.length)) + (list.length ? `<div class="group">${list.map((s, i) =>
-        `<button class="row hd-hrow" data-hd-go="${s.b}:${s.k}:${s.j}"><span class="num hd-bn">${SHORT[s.b]}<b>${ar(s.l)}</b></span>
+        `<button class="row hd-hrow" data-hd-go="${s.b}:${s.k}:${s.j}"><span class="num hd-bn">${SHORT[s.b]}${star(s.l)}</span>
           <span class="main"><span class="s hd-prev">${esc(s.t)}</span></span>
           <span class="del" data-hd-unsave="${i}" aria-label="حذف"><svg viewBox="0 0 24 24"><path d="M5 7h14M10 7V5h4v2M7 7l1 12h8l1-12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></span></button>`).join('')}</div>`
         : '<div class="empty"><b>لا أحاديث محفوظة</b>اضغط ☆ في أعلى الحديث لحفظه هنا.</div>');
@@ -187,7 +189,7 @@ const Hadith = (() => {
   function rowsHTML(b, k, p0, hs) {
     return hs.map((h, i) => {
       const j = p0 * PART + i, g = b === 'abudawud' && h.gr?.[0];
-      return `<button class="row hd-hrow" data-hd-go="${b}:${k}:${j}"><span class="num hd-n">${ar(label(b, h))}</span>
+      return `<button class="row hd-hrow" data-hd-go="${b}:${k}:${j}"><span class="num hd-n">${star(label(b, h))}</span>
         <span class="main"><span class="s hd-prev">${esc(matnOf(h).slice(0, 180))}</span>
         ${g || TYPE[h.ty] ? `<span class="hd-mini">${TYPE[h.ty] ? `<i class="hd-chip">${TYPE[h.ty]}</i>` : ''}${g ? `<i class="hd-chip g-${gradeCls(g[1])}">${g[1]}</i>` : ''}</span>` : ''}</span></button>`;
     }).join('');
@@ -278,7 +280,7 @@ const Hadith = (() => {
         ${chains.length > 1 ? `<details class="hd-more-c"><summary>${chains.length === 2 ? 'طريق آخر' : `${ar(chains.length - 1)} طرق أخرى`} في هذا الموضع</summary>${chains.slice(1).map(c => chainHTML(c, names, h)).join('')}</details>` : ''}
 </section>` : ''}
       ${others.length ? `<section class="hd-sec"><h3>روايات أخرى للحديث<small>${h.on > others.length ? `${ar(h.on)} رواية، أولها:` : 'في الكتب الثلاثة'}</small></h3>
-        <div class="group">${others.map(([b2, k2, j2, l, same]) => `<button class="row hd-orow" data-hd-go="${b2}:${k2}:${j2}"><span class="num hd-bn">${SHORT[b2]}<b>${ar(l)}</b></span>
+        <div class="group">${others.map(([b2, k2, j2, l, same]) => `<button class="row hd-orow" data-hd-go="${b2}:${k2}:${j2}"><span class="num hd-bn">${SHORT[b2]}${star(l)}</span>
           <span class="main"><span class="t">${BOOKS[b2]}</span><span class="s">${same ? 'عن الصحابي نفسه' : 'عن صحابي آخر أو بلفظ آخر'}</span></span>
           ${same && b2 !== b && b2 !== 'abudawud' && b !== 'abudawud' ? '<span class="tag hd-agree">متفق عليه</span>' : ''}${IC.go}</button>`).join('')}</div></section>` : ''}
     </article>`;
@@ -419,7 +421,7 @@ const Hadith = (() => {
     if (r.rawis?.length) html += `<div class="group-label">الرواة</div><div class="group">${r.rawis.map(([id, n, k, c]) =>
       `<button class="row" data-hd-rawi="${id}"><span class="num hd-dotn"><i class="hd-dot r-${RK(k)}"></i></span><span class="main"><span class="t">${esc(n)}</span><span class="s">في إسناد ${nHadith(c)}</span></span>${IC.go}</button>`).join('')}</div>`;
     if (r.hits.length) html += `<div class="group-label">${r.rawis?.length ? 'الأحاديث' : ''}${r.total > r.hits.length ? ` أول ${ar(r.hits.length)} من ${ar(r.total)} نتيجة` : r.total > 2 ? ` (${ar(r.total)} نتيجة)` : ''}</div><div class="group">${r.hits.map(([b, k, j, ns, s]) =>
-      `<button class="row hd-hrow" data-hd-go="${b}:${k}:${j}" data-hd-from-q><span class="num hd-bn">${SHORT[b]}<b>${ar(ns[0])}</b></span>
+      `<button class="row hd-hrow" data-hd-go="${b}:${k}:${j}" data-hd-from-q><span class="num hd-bn">${SHORT[b]}${star(ns[0])}</span>
         <span class="main"><span class="s hd-prev">${r.num ? esc(s.slice(0, 160)) : mark(s, q)}</span></span></button>`).join('')}</div>`;
     return html || '<div class="empty"><b>لا نتائج في الأحاديث</b>جرّب كلمة أخرى، أو اسم راوٍ، أو رقمًا: «البخاري ١».</div>';
   }
