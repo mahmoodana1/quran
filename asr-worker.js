@@ -5,13 +5,15 @@
 // the device.
 // Messages in: { type: 'load', model, dtype }, { type: 'run', id, audio: Float32Array (16 kHz), opts? (generation) }
 // Messages out: progress { file, loaded, total }, ready { threads }, text { id, text, ms }, error { message }
-import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.7.5';
+// (transformers.js and the onnxruntime it loads: copies in mahmoodana1/quran-models/lib, not jsDelivr)
+import { pipeline, env } from 'https://mahmoodana1.github.io/quran-models/lib/transformers@3.7.5/transformers.min.js';
 
 env.allowLocalModels = false;
 // the models are copies kept in mahmoodana1/quran-models (Apache-2.0, from
 // tarteel-ai's Quran Whisper), so the app doesn't depend on anyone else's account
 env.remoteHost = 'https://mahmoodana1.github.io/quran-models/';
 env.remotePathTemplate = 'whisper/{model}/';
+env.backends.onnx.wasm.wasmPaths = 'https://mahmoodana1.github.io/quran-models/lib/transformers@3.7.5/';
 // several cores when the page is cross-origin isolated (see sw.js)
 if (self.crossOriginIsolated) env.backends.onnx.wasm.numThreads = Math.min(4, navigator.hardwareConcurrency || 1);
 

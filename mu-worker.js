@@ -20,7 +20,7 @@
 import { tokens, score, path } from './ctc.js';
 import { features, Mel } from './fbank.js';
 
-const ORT = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.31.1/dist/';
+const ORT = 'https://mahmoodana1.github.io/quran-models/lib/onnxruntime-web@1.31.1/'; // (a copy of the npm package's dist, not jsDelivr)
 const BASE = 'https://mahmoodana1.github.io/quran-models/'; // where the models live (mahmoodana1/quran-models)
 const WIN = 4, RIGHT = 1, MIN_NEW = 0.25, RATE = 16000; // (the study, 480 readings: half the words wrongly marked of 2.5 / 0.5 / 0.25; a slower device reads less often by itself)
 const FRAME = 640;   // samples per output frame (40 ms); windows start on this grid so frames line up

@@ -57,7 +57,7 @@
     ['data/meta.json?v=' + V, 'data/' + rw + '.json?v=' + V].forEach(function (u) { pre[u] = fetch(u); });
     font('fonts/' + rw + '.woff2');
     var p = (k && k.page) || JSON.parse(localStorage.getItem('q.page.' + rw)) || 1;
-    if (rw === 'hafs' && p >= 1 && p <= 604) font('https://verses.quran.foundation/fonts/quran/hafs/v2/woff2/p' + p + '.woff2');
+    if (rw === 'hafs' && p >= 1 && p <= 604) font('fonts/qcf/p' + p + '.woff2');
   } catch (e) {}
 })();
 </script>

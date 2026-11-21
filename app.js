@@ -92,7 +92,8 @@ const isDev = () => document.documentElement.classList.contains('dev');
 const ar = n => String(n).replace(/\d/g, d => '٠١٢٣٤٥٦٧٨٩'[d]);
 const isEnd = t => /^[٠-٩]+$/.test(t) || t.endsWith('*');
 // KFGQPC QCF V2 per-page fonts (1441 Madani print): every word is a glyph
-const QCF_BASE = 'https://verses.quran.foundation/fonts/quran/hafs/v2/woff2/';
+// the mushaf's page fonts (KFGQPC QCF V2, as verses.quran.foundation serves them), the app's own copy
+const QCF_BASE = new URL('fonts/qcf/', location.href).href;
 const LINE_RATIO = 1.8;
 // thin rules fading out to either side of a small rub' el-hizb star
 const ORNAMENT = (() => {

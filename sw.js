@@ -7,7 +7,7 @@
 // requests data with ?v=N, so bumping DATA_VERSION there fetches new copies.
 // Hafs page fonts (verses.quran.foundation) are cached as pages are opened.
 // Recitation audio: see audioResponse below.
-const VERSION = 'quran-v222';
+const VERSION = 'quran-v223';
 const TAFSIR = 'tafsir-saadi';
 // the other tafsirs (app.js: TAFASIR), an aya at a time from GitHub, kept once read, across versions
 const TAFSIR_MORE = 'tafsir-more';
@@ -47,8 +47,23 @@ self.addEventListener('install', e => {
 self.addEventListener('activate', e => {
   e.waitUntil(caches.keys()
     .then(keys => Promise.all(keys.filter(k => k !== VERSION && k !== FONTS && k !== ASR && k !== AUDIO && k !== RIWAYA_AUDIO && k !== TAFSIR && k !== TAFSIR_MORE && k !== MUSHAF && !MODELS.includes(k)).map(k => caches.delete(k))))
+    .then(moveFonts)
     .then(() => self.clients.claim()));
 });
+// the mushaf's page fonts are the app's own now (fonts/qcf/, copied from verses.quran.foundation):
+// those a phone kept under the old address put under the new, so nothing is fetched twice
+async function moveFonts() {
+  try {
+    const c = await caches.open(FONTS), OLD = 'https://verses.quran.foundation/fonts/quran/hafs/v2/woff2/';
+    for (const req of await c.keys()) {
+      if (!req.url.startsWith(OLD)) continue;
+      const res = await c.match(req);
+      if (res) await c.put(new URL(`fonts/qcf/${req.url.slice(OLD.length)}`, self.registration.scope).href, new Response(await res.blob(), { headers: { 'Content-Type': 'font/woff2' } }));
+      await c.delete(req);
+    }
+  } catch {}
+}
+
 
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
@@ -82,6 +97,17 @@ self.addEventListener('fetch', e => {
     }));
     return;
   }
+  if (url.origin === location.origin && url.pathname.includes('/fonts/qcf/')) {
+    e.respondWith(caches.open(FONTS).then(async c => {
+      const key = url.origin + url.pathname;
+      const hit = await c.match(key);
+      if (hit) return hit;
+      const res = await fetch(e.request);
+      if (res.ok) c.put(key, res.clone());
+      return res;
+    }));
+    return;
+  }
   if (url.hostname === 'verses.quran.foundation') {
     e.respondWith(caches.open(FONTS).then(async c => {
       const hit = await c.match(e.request);
@@ -93,6 +119,17 @@ self.addEventListener('fetch', e => {
     return;
   }
   if (url.origin !== location.origin) return;
+  // the recitation check's libraries, kept in the models' repository: once fetched, kept (as above)
+  if (url.pathname.startsWith('/quran-models/lib/')) {
+    e.respondWith(caches.open(ASR).then(async c => {
+      const hit = await c.match(e.request);
+      if (hit) return hit;
+      const res = await fetch(e.request);
+      if (res.ok) c.put(e.request, res.clone());
+      return res;
+    }));
+    return;
+  }
   // the model repository on the same site: fetched as is (the worker keeps its own copy)
   if (!url.pathname.startsWith(new URL('./', location.href).pathname)) return;
   if (/\/data\/tafsir\//.test(url.pathname)) {
