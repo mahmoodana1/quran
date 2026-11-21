@@ -2024,7 +2024,7 @@ async function openTafsir(ai, mode = tfMode) {
     if (tfAya !== ai) return;
     why.innerHTML = w.n
       ? `<details class="tf-why"${whyOpen ? ' open' : ''}><summary><span class="tf-why-ic"><svg viewBox="0 0 24 24"><path d="M12 3.5l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L4.8 8.8l5-.7z"/></svg></span><b>سبب النزول</b><small>${w.n > 1 ? `${ar(w.n)} روايات` : 'رواية واحدة'}</small></summary><div class="tf-why-in">${asbabHTML(w)}</div></details>`
-      : '<p class="tf-why-none">لا سبب نزول لهذه الآية</p>';
+      : '<p class="tf-why-none">لا يُعرف لهذه الآية سبب نزول صحيح</p>';
   }).catch(() => {});
   if (tn[4]) {
     // another tafsir: an aya at a time
