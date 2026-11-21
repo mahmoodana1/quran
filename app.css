@@ -3714,3 +3714,12 @@ b.hz4-v { font-size: 19px; font-weight: 900; }
   background: var(--p-pattern) 0 0 / 30px 30px, linear-gradient(160deg, var(--p-green), var(--p-green-2));
 }
 .tq-row:not(.amber):not(.coral):not(.done) .tq-ri { background: var(--p-pattern) 0 0 / 22px 22px, linear-gradient(160deg, var(--p-green), var(--p-green-2)); }
+/* the khatmas' covers (whatever their colour) and the switches when on, patterned the same way */
+.cover:not(.new) {
+  background:
+    linear-gradient(90deg, rgba(255,255,255,.07), transparent 12%, transparent 88%, rgba(0,0,0,.28)),
+    var(--p-pattern) 0 0 / 22px 22px,
+    linear-gradient(160deg, var(--c1), var(--c2));
+}
+.cover.small:not(.new) { background-size: auto, 14px 14px, auto; }
+.tog.on, .rc-set .tog.on { background: var(--p-pattern) 0 0 / 14px 14px, linear-gradient(160deg, var(--p-green), var(--p-green-2)); }

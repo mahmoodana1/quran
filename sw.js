@@ -7,7 +7,7 @@
 // requests data with ?v=N, so bumping DATA_VERSION there fetches new copies.
 // Hafs page fonts (verses.quran.foundation) are cached as pages are opened.
 // Recitation audio: see audioResponse below.
-const VERSION = 'quran-v197';
+const VERSION = 'quran-v198';
 const TAFSIR = 'tafsir-saadi';
 // recitation files saved by the app (or while listening); kept across versions.
 // Hafs: aya files from everyayah.com; the other riwayat: surah files from
@@ -31,8 +31,14 @@ const SHELL = ['./', 'index.html', 'app.css', 'desk.css', 'app.js', 'desk.js', '
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(VERSION)
-    // ('no-cache': asked of the server again, but a file that has not changed is not sent again)
-    .then(c => c.addAll(SHELL.map(u => new Request(u, { cache: 'no-cache' }))))
+    // each file asked for past every cache on the way (GitHub's CDN keeps a file up to ten minutes
+    // after a push: a version saved in that time kept an old file of it for as long as it lasted),
+    // and saved under its own name
+    .then(c => Promise.all(SHELL.map(async u => {
+      const res = await fetch(new Request(`${u}${u.includes('?') ? '&' : '?'}v=${VERSION}`, { cache: 'reload' }));
+      if (!res.ok) throw new Error(`${u} ${res.status}`);
+      await c.put(new URL(u, self.registration.scope).href, res);
+    })))
     .then(() => self.skipWaiting()));
 });
 
