@@ -53,6 +53,7 @@ const Hadith = (() => {
     star: '<svg viewBox="0 0 24 24"><path d="M12 3.8l2.5 5.2 5.6.7-4.1 3.9 1 5.6-5-2.7-5 2.7 1-5.6-4.1-3.9 5.6-.7z"/></svg>',
     copy: '<svg viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7.5a2 2 0 002 2h2.5"/></svg>',
     share: '<svg viewBox="0 0 24 24"><path d="M12 15V3.5M7.5 8L12 3.5 16.5 8M5 12.5v6a2 2 0 002 2h10a2 2 0 002-2v-6"/></svg>',
+    person: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.6"/><path d="M5 20c.8-3.8 3.6-6 7-6s6.2 2.2 7 6"/></svg>',
     go: '<svg viewBox="0 0 24 24" class="go"><path d="M14.5 6l-6 6 6 6"/></svg>',
     tree: '<svg viewBox="0 0 24 24"><path d="M12 4v16M12 8H6.5v4M12 8h5.5v4M6.5 12H4.5v4M6.5 12h2v4M17.5 12h-2v4M17.5 12h2v4"/></svg>',
     saved: '<svg viewBox="0 0 24 24"><path d="M6.5 3.5h11v17l-5.5-4-5.5 4z"/></svg>',
@@ -152,7 +153,7 @@ const Hadith = (() => {
     async rawi({ id }) {
       const r = await rawi(id);
       if (!r) return bar('الراوي') + '<div class="empty"><b>لا ترجمة له هنا</b>لم تُذكر له ترجمة في المصدر.</div>';
-      return bar(esc(r.s), r.k === 1 ? 'صحابي' : TB[r.tb] || '') + rawiHTML(r);
+      return bar('ترجمة الراوي', esc(r.s)) + rawiHTML(r);
     },
 
     async topics({ t = 0 }) {
@@ -231,13 +232,13 @@ const Hadith = (() => {
   }
   function gradeHTML(b, h) {
     const chips = [];
-    if (TYPE[h.ty]) chips.push(`<i class="hd-chip">${TYPE[h.ty]}</i>`);
     if (b !== 'abudawud') {
       // the two Sahihs: their hadiths with a chain to the Prophet ﷺ are sahih (not graded again)
-      if (h.c && (h.ty == null || h.ty === 0)) chips.push(`<i class="hd-chip g-th">صحيح</i>`);
-      if (h.o?.some(o => o[4] && o[0] !== b && o[0] !== 'abudawud')) chips.push(`<i class="hd-chip g-agree">متفق عليه</i>`);
-    } else for (const [who, g] of h.gr || []) chips.push(`<i class="hd-chip g-${gradeCls(g)}"><small>${who}:</small> ${g}</i>`);
-    return chips.length || h.hk ? `<div class="hd-grade">${chips.join('')}${h.hk ? `<p class="hd-hk"><small>حكم الإسناد (موسوعة الحديث):</small> ${esc(h.hk)}</p>` : ''}</div>` : '';
+      if (h.c && (h.ty == null || h.ty === 0)) chips.push(`<i class="hd-pill">صحيح</i>`);
+      if (h.o?.some(o => o[4] && o[0] !== b && o[0] !== 'abudawud')) chips.push(`<i class="hd-pill hd-pill-o">متفق عليه</i>`);
+    } else for (const [who, g] of h.gr || []) chips.push(`<i class="hd-pill${gradeCls(g) === 'th' || gradeCls(g) === 'sd' ? '' : ' hd-pill-w'}"><small>${who}</small>${g}</i>`);
+    if (TYPE[h.ty]) chips.push(`<i class="hd-pill hd-pill-o">${TYPE[h.ty]}</i>`);
+    return `<div class="hd-plate"><span class="hd-pills">${chips.join('')}</span><span class="hd-src">${cite(b, h)}</span></div>`;
   }
   // the chain, down the page: the author at the top, each narrator with his standing, the Prophet ﷺ at the end
   const RK_WORD = { sh: 'صحابي', th: 'ثقة', sd: 'صدوق', mq: 'مقبول', dh: 'ضعيف', mt: 'متروك', gap: 'انقطاع' };
@@ -255,17 +256,16 @@ const Hadith = (() => {
     // Prophet's ﷺ words alone, what was around them in the chain's part)
     const full = h.m ? `${marked(h, 0, m0, names)}<b class="hd-mt">${marked(h, m0, m1, names)}</b>${marked(h, m1, h.t.length, names)}`.trim() : '';
     const chains = h.c || [];
-    const legend = [...new Set(chains.flat().map(id => RK(names[id]?.[1] ?? 0)))];
     const others = h.o || [];
     return `<article class="hd-read">
-      ${gradeHTML(b, h)}
-      <div class="hd-matn">${marked(h, m0, m1, names)}</div>
-      <div class="hd-cite-l">${cite(b, h)}</div>
-      ${full ? `<section class="hd-sec"><h3>الحديث بإسناده<small>اضغط على اسم الراوي لترجمته</small></h3><p class="hd-sanad">${full}</p></section>` : ''}
+      <div class="hd-card">${gradeHTML(b, h)}
+        <div class="hd-matn">${marked(h, m0, m1, names)}</div>
+        ${h.hk ? `<p class="hd-hk"><b>حكم الإسناد</b> ${esc(h.hk)} <small>(موسوعة الحديث)</small></p>` : ''}</div>
+      ${full ? `<details class="hd-sec hd-fold"><summary><h3>الحديث بإسناده<small>اضغط على اسم الراوي لترجمته</small></h3></summary><p class="hd-sanad">${full}</p></details>` : ''}
       ${chains.length ? `<section class="hd-sec"><h3>سلسلة الرواة<small>من المصنِّف إلى ${h.ty == null || h.ty === 0 ? 'النبي ﷺ' : 'قائله'}</small></h3>
         ${chainHTML(chains[0], names, h)}
         ${chains.length > 1 ? `<details class="hd-more-c"><summary>${chains.length === 2 ? 'طريق آخر' : `${ar(chains.length - 1)} طرق أخرى`} في هذا الموضع</summary>${chains.slice(1).map(c => chainHTML(c, names, h)).join('')}</details>` : ''}
-        <div class="hd-legend">${legend.map(c => `<span><i class="hd-dot r-${c}"></i>${RK_NAME[c]}</span>`).join('')}</div></section>` : ''}
+</section>` : ''}
       ${others.length ? `<section class="hd-sec"><h3>روايات أخرى للحديث<small>${h.on > others.length ? `${ar(h.on)} رواية، أولها:` : 'في الكتب الثلاثة'}</small></h3>
         <div class="group">${others.map(([b2, k2, j2, l, same]) => `<button class="row" data-hd-go="${b2}:${k2}:${j2}">
           <span class="main"><span class="t">${BOOKS[b2]} · ${ar(l)}</span><span class="s">${same ? 'عن الصحابي نفسه' : 'عن صحابي آخر أو بلفظ آخر'}</span></span>
@@ -290,8 +290,9 @@ const Hadith = (() => {
       <div class="hd-ppl">${list.map(([id, name, c, k]) => `<button class="hd-ch r-${RK(k || 0)}" data-hd-rawi="${id}">${esc(name)}<small>${nTimes(c)}</small></button>`).join('')}</div></section>` : '';
     const q = r.q || [];
     return `<article class="hd-rawi">
-      <div class="hd-rk r-${RK(r.k)}"><b>${esc(r.rk || RK_NAME[RK(r.k)])}</b><small>${r.k === 1 ? 'من الصحابة' : `مرتبته عند ابن حجر: ${ar(r.k)} من ١٢`}</small></div>
-      ${flags.length ? `<div class="hd-flags">${flags.map(f => `<i class="hd-chip g-dh">${f}</i>`).join('')}</div>` : ''}
+      <div class="hd-who"><span class="hd-who-i">${IC.person}</span><span class="hd-who-t"><b>${esc(r.s)}</b>
+        <small>${r.k === 1 ? 'من الصحابة' : TB[r.tb] ? `من ${TB[r.tb]}` : ''}${r.d ? ` · ت ${ar(r.d)}هـ` : ''}</small>
+        <span class="hd-pills"><i class="hd-pill${r.k >= 8 ? ' hd-pill-w' : ''}">${esc(r.rk || RK_NAME[RK(r.k)])}</i>${r.k > 1 ? `<i class="hd-pill hd-pill-o">مرتبته ${ar(r.k)} من ١٢</i>` : ''}${flags.map(f => `<i class="hd-pill hd-pill-w">${f}</i>`).join('')}</span></span></div>
       <div class="hd-facts">${facts.map(([k, v]) => `<div><span>${k}</span><b>${esc(String(v))}</b></div>`).join('')}
         <div><span>رواياته</span><b>في إسناد ${nHadith(r.n)} من الكتب الثلاثة</b></div></div>
       ${r.stub ? '<p class="hd-hk">لم تُذكر له ترجمة في المصدر؛ اسمه من نص الحديث.</p>' : ''}
