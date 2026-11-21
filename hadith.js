@@ -53,6 +53,8 @@ const Hadith = (() => {
     star: '<svg viewBox="0 0 24 24"><path d="M12 3.8l2.5 5.2 5.6.7-4.1 3.9 1 5.6-5-2.7-5 2.7 1-5.6-4.1-3.9 5.6-.7z"/></svg>',
     copy: '<svg viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11" height="11" rx="2.5"/><path d="M15.5 8.5V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7.5a2 2 0 002 2h2.5"/></svg>',
     share: '<svg viewBox="0 0 24 24"><path d="M12 15V3.5M7.5 8L12 3.5 16.5 8M5 12.5v6a2 2 0 002 2h10a2 2 0 002-2v-6"/></svg>',
+    check: '<svg viewBox="0 0 24 24" class="hd-ck"><path d="M5.5 12.5l4 4 9-9"/></svg>',
+    warn: '<svg viewBox="0 0 24 24" class="hd-wi"><path d="M12 4l9 16H3z"/><path d="M12 10v4.5M12 17.2v.3"/></svg>',
     person: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.6"/><path d="M5 20c.8-3.8 3.6-6 7-6s6.2 2.2 7 6"/></svg>',
     go: '<svg viewBox="0 0 24 24" class="go"><path d="M14.5 6l-6 6 6 6"/></svg>',
     tree: '<svg viewBox="0 0 24 24"><path d="M12 4v16M12 8H6.5v4M12 8h5.5v4M6.5 12H4.5v4M6.5 12h2v4M17.5 12h-2v4M17.5 12h2v4"/></svg>',
@@ -147,13 +149,14 @@ const Hadith = (() => {
         <button class="hd-tb" data-hd-copy aria-label="نسخ">${IC.copy}</button>
         <button class="hd-tb" data-hd-step="-1" aria-label="السابق"${!j && !k ? ' disabled' : ''}>${IC.back}</button>
         <button class="hd-tb" data-hd-step="1" aria-label="التالي"${last ? ' disabled' : ''}>${IC.next}</button>`;
-      return bar(`${SHORT[b]} ${nums(num(b, h))}`, `${k || b !== 'muslim' ? 'كتاب ' : ''}${B.k[k][0]}`, tools) + readerHTML(b, h, names);
+      const kt = `${k || b !== 'muslim' ? 'كتاب ' : ''}${B.k[k][0]}`;
+      return bar(kt, BOOKS[b], tools) + readerHTML(b, h, names, kt);
     },
 
     async rawi({ id }) {
       const r = await rawi(id);
       if (!r) return bar('الراوي') + '<div class="empty"><b>لا ترجمة له هنا</b>لم تُذكر له ترجمة في المصدر.</div>';
-      return bar('ترجمة الراوي', esc(r.s)) + rawiHTML(r);
+      return bar('ترجمة الراوي') + rawiHTML(r);
     },
 
     async topics({ t = 0 }) {
@@ -230,15 +233,22 @@ const Hadith = (() => {
     }
     return out + esc(h.t.slice(at, b));
   }
-  function gradeHTML(b, h) {
-    const chips = [];
+  // the hadith's head, green as الأذكار's cards: its book and kitab, its number, its grade
+  function headHTML(b, h, kt) {
+    const tags = [];
     if (b !== 'abudawud') {
       // the two Sahihs: their hadiths with a chain to the Prophet ﷺ are sahih (not graded again)
-      if (h.c && (h.ty == null || h.ty === 0)) chips.push(`<i class="hd-pill">صحيح</i>`);
-      if (h.o?.some(o => o[4] && o[0] !== b && o[0] !== 'abudawud')) chips.push(`<i class="hd-pill hd-pill-o">متفق عليه</i>`);
-    } else for (const [who, g] of h.gr || []) chips.push(`<i class="hd-pill${gradeCls(g) === 'th' || gradeCls(g) === 'sd' ? '' : ' hd-pill-w'}"><small>${who}</small>${g}</i>`);
-    if (TYPE[h.ty]) chips.push(`<i class="hd-pill hd-pill-o">${TYPE[h.ty]}</i>`);
-    return `<div class="hd-plate"><span class="hd-pills">${chips.join('')}</span><span class="hd-src">${cite(b, h)}</span></div>`;
+      if (h.c && (h.ty == null || h.ty === 0)) tags.push(`<i class="hd-tag">${IC.check}صحيح</i>`);
+      if (h.o?.some(o => o[4] && o[0] !== b && o[0] !== 'abudawud')) tags.push(`<i class="hd-tag">متفق عليه</i>`);
+    } else for (const [who, g] of h.gr || []) {
+      const ok = gradeCls(g) === 'th' || gradeCls(g) === 'sd';
+      tags.push(`<i class="hd-tag${ok ? '' : ' hd-tag-w'}">${ok ? IC.check : ''}<small>${who}</small>${g}</i>`);
+    }
+    if (TYPE[h.ty]) tags.push(`<i class="hd-tag">${TYPE[h.ty]}</i>`);
+    return `<div class="hd-hero"><small class="hd-hero-k">${BOOKS[b]}</small>
+      <b class="hd-hero-n">${b === 'muslim' && h.a ? 'رقم' : 'الحديث'} ${nums(num(b, h))}</b>
+      <span class="hd-hero-s">${kt}</span>
+      ${tags.length ? `<span class="hd-tags">${tags.join('')}</span>` : ''}</div>`;
   }
   // the chain, down the page: the author at the top, each narrator with his standing, the Prophet ﷺ at the end
   const RK_WORD = { sh: 'صحابي', th: 'ثقة', sd: 'صدوق', mq: 'مقبول', dh: 'ضعيف', mt: 'متروك', gap: 'انقطاع' };
@@ -250,7 +260,7 @@ const Hadith = (() => {
       return `<li class="r-${r}"><button class="hd-cn" data-hd-rawi="${id}">${esc(n)}</button><small>${i ? RK_WORD[r] : 'المصنِّف'}</small></li>`;
     }).join('')}${end}</ol>`;
   }
-  function readerHTML(b, h, names) {
+  function readerHTML(b, h, names, kt) {
     const [m0, m1] = h.m || [0, h.t.length];
     // the whole text, its chain to tap and its matn marked in it (the source's matn is at times the
     // Prophet's ﷺ words alone, what was around them in the chain's part)
@@ -258,8 +268,9 @@ const Hadith = (() => {
     const chains = h.c || [];
     const others = h.o || [];
     return `<article class="hd-read">
-      <div class="hd-card">${gradeHTML(b, h)}
-        <div class="hd-matn">${marked(h, m0, m1, names)}</div>
+      ${headHTML(b, h, kt)}
+      <div class="hd-box hd-matn-box"><div class="hd-matn">${marked(h, m0, m1, names)}</div>
+        <div class="hd-foot"><span>${cite(b, h)}</span></div>
         ${h.hk ? `<p class="hd-hk"><b>حكم الإسناد</b> ${esc(h.hk)} <small>(موسوعة الحديث)</small></p>` : ''}</div>
       ${full ? `<details class="hd-sec hd-fold"><summary><h3>الحديث بإسناده<small>اضغط على اسم الراوي لترجمته</small></h3></summary><p class="hd-sanad">${full}</p></details>` : ''}
       ${chains.length ? `<section class="hd-sec"><h3>سلسلة الرواة<small>من المصنِّف إلى ${h.ty == null || h.ty === 0 ? 'النبي ﷺ' : 'قائله'}</small></h3>
@@ -275,32 +286,60 @@ const Hadith = (() => {
 
   // ---------------------------------------------------------------- a narrator
   function rawiHTML(r) {
-    const facts = [
-      ['اسمه', r.f !== r.s ? r.f : ''],
-      ['نسبته', (r.ns || '').replace(/،/g, '، ')],
-      ['طبقته', r.tb ? `${ar(r.tb)} — ${TB[r.tb] || ''}` : ''],
-      ['مولده', r.b ? `${ar(r.b)}هـ` : ''],
-      ['وفاته', [r.d ? `${ar(r.d)}هـ` : '', r.dp ? `بـ${r.dp}` : ''].filter(Boolean).join(' ')],
-      ['عمره', r.age ? `${ar(r.age)} سنة` : ''],
-      ['أقام في', r.iq || ''],
-      ['عمله', r.pr || ''],
+    const R_ = RK(r.k), split = t => (t || '').split(/\s*[،,]\s*/).map(x => x.trim()).filter(Boolean);
+    const gen = r.k === 1 ? 'من الصحابة رضي الله عنهم' : TB[r.tb] ? `من ${TB[r.tb]}` : '';
+    // 1. the head: his name, his generation, three numbers
+    const head = `<div class="hd-hero hd-rhero"><span class="hd-hero-ic">${IC.person}</span>
+      <b class="hd-hero-name">${esc(r.s)}</b>${gen ? `<span class="hd-hero-s">${gen}</span>` : ''}
+      <div class="hd-stats">
+        <div><b>${RK_WORD[R_]}</b><small>${r.k === 1 ? 'عدالته' : 'عند ابن حجر'}</small></div>
+        <div><b>${r.d ? `${ar(r.d)}هـ` : '—'}</b><small>وفاته</small></div>
+        <div><b>${ar(r.n)}</b><small>${r.n > 2 && r.n <= 10 ? 'أحاديث' : 'حديثًا'} في الكتب الثلاثة</small></div>
+      </div></div>`;
+    // 2. the verdict on him: Ibn Hajar's words, where it stands of the twelve grades
+    const flags = [r.tad && ['موصوف بالتدليس', 'قد يروي عمّن لقيه ما لم يسمعه منه بلفظ محتمل'], r.ikh && ['اختلط أو تغيّر حفظه', 'تُميَّز روايته قبل الاختلاط من روايته بعده']].filter(Boolean);
+    const verdict = `<section class="hd-sec"><h3>الحكم عليه</h3><div class="hd-box hd-verdict">
+      <p class="hd-v">${esc(r.rk || RK_NAME[R_])}</p>
+      <small class="hd-v-src">${r.k === 1 ? 'الصحابة كلهم عدول' : 'خلاصة ابن حجر في «تقريب التهذيب»'}</small>
+      ${r.k > 1 ? `<div class="hd-scale" aria-label="مرتبته ${ar(r.k)} من ١٢">${Array.from({ length: 12 }, (_, i) => `<i class="${i + 1 === r.k ? 'on' : i + 1 < r.k ? 'up' : ''}"></i>`).join('')}</div>
+        <div class="hd-scale-l"><span>أعلى المراتب</span><b>مرتبته ${ar(r.k)} من ١٢</b><span>أدناها</span></div>` : ''}
+      ${flags.map(([t, d]) => `<div class="hd-flag">${IC.warn}<span><b>${t}</b><small>${d}</small></span></div>`).join('')}
+    </div></section>`;
+    // 3. who he was: the short facts as tiles, the long ones as rows
+    const tiles = [
+      ['الطبقة', r.tb ? ar(r.tb) : '', r.tb ? TB[r.tb] : ''],
+      ['المولد', r.b ? `${ar(r.b)}هـ` : '', ''],
+      ['الوفاة', r.d ? `${ar(r.d)}هـ` : '', r.dp ? `بـ${r.dp}` : ''],
+      ['العمر', r.age ? `${ar(r.age)} سنة` : '', ''],
     ].filter(x => x[1]);
-    const flags = [r.tad && 'موصوف بالتدليس', r.ikh && 'اختلط أو تغيّر حفظه'].filter(Boolean);
-    const people = (list, n, t) => list?.length ? `<section class="hd-sec"><h3>${t}<small>في أسانيد الكتب الثلاثة${n > list.length ? ` · ${ar(n)}، أكثرهم رواية:` : ''}</small></h3>
-      <div class="hd-ppl">${list.map(([id, name, c, k]) => `<button class="hd-ch r-${RK(k || 0)}" data-hd-rawi="${id}">${esc(name)}<small>${nTimes(c)}</small></button>`).join('')}</div></section>` : '';
+    const tagsOf = list => `<span class="hd-chips">${list.map(x => `<i>${esc(x)}</i>`).join('')}</span>`;
+    const rows = [
+      ['الاسم', r.f !== r.s ? `<b>${esc(r.f)}</b>` : ''],
+      ['النسبة', split(r.ns).length ? tagsOf(split(r.ns)) : ''],
+      ['البلدان', split(r.iq).length ? tagsOf(split(r.iq)) : ''],
+      ['العمل', r.pr ? `<b>${esc(r.pr)}</b>` : ''],
+    ].filter(x => x[1]);
+    const about = tiles.length || rows.length ? `<section class="hd-sec"><h3>التعريف به</h3>
+      ${tiles.length ? `<div class="hd-box hd-tiles">${tiles.map(([k, v, s2]) => `<div><small>${k}</small><b>${v}</b>${s2 ? `<span>${esc(s2)}</span>` : ''}</div>`).join('')}</div>` : ''}
+      ${rows.length ? `<div class="hd-box hd-rows">${rows.map(([k, v]) => `<div><small>${k}</small>${v}</div>`).join('')}</div>` : ''}
+      ${r.stub ? '<p class="hd-note">لم تُذكر له ترجمة في المصدر؛ اسمه من نص الحديث.</p>' : ''}</section>` : '';
+    // 4. what the critics said: a row each, cut short until tapped
     const q = r.q || [];
-    return `<article class="hd-rawi">
-      <div class="hd-who"><span class="hd-who-i">${IC.person}</span><span class="hd-who-t"><b>${esc(r.s)}</b>
-        <small>${r.k === 1 ? 'من الصحابة' : TB[r.tb] ? `من ${TB[r.tb]}` : ''}${r.d ? ` · ت ${ar(r.d)}هـ` : ''}</small>
-        <span class="hd-pills"><i class="hd-pill${r.k >= 8 ? ' hd-pill-w' : ''}">${esc(r.rk || RK_NAME[RK(r.k)])}</i>${r.k > 1 ? `<i class="hd-pill hd-pill-o">مرتبته ${ar(r.k)} من ١٢</i>` : ''}${flags.map(f => `<i class="hd-pill hd-pill-w">${f}</i>`).join('')}</span></span></div>
-      <div class="hd-facts">${facts.map(([k, v]) => `<div><span>${k}</span><b>${esc(String(v))}</b></div>`).join('')}
-        <div><span>رواياته</span><b>في إسناد ${nHadith(r.n)} من الكتب الثلاثة</b></div></div>
-      ${r.stub ? '<p class="hd-hk">لم تُذكر له ترجمة في المصدر؛ اسمه من نص الحديث.</p>' : ''}
-      ${q.length ? `<section class="hd-sec"><h3>أقوال العلماء فيه<small>${r.qn > 4 ? `${ar(r.qn)} قولًا` : ''}</small></h3>
-        <ul class="hd-aq">${q.map(([who, t], i) => `<li${i >= 4 ? ' hidden' : ''}><b>${esc(who)}</b>${esc(t)}</li>`).join('')}</ul>
-        ${q.length > 4 ? `<button class="hd-all" data-hd-aq>عرض ${q.length - 4 === 1 ? 'القول الباقي' : `الأقوال الباقية (${ar(q.length - 4)})`}</button>` : ''}</section>` : ''}
-      ${people(r.te, r.ten, 'شيوخه')}${people(r.st, r.stn, 'تلاميذه')}
-    </article>`;
+    const critics = q.length ? `<section class="hd-sec"><h3>أقوال العلماء فيه<small>${ar(r.qn || q.length)} ${(r.qn || q.length) <= 10 ? 'أقوال' : 'قولًا'}</small></h3>
+      <div class="hd-box hd-qs">${q.map(([who, t], i) => `<button class="hd-qrow"${i >= 5 ? ' hidden' : ''} data-hd-qx><b>${esc(who)}</b><span>${esc(t.replace(/^قال في التقريب\s*/, ''))}</span></button>`).join('')}</div>
+      ${q.length > 5 ? `<button class="hd-all" data-hd-aq>عرض ${q.length - 5 === 1 ? 'القول الباقي' : `الأقوال الباقية (${ar(q.length - 5)})`}</button>` : ''}</section>` : '';
+    // 5. his teachers and his students in these books: tabs, a row each with how often
+    const list = (l, key, on) => {
+      const max = Math.max(...(l || []).map(x => x[2]), 1);
+      return `<div class="hd-box hd-people"${on ? '' : ' hidden'} data-hd-list-of="${key}">${(l || []).map(([id, name, c, k]) => `<button class="hd-prow" data-hd-rawi="${id}">
+        <span class="hd-dot r-${RK(k || 0)}"></span><span class="hd-pn"><b>${esc(name)}</b><small>${RK_WORD[RK(k || 0)]}</small></span>
+        <span class="hd-pc"><i style="width:${Math.round(c / max * 100)}%"></i><small>${nTimes(c)}</small></span></button>`).join('')}</div>`;
+    };
+    const te = r.te?.length, st = r.st?.length;
+    const people = te || st ? `<section class="hd-sec"><h3>شيوخه وتلاميذه<small>في أسانيد الكتب الثلاثة</small></h3>
+      <div class="hd-seg">${te ? `<button data-hd-tab="te" class="on">شيوخه <small>${ar(r.ten)}</small></button>` : ''}${st ? `<button data-hd-tab="st"${te ? '' : ' class="on"'}>تلاميذه <small>${ar(r.stn)}</small></button>` : ''}</div>
+      ${te ? list(r.te, 'te', true) : ''}${st ? list(r.st, 'st', !te) : ''}</section>` : '';
+    return `<article class="hd-rawi">${head}${verdict}${about}${critics}${people}</article>`;
   }
 
   function groupRow(g) {
@@ -424,7 +463,14 @@ const Hadith = (() => {
       dismissSheet(); goTo(R.ayas[ai][2]); setTimeout(() => flashAya(ai), 250);
       return true;
     }
-    if (t.closest('[data-hd-aq]')) { root.querySelectorAll('.hd-aq li[hidden]').forEach(li => { li.hidden = false; }); t.closest('[data-hd-aq]').remove(); return true; }
+    if (t.closest('[data-hd-aq]')) { root.querySelectorAll('.hd-qrow[hidden]').forEach(x => { x.hidden = false; }); t.closest('[data-hd-aq]').remove(); return true; }
+    const qx = t.closest('[data-hd-qx]'); if (qx) { qx.classList.toggle('open'); return true; }
+    const tb = t.closest('[data-hd-tab]');
+    if (tb) {
+      root.querySelectorAll('[data-hd-tab]').forEach(x => x.classList.toggle('on', x === tb));
+      root.querySelectorAll('[data-hd-list-of]').forEach(x => { x.hidden = x.dataset.hdListOf !== tb.dataset.hdTab; });
+      return true;
+    }
     if (t.closest('[data-hd-retry]')) { paint(undefined); return true; }
     if (t.closest('[data-hd-retry-more]')) { paint(undefined, $('#sheetBody').scrollTop); return true; }
     return false;
