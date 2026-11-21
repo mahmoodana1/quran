@@ -57,7 +57,9 @@ const WordCard = (() => {
     const r = cur.el.getBoundingClientRect(), ph = cur.el.closest('.page')?.querySelector('.phead');
     const head = ph ? ph.getBoundingClientRect().bottom : 60;
     const below = innerHeight - 64 - r.bottom - 16, above = r.top - head - 24;
-    $('#wordBar').style.maxHeight = Math.max(240, Math.min(640, Math.max(below, above))) + 'px';
+    // (never taller than the screen: in landscape it is low, and its top went off it)
+    const bar = $('#wordBar'), foot = parseFloat(getComputedStyle(bar).bottom) || 0;
+    bar.style.maxHeight = Math.min(innerHeight - foot - 16, Math.max(240, Math.min(640, Math.max(below, above)))) + 'px';
   }
 
   function close() {

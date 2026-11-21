@@ -650,7 +650,7 @@ function paintMarks(root = document) {
 // wherever it covers less), so the aya is always in full view; in landscape,
 // where the page scrolls, the aya is scrolled into view as well.
 const BARS = ['#ayaBar', '#wordBar', '#suraBar', '#player', '#recBar', '#recWord'];
-let clearRaf = 0;
+let clearRaf = 0, clearTarget = null; // (clearTarget: the aya or word last brought into view in landscape)
 function keepClear() {
   cancelAnimationFrame(clearRaf);
   clearRaf = requestAnimationFrame(clearNow);
@@ -671,11 +671,20 @@ function clearNow() {
   // the page header's lowest part (its box can be shorter than its buttons)
   const ph = pg?.querySelector('.phead');
   const head = ph ? Math.max(ph.getBoundingClientRect().bottom, ...[...ph.querySelectorAll('*')].map(e => e.getBoundingClientRect().bottom)) : 0;
-  if (box && S.landscape) {
+  // in landscape the page scrolls: the aya (or word) opened is brought into view once, and then the
+  // page is the reader's — an aya taller than the room between the header and the bars can never be
+  // all in it, and was scrolled back to again and again (every 450 ms, and the reader's own scrolling
+  // undone). A short one is moved just clear of the bars; a tall one, its first line under the header
+  const target = wel?.isConnected ? wel : ai;
+  if (!box) clearTarget = null;
+  if (box && S.landscape && target !== clearTarget) {
+    clearTarget = target;
     const lowest = Math.min(window.innerHeight, ...bars.map(b => b.getBoundingClientRect().top));
-    if (box.top < head || box.bottom > lowest) {
-      pg.scrollBy({ top: box.top - head - 24, behavior: 'smooth' });
-      setTimeout(keepClear, 450);
+    const top = head + 8, bottom = lowest - 8, fits = box.bottom - box.top <= bottom - top;
+    const dy = box.top < top || !fits ? box.top - top - 16 : box.bottom > bottom ? box.bottom - bottom + 16 : 0;
+    if (Math.abs(dy) > 2 && (!fits || box.top < top || box.bottom > bottom)) {
+      pg.scrollBy({ top: dy, behavior: 'smooth' });
+      setTimeout(keepClear, 450); // (the bars placed once it has come; it is not scrolled to again)
       return;
     }
   }
@@ -685,13 +694,17 @@ function clearNow() {
   if (!rb.hidden && !rb.dataset.pin && store.get('recite.barUp', false)) rb.dataset.pin = 'up';
   for (const b of bars) {
     const lifted = parseFloat(b.style.getPropertyValue('--lift')) || 0;
-    const top = b.offsetTop, h = b.offsetHeight, up = head + 8; // where it rests (not mid-slide)
+    // where it rests (not mid-slide); sent up, under the page header — or the top of the screen, the header
+    // scrolled away in landscape (it was sent above the screen's top, over the aya)
+    const top = b.offsetTop, h = b.offsetHeight, up = Math.max(head, 0) + 8;
     // put where the reader tapped it to (flipBar), while it stays open
     if (b.dataset.pin) { b.style.setProperty('--lift', (b.dataset.pin === 'up' ? up - top : 0) + 'px'); continue; }
     if (!box) { if (lifted) b.style.setProperty('--lift', '0px'); continue; }
     const over = t => Math.max(0, Math.min(t + h, box.bottom + 6) - Math.max(t, box.top - 6));
     const down = over(top), high = over(up);
-    b.style.setProperty('--lift', (down === 0 || down <= high ? 0 : up - top) + 'px');
+    // up only where that clearly shows more of the aya (an aya filling the screen is under the bar
+    // wherever it is: then it stays at the bottom, not sent up over a few pixels' difference)
+    b.style.setProperty('--lift', (down === 0 || high > down * .6 ? 0 : up - top) + 'px');
   }
 }
 
