@@ -28,6 +28,10 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .
+      # (GitHub's artifact list can lag the upload by a few seconds: deploy-pages then finds
+      # "0 artifacts" and fails, as it did twice on 2026-11-21; a short wait first)
+      - name: Let the upload settle
+        run: sleep 20
       - id: deploy
         uses: actions/deploy-pages@v4
         with:
