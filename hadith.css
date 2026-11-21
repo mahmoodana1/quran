@@ -522,3 +522,18 @@ body.desk .hd-wc { bottom: 16px; }
 @font-face { font-family: hd-hafs; src: url(fonts/hafs.woff2) format("woff2"); font-display: swap;
   unicode-range: U+0621-063A, U+0640-065F, U+0670-06D3, U+06D5, U+FDF2, U+FDFA; }
 :root { --hd-read: hd-hafs, amiri, "Noto Naskh Arabic", serif; }
+/* the word: each meaning with where it is from */
+.hd-wm2 { margin: 6px 0 4px; padding: 8px 10px; border-radius: 12px; background: color-mix(in srgb, var(--p-green) 6%, transparent); }
+.hd-wm2 p { margin: 0 0 4px; font-size: 15px; line-height: 1.8; color: var(--ink); }
+.hd-wm2 small { display: block; font-size: 11.5px; font-weight: 700; color: var(--p-ink); }
+.hd-wc { max-height: 60vh; overflow-y: auto; }
+.hd-wc .hd-wcf { justify-content: flex-end; margin-top: 6px; }
+/* the sheet: dragged, it follows the finger; its veil a tap target */
+.hd-sh { transition: transform .22s cubic-bezier(.2, .9, .3, 1); touch-action: pan-y; }
+.hd-sh.drag { transition: none; }
+.hd-sh .hd-shg, .hd-sh header { touch-action: none; cursor: grab; }
+.hd-shg { width: 44px; height: 5px; margin: 10px auto 4px; padding: 0; }
+.hd-shv { cursor: pointer; }
+/* (the grip: a slim bar to see, a finger's height to take hold of) */
+.hd-sh .hd-shg { width: 100%; height: 22px; margin: 0; background: none; position: relative; }
+.hd-sh .hd-shg::before { content: ""; position: absolute; left: 50%; top: 9px; width: 44px; height: 5px; margin-left: -22px; border-radius: 3px; background: var(--line); }

@@ -112,6 +112,41 @@ const Hadith = (() => {
   const sharhOf = async id => (await J(`sharh/${id % 32}.json`))[id];
   const HAR = /[\u064B-\u065F\u0670\u06D6-\u06ED\u0640]/g;
   const bare = t => t.replace(HAR, '').replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').trim();
+  // مختار الصحاح (data/hadith/dict, tools/hadith_dict.py): the word as it is, then without the letters
+  // joined to it (و ف ب ل ك, ال, a pronoun, a plural's ending), with or without ال; failing those, the
+  // article of the root its letters come to (only a root the dictionary has), shown as that root
+  const dictPart = c => J(`dict/${c.codePointAt(0).toString(16)}.json`).catch(() => ({}));
+  function forms(w) {
+    const out = [w], add = x => { if (x.length >= 2 && !out.includes(x)) out.push(x); };
+    for (const x of [...out]) for (const p of ['و', 'ف']) if (x.startsWith(p) && x.length > 3) add(x.slice(1));
+    for (const x of [...out]) for (const p of ['ب', 'ل', 'ك']) if (x.startsWith(p) && x.length > 3) add(x.slice(1));
+    for (const x of [...out]) if (x.startsWith('لل') && x.length > 4) add('ال' + x.slice(2));
+    for (const x of [...out]) for (const e of ['هما', 'كما', 'هم', 'هن', 'كم', 'كن', 'ها', 'نا', 'ني', 'ه', 'ك', 'ي']) if (x.endsWith(e) && x.length - e.length >= 3) add(x.slice(0, -e.length));
+    for (const x of [...out]) for (const e of ['ون', 'ين', 'ات', 'وا', 'ان', 'تم', 'ت', 'و', 'ا']) if (x.endsWith(e) && x.length - e.length >= 3) add(x.slice(0, -e.length));
+    for (const x of [...out]) if (x.startsWith('ال') && x.length > 4) add(x.slice(2)); else if (!x.startsWith('ال') && x.length >= 3) add('ال' + x);
+    return out;
+  }
+  async function dictOf(w) {
+    const fs = forms(w), res = [];
+    for (const f of fs) {
+      const d = await dictPart(f[0]);
+      for (const [r, x] of d[f] || []) if (!res.some(y => y[0] === r && y[1] === x)) res.push([r, x]);
+      if (res.length >= 2) break;
+    }
+    if (res.length) return res.slice(0, 2);
+    // its root: the letters left without a verb's or noun's added ones (ت ي ن ا م before; ا و ي
+    // within), three or four of them, one the dictionary has
+    const roots = new Set();
+    for (const f of fs.filter(x => !x.startsWith('ال'))) {
+      const base = [f, f.replace(/^(ت|ي|ن|ا|م|است|مست|ان|افت|ت|م)/, '')];
+      for (const b of base) { const core = b.replace(/[اوي](?=.)/g, ''); for (const c of [b, core]) if (c.length === 3 || c.length === 4) roots.add(c); }
+    }
+    // (an article only when a word it explains is of its root — a few in the digital text carry the next
+    // root's words, their own heading lost)
+    const ofRoot = (x, r) => (x.match(/\(([^()]+)\)/g) || []).some(h => { const w = bare(h.slice(1, -1)); let i = 0; for (const c of w) if (c === r[i]) i++; return i >= r.length; });
+    for (const r of roots) { const d = await dictPart(r[0]); const a = d['√' + r]; if (a && ofRoot(a[1], r)) return [[a[0], a[1]]]; }
+    return [];
+  }
   const sheetOff = () => document.querySelectorAll('body > .hd-sh, body > .hd-wc, body > .hd-shv').forEach(x => x.remove());
   async function openSharh() {
     if (!cur?.sh) return;
@@ -126,8 +161,18 @@ const Hadith = (() => {
         ${d.w?.length ? `<h4>معاني الكلمات</h4><dl class="hd-shw">${d.w.map(([w, m]) => `<div><dt>${esc(w)}</dt><dd>${esc(m)}</dd></div>`).join('')}</dl>` : ''}
         ${d.h?.length ? `<h4>من فوائد الحديث</h4><ul class="hd-shh">${d.h.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
         <p class="hd-shs">${d.g ? `${esc(d.g)}، ` : ''}${d.a ? `${esc(d.a)}. ` : ''}من موسوعة الأحاديث النبوية (HadeethEnc.com)</p></div>`;
-    const close = () => { el.classList.add('out'); veil.classList.add('out'); setTimeout(() => { el.remove(); veil.remove(); }, 220); };
-    veil.onclick = close; el.querySelector('.hd-shx').onclick = close;
+    let gone = false;
+    const close = () => { if (gone) return; gone = true; el.style.transform = ''; el.classList.add('out'); veil.classList.add('out'); setTimeout(() => { el.remove(); veil.remove(); }, 220); };
+    // (outside it: the veil's own touch, not a click — Safari gives none to a bare div)
+    veil.addEventListener('pointerup', e => { e.preventDefault(); close(); });
+    el.querySelector('.hd-shx').onclick = close;
+    // pulled down by its grip or its head: it follows the finger, and goes past a third of the way
+    let y0 = null;
+    const grab = el.querySelector('.hd-shg'), head = el.querySelector('header');
+    for (const g of [grab, head]) g.addEventListener('pointerdown', e => { if (e.target.closest('button')) return; y0 = e.clientY; el.classList.add('drag'); g.setPointerCapture?.(e.pointerId); });
+    el.addEventListener('pointermove', e => { if (y0 == null) return; el.style.transform = `translateY(${Math.max(0, e.clientY - y0)}px)`; });
+    const drop = e => { if (y0 == null) return; const dy = e.clientY - y0; y0 = null; el.classList.remove('drag'); if (dy > Math.min(140, el.offsetHeight / 3)) close(); else el.style.transform = ''; };
+    el.addEventListener('pointerup', drop); el.addEventListener('pointercancel', drop);
     document.body.append(veil, el);
     haptic(6);
   }
@@ -149,16 +194,18 @@ const Hadith = (() => {
     wcMark = document.createElement('mark'); wcMark.className = 'hd-wm'; rg.surroundContents(wcMark);
     haptic(12);
     const bw = bare(word);
-    let mean = null, src = '', extra = '';
+    const found = []; // [source, meaning, root]
     if (cur?.sh) {
       const d = await sharhOf(cur.sh).catch(() => null);
       const hit = d?.w?.find(([w]) => { const b2 = bare(w); return b2 === bw || b2.split(/\s+/).includes(bw) || (bw.length > 3 && b2.includes(bw)); });
-      if (hit) { mean = hit[1]; src = 'من شرح الحديث'; }
+      if (hit) found.push(['من شرح الحديث · موسوعة الأحاديث النبوية', hit[1], '']);
     }
+    for (const [r, x] of await dictOf(bw)) found.push(['مختار الصحاح للرازي', x, r]);
     const el = document.createElement('div'); el.className = 'hd-wc';
-    el.innerHTML = `<div class="hd-wch"><b>${esc(word)}</b>${extra ? `<small>${extra}</small>` : ''}</div>
-      <p class="${mean ? '' : 'none'}">${mean ? esc(mean) : cur?.sh ? 'لم تُشرح هذه الكلمة في شرح الحديث: معناها ظاهر غالبًا.' : 'لا شرح لهذا الحديث بعد في مصادرنا.'}</p>
-      <div class="hd-wcf">${src ? `<small>${src}</small>` : '<small></small>'}${cur?.sh ? '<button data-hd-wsharh>شرح الحديث</button>' : ''}</div>`;
+    el.innerHTML = `<div class="hd-wch"><b>${esc(word)}</b></div>
+      ${found.length ? found.map(([src, m, r]) => `<div class="hd-wm2"><p>${esc(m)}</p><small>${src}${r ? ` · مادة (${esc(r)})` : ''}</small></div>`).join('')
+        : '<p class="none">لم نجد هذه الكلمة في شرح الحديث ولا في مختار الصحاح: معناها ظاهر غالبًا.</p>'}
+      ${cur?.sh ? '<div class="hd-wcf"><button data-hd-wsharh>شرح الحديث</button></div>' : ''}`;
     el.querySelector('[data-hd-wsharh]')?.addEventListener('click', () => { wordOff(); openSharh(); });
     document.body.append(el);
     return true;

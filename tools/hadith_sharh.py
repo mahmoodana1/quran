@@ -10,9 +10,19 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HE = os.path.expanduser('~/.cache/hadith-src/he')
 OUT = f'{ROOT}/data/hadith/sharh'; os.makedirs(OUT, exist_ok=True)
 HAR = re.compile('[ً-ٰٟۖ-ۭـ]')
+# (words every hadith shares — the chain's and the blessing's — weigh nothing in a match)
+COMMON = set('''رسول الله صلي عليه وسلم قال قالت عن رضي عنه عنها عنهم عنهما النبي سمعت حدثنا اخبرنا يقول فقال
+كان كانت الذي التي هذا هذه ذلك الي علي من في ما لا ان او ثم اذا لما حتي مع بن ابن ابي ابو'''.split())
 def words(t):
     t = HAR.sub('', t).replace('أ', 'ا').replace('إ', 'ا').replace('آ', 'ا').replace('ى', 'ي').replace('ة', 'ه')
-    return {w for w in re.findall(r'[ء-ي]{3,}', t)}
+    return {w for w in re.findall(r'[ء-ي]{3,}', t)} - COMMON
+def matn_of(he):  # (the Prophet's ﷺ words, in «», when HadeethEnc marks them)
+    q = re.findall(r'«([^»]+)»', he)
+    return ' '.join(q) if q and sum(len(x) for x in q) > 20 else he
+# (a match: the hadith's own words, at least three that matter and four in ten of HadeethEnc's)
+def fits(t, hw):
+    c = len(t & hw)
+    return bool(t) and bool(hw) and c >= min(3, len(hw)) and c / len(hw) >= .4
 # the app's hadiths: by number in each book; their text and group
 by_num, text, group, members = {}, {}, {}, {}
 ix = json.load(open(f'{ROOT}/data/hadith/index.json'))
@@ -30,17 +40,15 @@ BOOK = [('bukhari', 'صحيح البخاري'), ('muslim', 'صحيح مسلم'),
 index, content, direct = {}, {}, 0
 for f in glob.glob(f'{HE}/*.json'):
     d = json.load(open(f)); hid = int(d['id'])
-    he_words = words(d.get('hadeeth', ''))
+    he_words = words(matn_of(d.get('hadeeth', '')))
     hits = []
-    for line in (d.get('reference') or '').splitlines():
+    # (each reference by itself: a line can hold several, «صحيح البخاري (1/ 33) (110)، صحيح مسلم (1/ 10) (3)»)
+    for ref in re.split(r'[،\n]', d.get('reference') or ''):
         for b, name in BOOK:
-            if line.strip().startswith(name):
-                nums = re.findall(r'\((\d+)\)', line)
+            if ref.strip().startswith(name):
+                nums = re.findall(r'\((\d+)\)', ref)
                 if nums: hits += [k for k in by_num.get((b, int(nums[-1])), [])]
-    good = []
-    for key in hits:
-        t = text.get(key, set())
-        if t and he_words and len(t & he_words) / max(1, min(len(t), len(he_words))) >= .35: good.append(key)
+    good = [key for key in hits if fits(text.get(key, set()), he_words)]
     if not good: continue
     wm = []
     for x in d.get('words_meanings') or []:
@@ -51,7 +59,7 @@ for f in glob.glob(f'{HE}/*.json'):
         if index.get(key) is None or isinstance(index[key], tuple): index[key] = hid; direct += 1
     for key in good:  # (its narrations in the other books, unless they have their own)
         for o in members.get(group.get(key), []):
-            index.setdefault(o, hid)
+            if o not in index and fits(text.get(o, set()), he_words): index[o] = hid  # (each checked too)
 json.dump(index, open(f'{OUT}/index.json', 'w'), separators=(',', ':'))
 parts = {}
 for hid, c in content.items(): parts.setdefault(hid % 32, {})[hid] = c
