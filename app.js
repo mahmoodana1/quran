@@ -333,6 +333,21 @@ addEventListener('click', e => {
   R.textReady.then(() => el.click());
 }, true);
 
+// الحديث (hadith.js, hadith.css): fetched the first time its panel is opened, not with the app
+let hadithP = null;
+function loadHadith() {
+  return hadithP ||= new Promise((res, rej) => {
+    const css = document.createElement('link');
+    css.rel = 'stylesheet'; css.href = 'hadith.css';
+    const js = document.createElement('script');
+    js.src = 'hadith.js';
+    let n = 0; const done = () => { if (++n === 2) res(); };
+    css.onload = done; js.onload = done;
+    css.onerror = js.onerror = () => { hadithP = null; css.remove(); js.remove(); rej(new Error('hadith')); };
+    document.head.append(css, js);
+  });
+}
+
 // the imla'i text, for search only: fetched when first searched (and in the background once
 // the app has opened, so search is instant and works offline); renderSheet again once here
 let emlaey = null, emlaeyP = null;
@@ -3020,7 +3035,7 @@ function applyTheme() {
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', applyTheme);
 
 // the panel last open, its own page and how far down it was (ui.panel), to come back to it
-const PANELS = ['suras', 'hifz', 'recite', 'adhkar', 'marks', 'prayer', 'settings'];
+const PANELS = ['suras', 'hifz', 'recite', 'adhkar', 'hadith', 'marks', 'prayer', 'settings'];
 let tab = (p => PANELS.includes(p?.tab) ? p.tab : 'suras')(store.get('ui.panel', null));
 function keepPanel() {
   if ($('#q').value.trim()) return;
@@ -3065,7 +3080,7 @@ function railOpen(on) {
 }
 $('#railBtn').onclick = () => { railOpen(!$('#sheet').classList.contains('rail-open')); haptic(6); };
 $('#railVeil').onclick = () => railOpen(false);
-const TAB_NAMES = { suras: 'السور', hifz: 'الحفظ', recite: 'التسميع', adhkar: 'الأذكار', marks: 'العلامات', prayer: 'الصلاة', settings: 'الإعدادات' };
+const TAB_NAMES = { suras: 'السور', hifz: 'الحفظ', recite: 'التسميع', adhkar: 'الأذكار', hadith: 'الحديث', marks: 'العلامات', prayer: 'الصلاة', settings: 'الإعدادات' };
 $('#tabs').addEventListener('click', e => {
   const b = e.target.closest('[data-tab]');
   if (!b) return;
@@ -3140,6 +3155,7 @@ const PLACES = [
   ['settings', 'المظهر', 'فاتح، ورقي، داكن، أو تلقائي', 'مظهر داكن ليلي فاتح ورقي الوان لون'],
   ['settings', 'دون اتصال', 'تحميل المصحف والتلاوة والتفسير', 'تحميل تنزيل انترنت اتصال صوت تفسير تلاوه'],
   ['settings', 'إبقاء الشاشة مضاءة', 'لا تنطفئ وأنت تقرأ', 'شاشه اضاءه تنطفئ قفل سطوع'],
+  ['hadith', 'الحديث', 'صحيح البخاري وصحيح مسلم وسنن أبي داود، بأسانيدها ورواتها', 'حديث احاديث سنه بخاري مسلم ابو داود سنن صحيح اسناد سند رواه راوي رواه متن'],
   ['adhkar', 'المسبحة', 'عدّاد التسبيح والاستغفار', 'مسبحه سبحه تسبيح عداد استغفار تهليل'],
   ['prayer', 'التقويم الهجري', 'الشهر الهجري والمناسبات والأيام البيض', 'تقويم هجري مناسبات رمضان عيد عرفه عاشوراء صيام بيض'],
   ['prayer', 'تنبيه الصلاة', 'المواقيت في تقويم جهازك، وإشعار عند الوقت', 'تنبيه منبه اذان تذكير اشعار تقويم'],
@@ -3191,13 +3207,19 @@ function renderSheet() {
     }
     if (!IDX.ayas && /[^\d\s:：.,،\-]/.test(q)) quran += '<div class="tf-wait">جارٍ تحميل نص القرآن للبحث…</div>';
     const app = jz + go;
-    const parts = [
+    // the hadiths: searched in their panel (hadith-worker.js); from the others, a row that goes there
+    const hdQ = /[\u0621-\u064A]{2}/.test(q) || (tab === 'hadith' && /\d/.test(q));
+    const hd = !hdQ ? '' : tab === 'hadith' && typeof Hadith !== 'undefined' ? Hadith.searchHTML(q)
+      : `<div class="group"><button class="row" data-hd-search><span class="main"><span class="t">ابحث في الأحاديث عن «${esc(q.trim())}»</span><span class="s">البخاري ومسلم وأبو داود: المتون والرواة</span></span><span class="tag">حديث</span></button></div>`;
+    // (in the hadith panel, its search only)
+    const parts = (tab === 'hadith' && hd ? [['الحديث', hd]] : [
       app && ['في التطبيق', app],
       quran && ['القرآن', quran],
       dk && ['الأذكار', dk],
-    ].filter(Boolean);
+      hd && ['الحديث', hd],
+    ]).filter(Boolean);
     // the adhkar first when searching from their tab; the app's places first unless a surah or aya is a sure match
-    if (tab === 'adhkar' && dk) parts.sort((a, b) => (b[0] === 'الأذكار') - (a[0] === 'الأذكار'));
+    if (tab === 'hadith') {} else if (tab === 'adhkar' && dk) parts.sort((a, b) => (b[0] === 'الأذكار') - (a[0] === 'الأذكار'));
     else if (app && quran && res[0]?.score >= 1.3) parts.sort((a, b) => (b[0] === 'القرآن') - (a[0] === 'القرآن'));
     html = parts.length ? parts.map(([t, h]) => (parts.length > 1 ? `<div class="group-label">${t}</div>` : '') + h).join('')
       : '<div class="empty"><svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M15.5 15.5L21 21" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg><b>لا توجد نتائج</b>جرّب اسم سورة، أو رقم صفحة، أو كلمة من آية أو ذكر.</div>';
@@ -3205,6 +3227,9 @@ function renderSheet() {
     html = juzStripHTML() + '<div class="group">' + META.suras.map((_, i) => suraRow(i + 1)).join('') + '</div>';
   } else if (tab === 'adhkar') {
     html = Extras.misbahaRowHTML() + '<div id="adhkarList"></div>';
+  } else if (tab === 'hadith') {
+    html = typeof Hadith === 'undefined' ? '<div class="tf-wait">…</div>' : '<div id="hdRoot" class="hd"></div>';
+    if (typeof Hadith === 'undefined') loadHadith().then(() => { if (tab === 'hadith' && !$('#sheet').hidden) renderSheet(); }, () => { if (tab === 'hadith') $('#sheetBody').innerHTML = '<div class="empty"><b>تعذّر تحميل الحديث</b>تحقق من الاتصال ثم افتح اللوحة مرة أخرى.</div>'; });
   } else if (tab === 'recite') {
     html = Recite.panelHTML();
   } else if (tab === 'hifz') {
@@ -3245,6 +3270,7 @@ function renderSheet() {
   if (tab === 'recite' && !q.trim()) Recite.mounted();
   if (tab === 'hifz' && !q.trim()) Hifz.mounted();
   if (tab === 'adhkar' && !q.trim()) Adhkar.mount($('#adhkarList'));
+  if (tab === 'hadith' && !q.trim() && $('#hdRoot')) Hadith.mount($('#hdRoot'));
   if (typeof Desk !== 'undefined') Desk.sync();
 }
 
@@ -3259,6 +3285,8 @@ $('#sheetBody').addEventListener('change', e => {
 $('#sheetBody').addEventListener('click', async e => {
   if (typeof Sync !== 'undefined' && e.target.closest('#syncCard') && Sync.onClick(e)) return;
   if (Extras.onClick(e)) return;
+  if (e.target.closest('[data-hd-search]')) { tab = 'hadith'; renderSheet(); return; }
+  if (tab === 'hadith' && typeof Hadith !== 'undefined' && Hadith.onClick(e)) return;
   if (tab === 'marks' && !$('#q').value.trim() && Marks.onSheetClick(e)) return;
   const th = e.target.closest('[data-theme-set]');
   if (th) { store.set('theme', th.dataset.themeSet); applyTheme(); renderSheet(); return; }

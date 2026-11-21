@@ -72,3 +72,37 @@ test("index.html's first script asks for the data app.js will (DATA_VERSION), an
   assert.equal(t.length, h.ayas.length);
   assert.equal(e.length, meta.hafs.length);
 });
+
+test('الحديث: every kitab has its parts, each hadith its text, the names its chains need, the narrators their cards', () => {
+  const ix = json('data/hadith/index.json');
+  assert.deepEqual(ix.books.map(b => b.id), ['bukhari', 'muslim', 'abudawud']);
+  const shards = {};
+  for (const b of ix.books) {
+    let n = 0;
+    b.k.forEach(([t, count, , parts], k) => {
+      let got = 0;
+      for (let p = 0; p < parts; p++) {
+        const d = json(`data/hadith/${b.id}/${k}-${p}.json`);
+        for (const h of d.h) {
+          assert.ok(h.t && h.n.length, `${b.id} ${k}-${p}`);
+          for (const c of h.c || []) for (const id of c) assert.ok(d.R[id], `${b.id} ${h.n[0]}: name of ${id}`);
+          for (const q of h.q || []) assert.ok(q[0] < q[1] && q[1] <= h.t.length);
+          if (h.m) assert.ok(h.m[0] < h.m[1] && h.m[1] <= h.t.length);
+        }
+        got += d.h.length;
+      }
+      assert.equal(got, count, `${b.id} kitab ${k}`);
+      n += got;
+    });
+    assert.equal(n, b.n, b.id);
+  }
+  // a few known: Bukhari 1, Muslim 2564 (Abd al-Baqi), Abu Dawud 1 graded by al-Albani
+  const b1 = json('data/hadith/bukhari/0-0.json').h[0];
+  assert.ok(b1.n.includes(1) && b1.t.replace(/[\u064B-\u0652\u0670]/g, '').includes('إنما الأعمال بالنيات'));
+  assert.ok(b1.o.some(o => o[0] === 'muslim' && o[3] === 1907));
+  const ad1 = json('data/hadith/abudawud/0-0.json').h[0];
+  assert.ok(ad1.gr.some(([who]) => who === 'الألباني'));
+  for (const f of readdirSync(new URL('data/hadith/rawi/', root))) Object.assign(shards, json('data/hadith/rawi/' + f));
+  assert.ok(shards[7272]?.s.includes('الزهري'));
+  assert.equal(json('data/hadith/search/rawi.json').length, Object.keys(shards).length);
+});

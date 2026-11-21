@@ -41,6 +41,15 @@ Static PWA: open it in Safari → Share → **Add to Home Screen**. It must be s
   similar ayas (on a computer `A`), its count of narrations on it; an aya with none says so. From صحيح أسباب
   النزول (إبراهيم محمد العلي, via [asbab-al-nuzul-dataset](https://github.com/mostafaahmed97/asbab-al-nuzul-dataset),
   MIT; `tools/asbab.py` → `data/asbab-sahih.json`) and الموسوعة القرآنية (`data/asbab.json`): 327 ayas.
+- **الحديث** (hadith.js, loaded only when its panel is opened): Sahih al-Bukhari, Sahih Muslim and
+  Sunan Abi Dawud, by their standard numbers (Muslim also by Fuad Abd al-Baqi's) and kutub, and by
+  subject across the three. A hadith: its matn, its grade (the two Sahihs as sahih and «متفق عليه» when
+  both have it from the same companion; Abu Dawud as al-Albani and Shu'ayb al-Arna'ut graded it), its
+  chain as narrators to tap, each with Ibn Hajar's grade, generation, dates, the critics' words, teachers
+  and students; the Quran it quotes, a tap to the aya; where else it is narrated. Search by words (forms
+  of a word too), a narrator's name, or a number («مسلم ٢٥٦٤») in a worker (hadith-worker.js).
+  Data: data/hadith/, built by tools/hadith.py from «الجامع» Hadith Knowledge Graph
+  (huggingface.co/datasets/emadjumaah/hadith-kg, CC-BY-4.0) and fawazahmed0/hadith-api (Unlicense).
 - **Offline**: Settings → «تحميل الكل» saves the mushaf, tafsir, adhkar and (optionally) the recitation.
 - **Audio**: every riwaya is recited by a reciter of that riwaya, played continuously with
   page follow and the aya highlighted:
