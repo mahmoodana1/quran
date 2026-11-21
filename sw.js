@@ -7,7 +7,7 @@
 // requests data with ?v=N, so bumping DATA_VERSION there fetches new copies.
 // Hafs page fonts (verses.quran.foundation) are cached as pages are opened.
 // Recitation audio: see audioResponse below.
-const VERSION = 'quran-v219';
+const VERSION = 'quran-v220';
 const TAFSIR = 'tafsir-saadi';
 // the other tafsirs (app.js: TAFASIR), an aya at a time from GitHub, kept once read, across versions
 const TAFSIR_MORE = 'tafsir-more';

@@ -9,8 +9,11 @@
 const WordCard = (() => {
   const files = {};
   let index = null, cur = null; // cur: { ai, wi, el }
-  const surah = s => files[s] ||= loadJSON(`data/words/${s}.json?v=${DATA_VERSION}`).catch(e => { delete files[s]; throw e; });
-  const idx = () => index ||= loadJSON(`data/words/index.json?v=${DATA_VERSION}`).catch(e => { index = null; throw e; });
+  // (WORDS_V: the meanings placed again on their words, 2026-11-21; its own version, so only these
+  // files are fetched anew)
+  const WORDS_V = `${DATA_VERSION}.2`;
+  const surah = s => files[s] ||= loadJSON(`data/words/${s}.json?v=${WORDS_V}`).catch(e => { delete files[s]; throw e; });
+  const idx = () => index ||= loadJSON(`data/words/index.json?v=${WORDS_V}`).catch(e => { index = null; throw e; });
   const tokens = ai => R.text[ai].replace(/\s*[٠-٩]+$/, '').split(' ');
   const times = n => n === 1 ? 'مرة واحدة' : n === 2 ? 'مرتين' : n <= 10 ? `${ar(n)} مرات` : `${ar(n)} مرة`;
   const places = n => n === 1 ? 'موضع واحد' : n === 2 ? 'موضعين' : n <= 10 ? `${ar(n)} مواضع` : `${ar(n)} موضعًا`;

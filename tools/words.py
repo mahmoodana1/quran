@@ -28,6 +28,15 @@ def skel(t):
     t = re.sub('[ٱأإآ]', 'ا', t).replace('ى', 'ي').replace('ة', 'ه')
     return re.sub('[اويءؤئ]', '', t)
 
+# letters as written, harakat off and alef forms one (for scoring a fit; Uthmani الصلوة and common
+# الصلاة still close)
+def light(t):
+    t = MARKS.sub('', t)
+    return re.sub('[ٱأإآ]', 'ا', t).replace('ى', 'ي').replace('ة', 'ه')
+def close(x, y):
+    import difflib
+    return difflib.SequenceMatcher(None, x, y).ratio()
+
 def words_of(ai):
     t = re.sub(r'\s*[٠-٩]+$', '', U[ai].strip()).split(' ')
     return [x for x in t if x]
@@ -66,21 +75,54 @@ for ai, (s, a, *_) in enumerate(d['ayas']):
             if g['lemma_slug']: lemmas[g['lemma_slug']].append(ai * 256 + wi)
             if g['root']: roots[g['root']] += 1
     sk = [skel(t) for t in toks]
+    lt = [light(t) for t in toks]
     gl = []
     for m in G.get((s, a), []):
         b = m['book_info']['id']
         if b not in BOOKS: continue
+        after = 0  # (a book explains an aya's words in order: a word met twice, the one after the last placed)
         for e in m['words']:
-            es = [skel(t) for t in re.split(r'\s+', e['text'].strip()) if skel(t)]
+            # (its words only: a «؟» or «،» the book wrote after one is not a word of the aya)
+            et = [w for w in (re.sub(r'[^\u0621-\u0652\u0670-\u06ED]', '', t) for t in re.split(r'\s+', e['text'].strip())) if skel(w)]
+            es, el = [skel(t) for t in et], [light(t) for t in et]
             if not es: continue
-            hit = next((i for i in range(n - len(es) + 1) if sk[i:i + len(es)] == es), None)
-            span = len(es)
-            if hit is None: # the phrase's first word alone (a shorter spelling of the rest)
-                hit = next((i for i in range(n) if sk[i] == es[0]), None); span = 1
-            if hit is None:
-                stats['unplaced'] += 1
-                if os.environ.get('SHOW') and stats['unplaced'] % 150 == 0: print(s, a, e['text'], '|', ' '.join(toks), file=sys.stderr)
+            # every place the skeleton fits (the whole phrase, else its first word), each scored by how
+            # close its full spelling is: the skeleton drops ا و ي ء, so «لِوَلِيِّهِ» and «ٱللَّهُ» both
+            # come to «لله» — the first fit alone put a meaning on the wrong word
+            L = len(es)
+            def pick(cands, score):
+                best = None
+                for i, span in cands:
+                    sc = score(i, span)
+                    key = (round(sc, 2), i >= after, -abs(i - after))
+                    if best is None or key > best[0]: best = (key, i, span, sc)
+                return best
+            word_by_word = lambda i, span: sum(close(el[k], lt[i + k]) for k in range(span)) / span
+            best = pick([(i, L) for i in range(n - L + 1) if sk[i:i + L] == es], word_by_word)
+            if best is None and L > 1 and n >= L:
+                # the phrase spelled otherwise in the mushaf (ٱلَّيۡلِ / الليل): the window of as many
+                # words closest to it as a whole, if clearly close
+                best = pick([(i, L) for i in range(n - L + 1)], lambda i, span: close(' '.join(el), ' '.join(lt[i:i + span])))
+                if best and best[3] < .72: best = None
+            if best is None and L > 1:
+                # its first word alone: only a word of its own, nearly as written (a «لا» or «من» fits
+                # anywhere, and some books' entries belong to the ayas around)
+                cands = [(i, 1) for i in range(n) if sk[i] == es[0]]
+                best = pick(cands, word_by_word)
+                # (or a word of its own met once only in the aya: «كُرْهٌ وكُرْهٌ», «حاشى لله و حاشَ لِلَّهِ»)
+                if best and not (len(el[0]) >= 4 and best[3] >= .85) and not (len(cands) == 1 and (len(es[0]) >= 3 or (len(es[0]) == 2 and len(el[0]) >= 3))): best = (best[0], best[1], best[2], 0)
+                elif best: best = (best[0], best[1], best[2], max(best[3], .6))
+            if best is None and L == 1:
+                best = pick([(i, 1) for i in range(n) if sk[i] == es[0]], word_by_word)
+            # (a skeleton that fits one word of the aya only, and not a mere letter or two: that word,
+            # however the mushaf spells it — رَءُوف / رؤوف, شَٰطِي / شاطئ)
+            if best and best[3] < .6 and best[2] == L and (len(es[0]) >= 3 or (len(es[0]) == 2 and len(el[0]) >= 3)) and sum(1 for i in range(n - L + 1) if sk[i:i + L] == es) == 1: best = (best[0], best[1], best[2], .6)
+            if best is None or best[3] < .6:
+                stats['unplaced' if best is None else 'doubtful'] += 1
+                if os.environ.get('SHOW') and best: print(s, a, e['text'], '→', ' '.join(toks[best[1]:best[1] + best[2]]), round(best[3], 2), file=sys.stderr)
                 continue
+            _, hit, span, sc = best
+            after = hit + span
             stats['placed'] += 1
             meaning = re.sub(r'\s+', ' ', e['meaning']).strip()
             gl.append([hit, hit + span - 1, BOOKS.index(b), meaning])
