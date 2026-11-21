@@ -3723,3 +3723,48 @@ b.hz4-v { font-size: 19px; font-weight: 900; }
 }
 .cover.small:not(.new) { background-size: auto, 14px 14px, auto; }
 .tog.on, .rc-set .tog.on { background: var(--p-pattern) 0 0 / 14px 14px, linear-gradient(160deg, var(--p-green), var(--p-green-2)); }
+
+/* ---- the settings in sections: a head each (a patterned green mark, its name, what it is for), then
+   white cards; what is saved for offline use in one card, a row a thing with its action at its side */
+.set-sec { margin: 26px 0 8px; scroll-margin-top: 64px; }
+.set-sec:first-of-type { margin-top: 16px; }
+.set-h { display: flex; align-items: center; gap: 12px; margin: 0 2px 12px; }
+.set-ic { flex: none; width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; color: #e6cc8a;
+  background: var(--p-pattern) 0 0 / 18px 18px, linear-gradient(160deg, var(--p-green), var(--p-green-2));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p-gold) 45%, transparent), 0 4px 10px -4px color-mix(in srgb, var(--p-green-2) 60%, transparent); }
+.set-ic svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.set-ht { display: flex; flex-direction: column; min-width: 0; }
+.set-ht b { font-size: 18px; font-weight: 900; color: var(--ink); line-height: 1.35; }
+.set-ht small { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+.set-sec > .group, .set-sec .sy-card { margin-bottom: 8px; }
+.set-sec .note { margin: 6px 6px 0; }
+.set-sec .vc-n { font-size: 13px; font-weight: 700; color: var(--p-ink); }
+
+/* offline: everything in one card, a row each */
+.set-list { margin-top: 10px; background: var(--card); border: 1px solid var(--p-rule); border-radius: 18px; overflow: hidden; }
+.set-sub { display: flex; flex-direction: column; padding: 12px 16px 4px; font-size: 12.5px; font-weight: 800; color: var(--gold-ink); letter-spacing: .2px; }
+.set-sub small { font-size: 11.5px; font-weight: 600; color: var(--muted); letter-spacing: 0; }
+.set-sub ~ .set-sub { margin-top: 6px; border-top: 1px solid var(--p-rule); padding-top: 14px; }
+#sheet .set-list .group.dl-card { margin: 0; border: 0; border-radius: 0; box-shadow: none; background: none; padding: 12px 16px;
+  display: grid; grid-template-columns: 1fr auto; grid-template-areas: "top acts" "bar bar"; align-items: center; gap: 8px 12px; }
+#sheet .set-list .dl-card + .dl-card { border-top: 1px dotted var(--p-rule); }
+.set-list .dl-top { grid-area: top; min-width: 0; }
+.set-list .dl-pct { display: none; }
+.set-list .dl-prog { grid-area: bar; height: 3px; border-radius: 2px; margin: 0; }
+.set-list .dl-actions { grid-area: acts; flex-direction: column; align-items: stretch; gap: 4px; }
+.set-list .dl-actions:empty { display: none; }
+.set-list .dl-actions button { flex: none; width: auto; padding: 7px 14px; font-size: 13px; font-weight: 800; white-space: nowrap; border-radius: 99px; }
+.set-list .dl-actions button.danger { padding: 2px 8px; font-size: 12px; font-weight: 700; background: none; box-shadow: none; }
+.set-list .dl-actions button:not(.primary):not(.danger) { color: var(--p-ink); background: none; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p-green) 35%, transparent); }
+.set-list .ico { width: 34px; height: 34px; border-radius: 11px; color: var(--p-ink); background: color-mix(in srgb, var(--p-green) 8%, transparent); }
+.set-list .ico svg { width: 20px; height: 20px; }
+.set-list .dl-top .t { font-size: 15px; }
+.set-list .dl-top .s { font-size: 12px; line-height: 1.5; }
+
+/* «تحميل الكل»: its button white on the green, no gold behind it */
+.all-btn { color: var(--p-green-2); background: #fbf8f1; box-shadow: inset 0 0 0 1px color-mix(in srgb, #e6cc8a 70%, transparent), 0 4px 12px rgba(0, 0, 0, .25); }
+.all-btn small { color: var(--p-green); }
+
+/* the riwayat's downloads in the app's green, not blue */
+.row .rw-dl { color: var(--p-ink); background: color-mix(in srgb, var(--p-green) 9%, transparent); }
+.row .rw-dl.run { color: var(--p-on); background: linear-gradient(270deg, var(--p-green) var(--p), color-mix(in srgb, var(--p-green) 45%, transparent) var(--p)); }

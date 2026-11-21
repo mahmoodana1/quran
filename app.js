@@ -2180,7 +2180,7 @@ function paintTafsirCard() {
   const complete = TF.done >= 114;
   $('#tfText').textContent = complete ? 'التفسير كاملًا محفوظ على جهازك ✓'
     : `${ar(TF.done)} من ١١٤ سورة · قرابة ٦ م.ب${TF.running ? ' · جارٍ التحميل…' : ''}`;
-  $('#tfActions').innerHTML = complete || TF.running ? '' : `<button data-dl="tafsir" class="primary">${TF.done ? 'متابعة التحميل' : 'تحميل التفسير كاملًا'}</button>`;
+  $('#tfActions').innerHTML = complete || TF.running ? '' : `<button data-dl="tafsir" class="primary">${TF.done ? 'متابعة' : 'تحميل'}</button>`;
   paintAllCard();
 }
 
@@ -2219,7 +2219,7 @@ function mushafCardHTML() {
   return `<div class="group dl-card" id="mqCard">
     <div class="dl-top">
       ${ico('tafsir', 'marks')}
-      <div class="dl-txt"><div class="t">المصحف كاملًا دون اتصال</div><div class="s" id="mqText"></div></div>
+      <div class="dl-txt"><div class="t">المصحف كاملًا</div><div class="s" id="mqText"></div></div>
       <div class="dl-pct" id="mqPct"></div>
     </div>
     <div class="prog dl-prog"><i id="mqBar" style="width:0"></i></div>
@@ -2236,8 +2236,8 @@ function paintMushafCard() {
   $('#mqText').textContent = complete ? 'خطوط الصفحات ونصوص الروايات محفوظة على جهازك ✓'
     : `خطوط الصفحات ونصوص الروايات · قرابة ١١٠ م.ب${MQ.running ? ' · جارٍ التحميل…' : ''}${MQ.failed ? ` · تعذّر ${ar(MQ.failed)}` : ''}`;
   $('#mqActions').innerHTML = complete || ALL.running ? '' : MQ.running
-    ? '<button data-dl="mushaf-pause">إيقاف مؤقت</button>'
-    : `<button data-dl="mushaf" class="primary">${MQ.done ? 'متابعة التحميل' : 'تحميل المصحف دون اتصال'}</button>`;
+    ? '<button data-dl="mushaf-pause">إيقاف</button>'
+    : `<button data-dl="mushaf" class="primary">${MQ.done ? 'متابعة' : 'تحميل'}</button>`;
   paintAllCard();
 }
 
@@ -2294,13 +2294,13 @@ async function hadithStatus(b) {
   } catch { HQ[b].total = 0; }
 }
 function hadithCardsHTML() {
-  return `<div class="group-label">الحديث</div>` + HD_BOOKS.map(([b, t]) => `<div class="group dl-card" id="hq-${b}">
+  return HD_BOOKS.map(([b, t]) => `<div class="group dl-card" id="hq-${b}">
     <div class="dl-top">${ico('hadith', 'marks')}
       <div class="dl-txt"><div class="t">${t}</div><div class="s" data-hq-text></div></div>
       <div class="dl-pct" data-hq-pct></div></div>
     <div class="prog dl-prog"><i data-hq-bar style="width:0"></i></div>
     <div class="dl-actions" data-hq-acts></div>
-  </div>`).join('') + `<p class="note">كل كتاب يُحفظ وحده بأحاديثه وأسانيدها وبحثه؛ وتراجم الرواة والمواضيع تُحفظ مع أول كتاب تحفظه.</p>`;
+  </div>`).join('');
 }
 function paintHadithCard(b) {
   const el = $('#hq-' + b);
@@ -2314,8 +2314,8 @@ function paintHadithCard(b) {
     : complete ? 'محفوظ على جهازك بأسانيده ورواته ✓'
     : `${q.done ? `${ar(Math.floor(pct * 100))}٪ محفوظ · ` : 'أحاديثه بأسانيدها ورواتها · '}${size}${q.running ? ' · جارٍ التحميل…' : ''}${q.failed ? ` · تعذّر ${ar(q.failed)}` : ''}`;
   el.querySelector('[data-hq-acts]').innerHTML = !q.total ? `<button data-hq-check="${b}">أعد الفحص</button>` : (q.running
-    ? `<button data-hq-pause="${b}">إيقاف مؤقت</button>`
-    : complete ? '' : `<button data-hq-get="${b}" class="primary">${q.own ? 'متابعة التحميل' : 'تحميل الكتاب'}</button>`)
+    ? `<button data-hq-pause="${b}">إيقاف</button>`
+    : complete ? '' : `<button data-hq-get="${b}" class="primary">${q.own ? 'متابعة' : 'تحميل'}</button>`)
     + (q.own && !q.running ? `<button data-hq-del="${b}" class="danger">حذف</button>` : '');
 }
 async function refreshHadithCards() {
@@ -2445,63 +2445,74 @@ function settingsHTML() {
   const v = voice(R.id), n = voices(R.id).length, rname = META.riwayat.find(r => r.id === R.id)?.name || '';
   const nav = [['set-audio', 'التلاوة'], ['set-hifz', 'الحفظ'], ['set-look', 'المظهر'], ['set-off', 'دون اتصال'], ['set-data', 'بياناتك'], ['set-app', 'التطبيق'], ['set-rw', 'الرواية']]
     .map(([id, t]) => `<button data-set-jump="${id}">${t}</button>`).join('');
+  // a section: its head (a green mark, its name, what it is for in a line), then its body
+  const sec = (id, ic, t, sub, body) => `<section class="set-sec"${id ? ` id="${id}"` : ''}>
+    <header class="set-h"><span class="set-ic"><svg viewBox="0 0 24 24">${SET_ICO[ic]}</svg></span><span class="set-ht"><b>${t}</b><small>${sub}</small></span></header>
+    ${body}</section>`;
+  const go = `<svg viewBox="0 0 24 24" class="go">${ICO.next}</svg>`;
+  const link = (attr, t, sub2) => `<button class="row" ${attr}><span class="main"><span class="t">${t}</span><span class="s">${sub2}</span></span>${go}</button>`;
   return `
     ${typeof Install !== 'undefined' ? Install.settingsHTML() : ''}
     <nav class="set-nav" aria-label="أقسام الإعدادات">${nav}</nav>
 
-    <div class="group-label" id="set-audio">التلاوة</div>
-    <div class="group">
+    ${sec('set-audio', 'audio', 'التلاوة', `${rname} · ${n > 1 ? `${ar(n)} ${n <= 10 ? 'قرّاء' : 'قارئًا'} تختار منهم` : `بصوت ${v.name}`}`, `<div class="group">
       <button class="row vc-cur" data-set-view="reciter">${voiceBadge(v)}
         <span class="main"><span class="s">القارئ</span><span class="t">${v.name}${v.style ? ` <em class="vc-style">${v.style}</em>` : ''}</span></span>
-        <span class="vc-n">${n > 1 ? `${ar(n)} ${n <= 10 ? 'قرّاء' : 'قارئًا'}` : ''}</span><svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button>
+        <span class="vc-n">${n > 1 ? 'غيّره' : ''}</span>${go}</button>
       ${'wakeLock' in navigator ? switchRow('awake', 'إبقاء الشاشة مضاءة', 'لا تنطفئ الشاشة وأنت تقرأ أو تستمع أو تسمّع') : ''}
-    </div>
-    <p class="note">${n > 1 ? `اختر من تحب أن تستمع إليه في ${rname}، واستمع إلى نموذج من تلاوة كل قارئ قبل اختياره.` : `تلاوة ${rname} بصوت ${v.name}.`}</p>
+    </div>`)}
 
-    <div class="group-label" id="set-hifz">الحفظ والتسميع</div>
-    <div class="group">
-      <button class="row" data-hz-open="way"><span class="main"><span class="t">طريقتك في الحفظ</span><span class="s">خطوات الجلسة، وكم تتكرر كل آية، والسرعة، والمراجعة</span></span><svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button>
-      <button class="row" data-hz-open="known"><span class="main"><span class="t">ما تحفظه من قبل</span><span class="s">علّم سورًا تحفظها لتُراجَع ولا تأتيك دروسًا</span></span><svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button>
-      <button class="row" data-hz-open="edit"><span class="main"><span class="t">درسك</span><span class="s">السورة، ومن أي آية إلى أي آية</span></span><svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button>
-      <button class="row" data-hz-open="rc-set"><span class="main"><span class="t">إعدادات التسميع</span><span class="s">النموذج، والتنبيه، وإخفاء الكلمات، والتجويد</span></span><svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button>
-    </div>
+    ${sec('set-hifz', 'hifz', 'الحفظ والتسميع', 'طريقتك، وما تحفظه، ودرسك، والتسميع', `<div class="group">
+      ${link('data-hz-open="way"', 'طريقتك في الحفظ', 'خطوات الجلسة، وكم تتكرر كل آية، والسرعة، والمراجعة')}
+      ${link('data-hz-open="known"', 'ما تحفظه من قبل', 'علّم سورًا تحفظها لتُراجَع ولا تأتيك دروسًا')}
+      ${link('data-hz-open="edit"', 'درسك', 'السورة، ومن أي آية إلى أي آية')}
+      ${link('data-hz-open="rc-set"', 'إعدادات التسميع', 'النموذج، والتنبيه، وإخفاء الكلمات، والتجويد')}
+    </div>`)}
 
-    <div class="group-label" id="set-look">المظهر</div>
-    <div class="themes">${themes}</div>
-    <div class="group">${switchRow('lite', 'مظهر خفيف', 'بلا ضبابية خلف الأشرطة ولا حركات مستمرة: أسلس على الهواتف المتوسطة والقديمة')}${S.desk ? '' : switchRow('norotate', 'إيقاف التدوير التلقائي', IOS ? 'على iPhone وiPad لا يسمح النظام لتطبيق ويب بتثبيت الاتجاه: ثبّته من «قفل اتجاه الشاشة» في مركز التحكم' : `تبقى الشاشة ${rotLockName()} ولو أدرت الهاتف`)}</div>
+    ${sec('set-look', 'look', 'المظهر', 'ألوان الصفحات، وما يريح هاتفك', `<div class="themes">${themes}</div>
+      <div class="group">${switchRow('lite', 'مظهر خفيف', 'بلا ضبابية خلف الأشرطة ولا حركات مستمرة: أسلس على الهواتف المتوسطة والقديمة')}${S.desk ? '' : switchRow('norotate', 'إيقاف التدوير التلقائي', IOS ? 'على iPhone وiPad لا يسمح النظام لتطبيق ويب بتثبيت الاتجاه: ثبّته من «قفل اتجاه الشاشة» في مركز التحكم' : `تبقى الشاشة ${rotLockName()} ولو أدرت الهاتف`)}</div>`)}
 
-    <div class="group-label">الختمة</div>
-    <div class="group"><button class="row" data-open-lib><span class="mini-cover">${coverHTML(K, true)}</span>
-      <span class="main"><span class="t">ختماتي</span><span class="s">${esc(K.name)} · ${ar(khatmaPct(K))}٪ · صفحة ${ar(K.page)}${KH.length > 1 ? ` · ${ar(KH.length)} ختمات` : ''}</span></span>
-      <svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button></div>
+    ${sec('', 'khatma', 'الختمة', 'ختماتك وتقدّمك في كل منها', `<div class="group"><button class="row" data-open-lib><span class="mini-cover">${coverHTML(K, true)}</span>
+      <span class="main"><span class="t">ختماتي</span><span class="s">${esc(K.name)} · ${ar(khatmaPct(K))}٪ · صفحة ${ar(K.page)}${KH.length > 1 ? ` · ${ar(KH.length)} ختمات` : ''}</span></span>${go}</button></div>`)}
 
-    <div class="group-label" id="set-off">دون اتصال</div>
-    ${allCardHTML()}
-    ${mushafCardHTML()}
-    ${audioPanelHTML()}
-    ${hadithCardsHTML()}
+    ${sec('set-off', 'off', 'دون اتصال', 'ما تحفظه على جهازك ليعمل بلا إنترنت', `${allCardHTML()}
+      <div class="set-list">
+        <div class="set-sub">المصحف والتفسير والتلاوة</div>
+        ${mushafCardHTML()}${audioPanelHTML()}
+        <div class="set-sub">الحديث<small>كل كتاب وحده؛ وتراجم الرواة والمواضيع مع أول كتاب</small></div>
+        ${hadithCardsHTML()}
+      </div>
+      <p class="note" id="dlNote"></p>`)}
 
-    <div id="set-data"></div>
-    ${typeof Sync !== 'undefined' ? Sync.settingsHTML() : ''}
-    <div class="group-label">بياناتك</div>
-    <div class="group">
-      <button class="row" data-backup="save"><span class="main"><span class="t">حفظ نسخة احتياطية</span><span class="s">العلامات والختمات وتقدّم التسميع والأذكار والإعدادات، في ملف واحد</span></span><svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button>
-      <button class="row" data-backup="load"><span class="main"><span class="t">استعادة من نسخة</span><span class="s">من ملف حفظته من قبل، على هذا الجهاز أو غيره</span></span><svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button>
-    </div>
-    <p class="note">بيانات التطبيق محفوظة على جهازك، وقد يمسحها المتصفح إن قلّت مساحته أو طال تركه. احفظ نسخة بين حين وآخر، أو فعّل المزامنة.</p>
-    ${Extras.dataLineHTML()}
+    ${sec('set-data', 'data', 'بياناتك', 'المزامنة بين أجهزتك، والنسخ الاحتياطية', `
+      ${typeof Sync !== 'undefined' ? Sync.settingsHTML().replace('<div class="group-label">المزامنة</div>', '') : ''}
+      <div class="group">
+        ${link('data-backup="save"', 'حفظ نسخة احتياطية', 'العلامات والختمات وتقدّم التسميع والأذكار والإعدادات، في ملف واحد')}
+        ${link('data-backup="load"', 'استعادة من نسخة', 'من ملف حفظته من قبل، على هذا الجهاز أو غيره')}
+      </div>
+      ${Extras.dataLineHTML()}`)}
 
-    <div class="group-label" id="set-app">التطبيق</div>
-    <div class="group">
+    ${sec('set-app', 'app', 'التطبيق', 'نسخته، ومساحته، وجولة فيه', `<div class="group">
       <div class="row"><span class="main"><span class="t">النسخة</span><span class="s" id="appVer">…</span></span><button class="rc-not" data-app-update>تحقق من التحديث</button></div>
       <div class="row"><span class="main"><span class="t">المساحة المستعملة</span><span class="s" id="appStore">…</span></span></div>
-      <button class="row" data-xs="tour"><span class="main"><span class="t">جولة في التطبيق</span><span class="s">ما يخفى منه: بطاقة الآية والكلمة والسورة، والحفظ، واللوحات</span></span><svg viewBox="0 0 24 24" class="go">${ICO.next}</svg></button>
-    </div>
+      ${link('data-xs="tour"', 'جولة في التطبيق', 'ما يخفى منه: بطاقة الآية والكلمة والسورة، والحفظ، واللوحات')}
+    </div>`)}
 
-    <div class="group-label" id="set-rw">الرواية</div>
-    <div class="group">${riwayat}</div>
-    <p class="note">لكل رواية رسمها وعلامات ضبطها ووقفها، وتلاوتها بصوت من يقرأ بها، سورةً سورة من mp3quran.net مع مواضع آياتها (وبعض قرّاء حفص آيةً آية من everyayah.com). اختيار الرواية يغيّر المصحف كله.</p>`;
+    ${sec('set-rw', 'riwaya', 'الرواية', 'اختيار الرواية يغيّر المصحف كله: رسمه وضبطه ووقفه وتلاوته', `<div class="group">${riwayat}</div>
+      <p class="note">التلاوات سورةً سورة من mp3quran.net مع مواضع آياتها، وبعض قرّاء حفص آيةً آية من everyayah.com.</p>`)}`;
 }
+
+// the settings' sections' marks
+const SET_ICO = {
+  audio: '<path d="M4 10v4M8 7v10M12 4v16M16 7v10M20 10v4"/>',
+  hifz: '<path d="M12 20V11M12 11c0-3.5 2.5-6 6.5-6 0 3.5-2.5 6-6.5 6zM12 14c0-3-2-5.2-5.5-5.2 0 3 2 5.2 5.5 5.2z"/>',
+  look: '<circle cx="12" cy="12" r="4"/><path d="M12 2.8v2.2M12 19v2.2M2.8 12h2.2M19 12h2.2M5.5 5.5l1.6 1.6M16.9 16.9l1.6 1.6M5.5 18.5l1.6-1.6M16.9 7.1l1.6-1.6"/>',
+  khatma: '<path d="M12 6.5C10 5 7 4.5 3.5 5v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5zM12 6.5v13"/>',
+  off: '<path d="M12 3.5v11M7.5 10l4.5 4.5 4.5-4.5M4.5 15.5v2.5a2.5 2.5 0 002.5 2.5h10a2.5 2.5 0 002.5-2.5v-2.5"/>',
+  data: '<ellipse cx="12" cy="6" rx="7" ry="2.8"/><path d="M5 6v12c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8V6M5 12c0 1.5 3.1 2.8 7 2.8s7-1.3 7-2.8"/>',
+  app: '<circle cx="12" cy="12" r="8.5"/><path d="M12 11v5.5M12 7.6v.3"/>',
+  riwaya: '<path d="M6 3.5h9.5l3 3v14H6a1.5 1.5 0 01-1.5-1.5V5A1.5 1.5 0 016 3.5z"/><path d="M15.5 3.5v3h3M8.5 11h7M8.5 14.5h7"/>',
+};
 
 // the reciters of the riwaya being read: a tap chooses, the round button plays a sample
 function reciterPageHTML() {
@@ -2701,8 +2712,7 @@ function audioPanelHTML() {
     <div class="prog dl-prog"><i id="dlBar" style="width:0"></i></div>
     <div class="dl-actions" id="dlActions"></div>
   </div>
-  ${tafsirCardHTML()}
-  <p class="note" id="dlNote"></p>`;
+  ${tafsirCardHTML()}`;
 }
 
 async function refreshAudioPanel() {
@@ -2729,9 +2739,9 @@ function paintAudioPanel() {
     : !st.total ? 'تعذّر الفحص — تحقق من الاتصال'
     : `${ar(st.done)} من ${ar(st.total)} ${hafs ? 'آية' : 'سورة'} · ${ar(Math.round(st.doneMB))} من ${ar(Math.round(st.mb))} م.ب${running ? ' · جارٍ التحميل…' : ''}${running && DL.failed ? ` · تعذّر ${ar(DL.failed)}` : ''}`;
   $('#dlActions').innerHTML = (complete || ALL.running || !st.total ? '' : running
-    ? '<button data-dl="pause">إيقاف مؤقت</button>'
-    : `<button data-dl="start" class="primary">${st.done ? 'متابعة التحميل' : 'تحميل التلاوة كاملة'}</button>`)
-    + (st.done && !running && !ALL.running ? `<button data-dl="clear" data-rid="${rid}" class="danger">حذف التحميلات</button>` : '');
+    ? '<button data-dl="pause">إيقاف</button>'
+    : `<button data-dl="start" class="primary">${st.done ? 'متابعة' : 'تحميل'}</button>`)
+    + (st.done && !running && !ALL.running ? `<button data-dl="clear" data-rid="${rid}" class="danger">حذف</button>` : '');
   $('#dlNote').textContent = (hafs
     ? `يُحفظ صوت كل آية بصوت ${reciterFull('hafs')} (قرابة ${gbText(st.mb || AUDIO_TOTAL_MB)}) والتفسير على جهازك لتستعملهما دون إنترنت.`
     : `تُحفظ تلاوة ${reciterFull(rid)} سورةً سورة (قرابة ${gbText(st.mb)}) والتفسير على جهازك لتستعملهما دون إنترنت.`)
