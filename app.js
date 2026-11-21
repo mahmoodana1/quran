@@ -2270,6 +2270,92 @@ async function downloadMushaf() {
   if (!MQ.stop && !ALL.running) toast(MQ.failed ? 'تعذّر تحميل بعض الملفات — حاول مجددًا' : 'اكتمل تحميل المصحف');
 }
 
+// ---------------------------------------------------------------- offline hadith
+// Each book of الحديث saved on its own (the settings: a card each): its kutub, a part at a time, and its
+// search; with the first of them, what the three share (the narrators, the subjects, the meanings).
+// In the mushaf's cache, where the panel's fetches find them (sw.js: data/ cache-first)
+const HADITH_V = 2; // bump with data/hadith/ (tools/hadith.py); hadith.js and its worker use it
+const HD_BOOKS = [['bukhari', 'صحيح البخاري'], ['muslim', 'صحيح مسلم'], ['abudawud', 'سنن أبي داود']];
+const HQ = Object.fromEntries(HD_BOOKS.map(([b]) => [b, { running: false, stop: false, done: 0, total: 0, failed: 0 }]));
+let hdIndexP = null;
+const hdUrl = f => new URL(`data/hadith/${f}?v=${HADITH_V}`, location.href).href;
+const hdIndex = () => hdIndexP ||= fetch(hdUrl('index.json')).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }).catch(e => { hdIndexP = null; throw e; });
+const hdShared = ix => ['index.json', 'topics.json', 'groups.json', 'search/rawi.json', ...Array.from({ length: ix.rawi || 64 }, (_, i) => `rawi/${i}.json`)].map(hdUrl);
+const hdOwn = (ix, b) => [`search/${b}.json`, ...ix.books.find(x => x.id === b).k.flatMap(([, , , parts], k) => Array.from({ length: parts }, (_, p) => `${b}/${k}-${p}.json`))].map(hdUrl);
+async function hadithStatus(b) {
+  if (!('caches' in window)) return;
+  try {
+    const ix = await hdIndex(), have = new Set((await (await caches.open(MUSHAF_CACHE)).keys()).map(r => r.url));
+    const own = hdOwn(ix, b), shared = hdShared(ix);
+    // (a book none of whose own files is saved is not saved, whatever the others left of what they share)
+    const ownHave = own.filter(u => have.has(u)).length;
+    Object.assign(HQ[b], { done: ownHave ? ownHave + shared.filter(u => have.has(u)).length : 0, total: own.length + shared.length,
+      own: own.filter(u => have.has(u)).length, sharedHave: shared.every(u => have.has(u)), mb: ix.sz?.[b] / 1048576, smb: ix.sz?.shared / 1048576 });
+  } catch { HQ[b].total = 0; }
+}
+function hadithCardsHTML() {
+  return `<div class="group-label">الحديث</div>` + HD_BOOKS.map(([b, t]) => `<div class="group dl-card" id="hq-${b}">
+    <div class="dl-top">${ico('hadith', 'marks')}
+      <div class="dl-txt"><div class="t">${t}</div><div class="s" data-hq-text></div></div>
+      <div class="dl-pct" data-hq-pct></div></div>
+    <div class="prog dl-prog"><i data-hq-bar style="width:0"></i></div>
+    <div class="dl-actions" data-hq-acts></div>
+  </div>`).join('') + `<p class="note">كل كتاب يُحفظ وحده بأحاديثه وأسانيدها وبحثه؛ وتراجم الرواة والمواضيع تُحفظ مع أول كتاب تحفظه.</p>`;
+}
+function paintHadithCard(b) {
+  const el = $('#hq-' + b);
+  if (!el) return;
+  const q = HQ[b], pct = q.total ? q.done / q.total : 0, complete = q.total > 0 && q.done >= q.total;
+  el.querySelector('[data-hq-bar]').style.width = (pct * 100).toFixed(1) + '%';
+  el.querySelector('[data-hq-pct]').textContent = q.total ? ar(Math.floor(pct * 100)) + '٪' : '';
+  const mb = n => ar(Math.max(1, Math.round(n)));
+  const size = q.mb ? `قرابة ${mb(q.mb + (q.sharedHave ? 0 : q.smb || 0))} م.ب` : '';
+  el.querySelector('[data-hq-text]').textContent = !q.total ? 'تعذّر الفحص — تحقق من الاتصال'
+    : complete ? 'محفوظ على جهازك بأسانيده ورواته ✓'
+    : `${q.done ? `${ar(Math.floor(pct * 100))}٪ محفوظ · ` : 'أحاديثه بأسانيدها ورواتها · '}${size}${q.running ? ' · جارٍ التحميل…' : ''}${q.failed ? ` · تعذّر ${ar(q.failed)}` : ''}`;
+  el.querySelector('[data-hq-acts]').innerHTML = !q.total ? `<button data-hq-check="${b}">أعد الفحص</button>` : (q.running
+    ? `<button data-hq-pause="${b}">إيقاف مؤقت</button>`
+    : complete ? '' : `<button data-hq-get="${b}" class="primary">${q.own ? 'متابعة التحميل' : 'تحميل الكتاب'}</button>`)
+    + (q.own && !q.running ? `<button data-hq-del="${b}" class="danger">حذف</button>` : '');
+}
+async function refreshHadithCards() {
+  for (const [b] of HD_BOOKS) { if (!HQ[b].running) await hadithStatus(b); paintHadithCard(b); }
+}
+async function downloadHadith(b) {
+  const q = HQ[b];
+  if (q.running) return;
+  Object.assign(q, { running: true, stop: false, failed: 0 });
+  paintHadithCard(b);
+  try {
+    const ix = await hdIndex(), c = await caches.open(MUSHAF_CACHE);
+    const tasks = [...hdShared(ix), ...hdOwn(ix, b)];
+    let next = 0;
+    const worker = async () => {
+      while (!q.stop && next < tasks.length) {
+        const u = tasks[next++];
+        if (await c.match(u)) continue;
+        try { const r = await fetch(u); if (r.ok) { await c.put(u, r); q.done++; } else q.failed++; } catch { q.failed++; }
+        paintHadithCard(b);
+      }
+    };
+    await Promise.all(Array.from({ length: 4 }, worker));
+  } catch { q.failed++; }
+  q.running = false;
+  await refreshHadithCards(); // (the shared files count for the others too)
+  if (!q.stop) toast(q.failed ? 'تعذّر تحميل بعض الملفات — حاول مجددًا' : `حُفظ ${HD_BOOKS.find(x => x[0] === b)[1]} على جهازك`);
+}
+async function deleteHadith(b) {
+  try {
+    const ix = await hdIndex(), c = await caches.open(MUSHAF_CACHE);
+    await Promise.all(hdOwn(ix, b).map(u => c.delete(u)));
+    // what the three share: removed with the last of them
+    const have = new Set((await c.keys()).map(r => r.url));
+    if (!HD_BOOKS.some(([x]) => x !== b && hdOwn(ix, x).some(u => have.has(u)))) await Promise.all(hdShared(ix).map(u => c.delete(u)));
+  } catch {}
+  await refreshHadithCards();
+  toast('حُذف الكتاب من جهازك');
+}
+
 // ---------------------------------------------------------------- offline audio
 // Each riwaya's recitation can be saved on the device, only when asked: from
 // the recitation card (the riwaya being read) or the button beside each riwaya
@@ -2323,6 +2409,7 @@ const ICO = {
   theme: '<path d="M12 3.5a8.5 8.5 0 100 17 8.5 8.5 0 000-17zM12 3.5v17"/><path d="M12 3.5a8.5 8.5 0 010 17z" fill="currentColor" stroke="none"/>',
   book: '<path d="M5 4.5h3.5v15H5zM10.5 4.5H14v15h-3.5zM15.6 5.6l3.3-.9 3.4 14.2-3.3.9z"/>',
   audio: '<path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 10.5v3"/>',
+  hadith: '<path d="M6 3.5h9.5l3 3v14H6a1.5 1.5 0 01-1.5-1.5V5A1.5 1.5 0 016 3.5z"/><path d="M15.5 3.5v3h3M8.5 10h7M8.5 13h7M8.5 16h4.5"/>',
   tafsir: '<path d="M12 6.5C10 5 7 4.5 3.5 5v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5zM12 6.5v13"/>',
   next: '<path d="M14.5 6l-6 6 6 6"/>',
 };
@@ -2392,6 +2479,7 @@ function settingsHTML() {
     ${allCardHTML()}
     ${mushafCardHTML()}
     ${audioPanelHTML()}
+    ${hadithCardsHTML()}
 
     <div id="set-data"></div>
     ${typeof Sync !== 'undefined' ? Sync.settingsHTML() : ''}
@@ -3265,7 +3353,7 @@ function renderSheet() {
     const here = body.querySelector('.row.here');
     if (here) here.scrollIntoView({ block: 'center' }); else if (tab !== 'adhkar') body.scrollTop = 0;
   }
-  if (tab === 'settings' && !q.trim()) { if (setView) paintVoiceSaved(); else { refreshAudioPanel(); refreshMushafCard(); refreshAppInfo(); } }
+  if (tab === 'settings' && !q.trim()) { if (setView) paintVoiceSaved(); else { refreshAudioPanel(); refreshMushafCard(); refreshHadithCards(); refreshAppInfo(); } }
   if (tab === 'prayer' && !q.trim()) Prayer.mount();
   if (tab === 'recite' && !q.trim()) Recite.mounted();
   if (tab === 'hifz' && !q.trim()) Hifz.mounted();
@@ -3330,6 +3418,15 @@ $('#sheetBody').addEventListener('click', async e => {
     e.stopPropagation();
     const list = bookmarks(); list.splice(+del.dataset.delMark, 1); setBookmarks(list);
     refreshHeader(); renderSheet(); return;
+  }
+  const hq = e.target.closest('[data-hq-get], [data-hq-pause], [data-hq-del], [data-hq-check]');
+  if (hq) {
+    const d = hq.dataset;
+    if (d.hqGet) downloadHadith(d.hqGet);
+    else if (d.hqPause) HQ[d.hqPause].stop = true;
+    else if (d.hqDel) deleteHadith(d.hqDel);
+    else refreshHadithCards();
+    return;
   }
   const dl = e.target.closest('[data-dl]');
   if (dl) {

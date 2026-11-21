@@ -9,7 +9,7 @@
 // it quotes, where else it is narrated), a narrator, the subjects, the saved ones.
 // Uses $, esc, ar, store, toast, renderSheet, dismissSheet, goTo, flashAya, R and haptic from app.js.
 const Hadith = (() => {
-  const V = 1; // bump with data/hadith/ (tools/hadith.py)
+  const V = HADITH_V; // (app.js)
   const BOOKS = { bukhari: 'صحيح البخاري', muslim: 'صحيح مسلم', abudawud: 'سنن أبي داود' };
   const SHORT = { bukhari: 'البخاري', muslim: 'مسلم', abudawud: 'أبو داود' };
   const PART = 100;

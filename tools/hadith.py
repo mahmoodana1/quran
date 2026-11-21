@@ -349,6 +349,12 @@ for ki, hs in enumerate(ALL['bukhari']):
 step = max(1, len(daily) // 366)
 index['daily'] = daily[::step][:366]
 print('daily', len(daily), '->', len(index['daily']))
+# what each book takes on a phone saved for offline use (its kutub and its search), and what the
+# three share (the narrators, the subjects, the meanings), in bytes (app.js: the settings' cards)
+def size(paths): return sum(os.path.getsize(f'{OUT}/{p}') for p in paths)
+index['sz'] = {bk: size([f'{bk}/{f}' for f in os.listdir(f'{OUT}/{bk}')] + [f'search/{bk}.json']) for bk, *_ in BOOKS}
+index['sz']['shared'] = size([f'rawi/{f}' for f in os.listdir(f'{OUT}/rawi')] + ['search/rawi.json', 'topics.json', 'groups.json'])
+index['rawi'] = len(os.listdir(f'{OUT}/rawi'))
 json.dump(index, open(f'{OUT}/index.json', 'w'), ensure_ascii=False, separators=(',', ':'))
 print('suras not known', unknown_suras.most_common(8))
 print('narrators', len(used_rawis), 'groups', len(gw), 'topics', len(tree))
