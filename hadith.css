@@ -214,3 +214,48 @@ button.hd-cn:active { color: var(--p-ink); }
 .hd-pc i { display: block; height: 4px; border-radius: 2px; background: var(--p-green); opacity: .75; }
 .hd-pc small { font-size: 11px; color: var(--muted); text-align: end; }
 .hd-prow:active { opacity: .6; }
+
+/* ---- the chain's tree: a button under the chain, then a page of its own ---- */
+.hd-treeb { width: 100%; display: flex; align-items: center; gap: 12px; margin-top: 10px; padding: 12px 14px; border-radius: 14px; text-align: start;
+  background: var(--card); border: 1px solid var(--p-rule); color: var(--ink); }
+.hd-treeb:active { transform: scale(.985); }
+.hd-treeb > span:nth-child(2) { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.hd-treeb b { font-size: 15.5px; font-weight: 800; }
+.hd-treeb small { font-size: 12px; color: var(--muted); }
+.hd-treei { flex: none; width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; color: var(--p-ink); background: color-mix(in srgb, var(--p-green) 11%, transparent); }
+.hd-treei svg, .hd-treeb .go { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.hd-treeb .go { width: 16px; height: 16px; color: var(--faint); }
+
+.hd-tnote { margin: 2px 4px 10px; font-size: 12.5px; line-height: 1.7; color: var(--muted); }
+.hd-tlegend { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 0 4px 12px; font-size: 11.5px; color: var(--muted); }
+.hd-tlegend span { display: inline-flex; align-items: center; gap: 5px; }
+.hd-tlegend i, .hd-tnb i { flex: none; width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--p-green); box-sizing: border-box; }
+.hd-tlegend .own i { width: 16px; height: 3px; border: 0; border-radius: 2px; background: var(--p-green); }
+.r-sh > i, .r-sh .hd-tnb i { background: var(--p-green); box-shadow: 0 0 0 1.5px var(--card), 0 0 0 2.6px var(--p-gold); }
+.r-th > i, .r-th .hd-tnb i { background: var(--p-green); }
+.r-sd > i, .r-sd .hd-tnb i { background: color-mix(in srgb, var(--p-green) 45%, transparent); }
+.r-mq > i, .r-mq .hd-tnb i { border-color: var(--muted); }
+.r-dh > i, .r-dh .hd-tnb i { border-color: #c27a2c; }
+.r-mt > i, .r-mt .hd-tnb i, .r-gap .hd-tnb i { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 25%, transparent); }
+
+/* (it scrolls sideways, inside the page; the way opened from is at the start) */
+.hd-tsc { overflow: auto hidden; margin: 0 -16px; padding: 4px 16px 12px; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+.hd-tree { position: relative; }
+.hd-tlines { position: absolute; top: 0; left: 0; overflow: visible; }
+.hd-tlines path { fill: none; stroke: color-mix(in srgb, var(--p-gold) 55%, var(--line)); stroke-width: 1.3; }
+.hd-tlines path.own { stroke: var(--p-green); stroke-width: 2.2; }
+.hd-tn { position: absolute; width: 112px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.hd-tnb { width: 100%; min-height: 40px; display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 11px; text-align: start;
+  background: var(--card); border: 1px solid var(--p-rule); box-shadow: 0 1px 3px rgba(40, 28, 8, .06); color: var(--ink); }
+.hd-tnb span { flex: 1; min-width: 0; font-size: 12px; font-weight: 700; line-height: 1.35;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.hd-tnb:active { transform: scale(.96); }
+.hd-tn.own .hd-tnb { border-color: var(--p-green); box-shadow: inset 0 0 0 1px var(--p-green), 0 2px 6px rgba(18, 58, 45, .12); }
+.hd-troot { height: 40px; justify-content: center; border-radius: 12px; color: var(--p-on, #f3e6c4);
+  background: var(--p-pattern) 0 0 / 18px 18px, linear-gradient(160deg, var(--p-green), var(--p-green-2)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p-gold) 55%, transparent); }
+.hd-troot b { font-size: 14px; font-weight: 800; }
+.hd-trefs { display: flex; flex-direction: column; align-items: stretch; gap: 3px; width: 100%; }
+.hd-tref { padding: 3px 6px; border-radius: 8px; font-size: 11.5px; font-weight: 700; color: var(--p-ink); text-align: center;
+  background: color-mix(in srgb, var(--p-green) 9%, transparent); }
+.hd-tref.own { color: var(--p-on, #f3e6c4); background: var(--p-green); }
+.hd-tn.leaf .hd-tnb span { -webkit-line-clamp: 3; }
