@@ -152,6 +152,7 @@ const Hadith = (() => {
         <button class="hd-tb" data-hd-step="-1" aria-label="السابق"${!j && !k ? ' disabled' : ''}>${IC.back}</button>
         <button class="hd-tb" data-hd-step="1" aria-label="التالي"${last ? ' disabled' : ''}>${IC.next}</button>`;
       const kt = `${k || b !== 'muslim' ? 'كتاب ' : ''}${B.k[k][0]}`;
+      after = centreTrees;
       return bar(kt, BOOKS[b], tools) + readerHTML(b, h, names, kt);
     },
 
@@ -168,60 +169,15 @@ const Hadith = (() => {
       const all = refs.length;
       refs = refs.slice(0, 30);
       const got = (await Promise.all(refs.map(r => hadith(...r).then(x => ({ r, ...x })).catch(() => null)))).filter(Boolean);
-      const names = {}, root = { id: 0, kids: new Map(), refs: [], own: true };
-      for (const g of got) {
-        Object.assign(names, g.R);
-        const own = g.r === refs[0];
-        for (const c of g.h.c || []) {
-          let n = root;
-          for (const id of [...c].reverse()) {
-            if (!n.kids.has(id)) n.kids.set(id, { id, kids: new Map(), refs: [], own: false });
-            n = n.kids.get(id);
-            if (own) n.own = true;
-          }
-          if (!n.refs.some(x => x.b === g.r[0] && x.k === g.r[1] && x.j === g.r[2])) n.refs.push({ b: g.r[0], k: g.r[1], j: g.r[2], l: label(g.r[0], g.h), own });
-        }
-      }
-      if (!root.kids.size) return bar('شجرة الإسناد') + '<div class="empty"><b>لا إسناد لهذا الحديث هنا</b></div>';
-      // the layout: each leaf its own column (the way opened from first, at the start), a node over
-      // its first branch, a row per step from the Prophet ﷺ
-      const CW = 124, NW = 112, RH = 92, marfu = h.ty == null || h.ty === 0;
-      const order = n => [...n.kids.values()].sort((a, b2) => (b2.own - a.own) || (size(b2) - size(a)));
-      const sz = new Map(), size = n => { if (!sz.has(n)) sz.set(n, n.kids.size ? [...n.kids.values()].reduce((s2, x) => s2 + size(x), 0) : 1); return sz.get(n); };
-      let col = 0, depth = 0, people = 0;
-      const nodes = [], lines = [];
-      const place = (n, d) => {
-        depth = Math.max(depth, d);
-        if (!n.kids.size) { n.x = col++ * CW + CW / 2; n.d = d; return; }
-        const ks = order(n); ks.forEach(x => place(x, d + 1));
-        n.x = ks[0].x; n.d = d; // (over its first branch: the trunk straight down at the start, the others off to the side)
-      };
-      place(root, 0);
-      const W = col * CW, top0 = marfu ? 0 : -RH, yOf = d => d * RH + top0 + 8;
-      const walk = (n, parent) => {
-        if (n !== root) {
-          people++;
-          const [nm, rk] = names[n.id] || ['', 0], r = RK(rk), leaf = !n.kids.size;
-          nodes.push(`<div class="hd-tn r-${r}${n.own ? ' own' : ''}${leaf ? ' leaf' : ''}" style="right:${n.x - NW / 2}px;top:${yOf(n.d)}px">
-            <button class="hd-tnb" data-hd-rawi="${n.id}"><i></i><span>${esc(nm || '—')}</span></button>
-            ${n.refs.length ? `<span class="hd-trefs">${n.refs.map(x => `<button class="hd-tref${x.own ? ' own' : ''}" data-hd-go="${x.b}:${x.k}:${x.j}">${SHORT[x.b]} ${ar(x.l)}</button>`).join('')}</span>` : ''}</div>`);
-          if (parent && (parent !== root || marfu)) {
-            const x1 = W - parent.x, y1 = yOf(parent.d) + 40, x2 = W - n.x, y2 = yOf(n.d), my = (y1 + y2) / 2;
-            lines.push(`<path class="${n.own ? 'own' : ''}" d="M${x1} ${y1}C${x1} ${my} ${x2} ${my} ${x2} ${y2}"/>`);
-          }
-        }
-        for (const x of order(n)) walk(x, n);
-      };
-      walk(root, null);
-      const H = yOf(depth) + 40 + 26 * Math.max(1, ...nodesRefs(root)) + 16;
-      function nodesRefs(n) { const out = [n.refs.length]; for (const x of n.kids.values()) out.push(...nodesRefs(x)); return out; }
-      const rootHTML = marfu ? `<div class="hd-tn hd-troot" style="right:${root.x - NW / 2}px;top:${yOf(0)}px"><b>النبي ﷺ</b></div>` : '';
-      const ways = got.length;
-      return bar('شجرة الإسناد', `${ways === 1 ? 'رواية واحدة' : ways === 2 ? 'روايتان' : `${ar(ways)} ${ways <= 10 ? 'روايات' : 'رواية'}`}، ${ar(people)} ${people <= 10 ? 'رواة' : 'راويًا'}`) + `
-        <p class="hd-tnote">من النبي ﷺ إلى أصحاب الكتب: حيث يلتقي طريقان فهو راوٍ واحد حمل الحديث إلى أكثر من تلميذ. اضغط على راوٍ لترجمته، وعلى الكتاب لروايته.${all > refs.length ? ` (أول ${ar(refs.length)} من ${ar(all)} رواية)` : ''}</p>
+      const names = {}, ways = got.map(g => { Object.assign(names, g.R); return { c: g.h.c || [], ref: { b: g.r[0], k: g.r[1], j: g.r[2], l: label(g.r[0], g.h) }, own: g.r === refs[0] }; });
+      const t = treeHTML(ways, names, h.ty == null || h.ty === 0);
+      if (!t) return bar('شجرة الإسناد') + '<div class="empty"><b>لا إسناد لهذا الحديث هنا</b></div>';
+      const n = got.length;
+      after = centreTrees;
+      return bar('شجرة الإسناد', `${n === 1 ? 'رواية واحدة' : n === 2 ? 'روايتان' : `${ar(n)} ${n <= 10 ? 'روايات' : 'رواية'}`}، ${ar(t.people)} ${t.people <= 10 ? 'رواة' : 'راويًا'}`) + `
+        <p class="hd-tnote">من النبي ﷺ إلى أصحاب الكتب. حيث يتفرّع الطريق فهو راوٍ حمل الحديث إلى أكثر من تلميذ. اضغط على راوٍ لترجمته، وعلى الكتاب لروايته.${all > refs.length ? ` (أول ${ar(refs.length)} من ${ar(all)} رواية)` : ''}</p>
         <div class="hd-tlegend">${['sh', 'th', 'sd', 'mq', 'dh', 'mt'].map(r => `<span class="r-${r}"><i></i>${RK_WORD[r]}</span>`).join('')}<span class="own"><i></i>طريق هذا الحديث</span></div>
-        <div class="hd-tsc"><div class="hd-tree" style="width:${W}px;height:${H}px">
-          <svg class="hd-tlines" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${lines.join('')}</svg>${rootHTML}${nodes.join('')}</div></div>`;
+        ${t.html}`;
     },
 
     async rawi({ id }) {
@@ -283,6 +239,8 @@ const Hadith = (() => {
 
   // ---------------------------------------------------------------- a hadith
   // its text with what is marked in it: the narrators (to tap), the Quran it quotes (with its aya)
+  // the source's spacing tidied: no space before «، ؛ : . ؟ !», one after; no doubled spaces
+  const tidy = t => t.replace(/\s+([،؛:.؟!,])/g, '$1').replace(/([،؛:؟!])(?=[^\s»)\]])/g, '$1 ').replace(/\s{2,}/g, ' ');
   function marked(h, a, b, names) {
     const marks = [];
     for (const [s, e, id] of h.r || []) if (s >= a && e <= b) marks.push({ s, e, k: 'r', id });
@@ -291,7 +249,7 @@ const Hadith = (() => {
     let out = '', at = a;
     for (const m of marks) {
       if (m.s < at) continue;
-      out += esc(h.t.slice(at, m.s));
+      out += tidy(esc(h.t.slice(at, m.s)));
       const t = h.t.slice(m.s, m.e);
       if (m.k === 'r') out += `<button class="hd-rw r-${RK(names[m.id]?.[1] ?? 0)}" data-hd-rawi="${m.id}">${esc(t)}</button>`;
       else {
@@ -302,7 +260,7 @@ const Hadith = (() => {
       }
       at = m.e;
     }
-    return out + esc(h.t.slice(at, b));
+    return out + tidy(esc(h.t.slice(at, b)));
   }
   // the hadith's head, green as الأذكار's cards: its book and kitab, its number, its grade
   function headHTML(b, h, kt) {
@@ -331,6 +289,65 @@ const Hadith = (() => {
       return `<li class="r-${r}"><button class="hd-cn" data-hd-rawi="${id}">${esc(n)}</button><small>${i ? RK_WORD[r] : 'المصنِّف'}</small></li>`;
     }).join('')}${end}</ol>`;
   }
+  // ---------------------------------------------------------------- the chain as a tree
+  // ways = [{ c: [chains, each author … companion], ref: {b, k, j, l} | null, own }]: merged from the
+  // Prophet ﷺ down (a narrator once on each path; where paths part, the tree branches), each
+  // parent centred over its branches, a circle per narrator in the colour of his standing, his
+  // name under it; the way of the hadith opened from in green
+  const initial = n => (n.replace(/^(أبو|أبي|أم|ابن|بن|عبد)\s+/, '').trim()[0] || '·');
+  function treeHTML(ways, names, marfu) {
+    const root = { id: 0, kids: new Map(), refs: [], own: true };
+    for (const w of ways) for (const c of w.c) {
+      let n = root;
+      for (const id of [...c].reverse()) {
+        if (!n.kids.has(id)) n.kids.set(id, { id, kids: new Map(), refs: [], own: false });
+        n = n.kids.get(id);
+        if (w.own) n.own = true;
+      }
+      if (w.ref && !n.refs.some(x => x.b === w.ref.b && x.k === w.ref.k && x.j === w.ref.j)) n.refs.push({ ...w.ref, own: w.own });
+    }
+    if (!root.kids.size) return '';
+    const CW = 92, RH = 122, NW = 88, LB = 86, sz = new Map(); // (LB: the circle, the name and the standing: the line leaves under them)
+    const size = n => { if (!sz.has(n)) sz.set(n, n.kids.size ? [...n.kids.values()].reduce((a, x) => a + size(x), 0) : 1); return sz.get(n); };
+    const order = n => [...n.kids.values()].sort((a, b) => (b.own - a.own) || (size(b) - size(a)));
+    let col = 0, depth = 0, people = 0, maxRefs = 0;
+    const place = (n, d) => {
+      depth = Math.max(depth, d); maxRefs = Math.max(maxRefs, n.refs.length);
+      if (!n.kids.size) { n.x = col++ * CW + CW / 2; n.d = d; return; }
+      const ks = order(n); ks.forEach(x => place(x, d + 1));
+      n.x = (ks[0].x + ks[ks.length - 1].x) / 2; n.d = d;
+    };
+    place(root, 0);
+    const W = Math.max(col * CW, CW), y0 = marfu ? 0 : -RH, yOf = d => d * RH + y0 + 6;
+    const H = yOf(depth) + LB + 6 + 24 * maxRefs + 8;
+    const nodes = [], lines = [];
+    const walk = (n, parent) => {
+      if (n !== root) {
+        people++;
+        const [nm, rk] = names[n.id] || ['', 0], r = RK(rk);
+        nodes.push(`<div class="hd-tn r-${r}${n.own ? ' own' : ''}" style="right:${n.x - NW / 2}px;top:${yOf(n.d)}px">
+          <button class="hd-tnb" data-hd-rawi="${n.id}" aria-label="${esc(nm)}"><i class="hd-tc">${esc(initial(nm))}</i><span class="hd-tname">${esc(nm || '—')}</span><small>${n.kids.size ? RK_WORD[r] : 'المصنِّف'}</small></button>
+          ${n.refs.length ? `<span class="hd-trefs">${n.refs.map(x => `<button class="hd-tref${x.own ? ' own' : ''}" data-hd-go="${x.b}:${x.k}:${x.j}">${SHORT[x.b]} ${ar(x.l)}</button>`).join('')}</span>` : ''}</div>`);
+        if (parent !== root || marfu) {
+          const x1 = W - parent.x, y1 = yOf(parent.d) + (parent === root ? 62 : LB), x2 = W - n.x, y2 = yOf(n.d) + 1, my = (y1 + y2) / 2;
+          lines.push(`<path class="${n.own ? 'own' : ''}" d="M${x1} ${y1}C${x1} ${my} ${x2} ${my} ${x2} ${y2}"/>`);
+        }
+      }
+      for (const x of order(n)) walk(x, n);
+    };
+    walk(root, null);
+    const top = marfu ? `<div class="hd-tn hd-troot" style="right:${root.x - NW / 2}px;top:${yOf(0)}px"><i class="hd-tc">ﷺ</i><span class="hd-tname">النبي ﷺ</span></div>` : '';
+    return { people, html: `<div class="hd-tsc"><div class="hd-tree" style="width:${W}px;height:${H}px" data-root="${root.x}">
+      <svg class="hd-tlines" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${lines.join('')}</svg>${top}${nodes.join('')}</div></div>` };
+  }
+  // a tree wider than the screen opens with its root in the middle (RTL: scrollLeft runs negative)
+  function centreTrees() {
+    for (const sc of document.querySelectorAll('.hd-tsc')) {
+      const t = sc.firstElementChild, rx = +t.dataset.root;
+      if (t.offsetWidth > sc.clientWidth) sc.scrollLeft = -Math.max(0, rx - sc.clientWidth / 2 + 16);
+    }
+  }
+
   function readerHTML(b, h, names, kt) {
     const [m0, m1] = h.m || [0, h.t.length];
     // the whole text, its chain to tap and its matn marked in it (the source's matn is at times the
@@ -345,9 +362,8 @@ const Hadith = (() => {
         ${h.hk ? `<p class="hd-hk"><b>حكم الإسناد</b> ${esc(h.hk)} <small>(موسوعة الحديث)</small></p>` : ''}</div>
       ${full ? `<details class="hd-sec hd-fold"><summary><h3>الحديث بإسناده<small>اضغط على اسم الراوي لترجمته</small></h3></summary><p class="hd-sanad">${full}</p></details>` : ''}
       ${chains.length ? `<section class="hd-sec"><h3>سلسلة الرواة<small>من المصنِّف إلى ${h.ty == null || h.ty === 0 ? 'النبي ﷺ' : 'قائله'}</small></h3>
-        ${chainHTML(chains[0], names, h)}
-        ${chains.length > 1 ? `<details class="hd-more-c"><summary>${chains.length === 2 ? 'طريق آخر' : `${ar(chains.length - 1)} طرق أخرى`} في هذا الموضع</summary>${chains.slice(1).map(c => chainHTML(c, names, h)).join('')}</details>` : ''}
-        ${others.length || chains.length > 1 ? `<button class="hd-treeb" data-hd-tree><span class="hd-treei">${IC.tree}</span><span><b>شجرة الإسناد كاملة</b><small>طرق الحديث كلها في الكتب الثلاثة، وأين تلتقي</small></span>${IC.go}</button>` : ''}
+        ${treeHTML([{ c: chains, ref: null, own: true }], names, h.ty == null || h.ty === 0).html || ''}
+        ${others.length || chains.length > 1 ? `<button class="hd-treeb" data-hd-tree><span class="hd-treei">${IC.tree}</span><span><b>شجرة الإسناد كاملة</b><small>${others.length ? `طرقه كلها في الكتب الثلاثة (${ar(others.length + 1)} روايات)، وأين تفترق` : 'طرقه كلها في هذا الموضع'}</small></span>${IC.go}</button>` : ''}
 </section>` : ''}
       ${others.length ? `<section class="hd-sec"><h3>روايات أخرى للحديث<small>${h.on > others.length ? `${ar(h.on)} رواية، أولها:` : 'في الكتب الثلاثة'}</small></h3>
         <div class="group">${others.map(([b2, k2, j2, l, same]) => `<button class="row hd-orow" data-hd-go="${b2}:${k2}:${j2}"><span class="num hd-bn">${SHORT[b2]}${star(l)}</span>
