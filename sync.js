@@ -26,7 +26,7 @@ const Sync = (() => {
   const BIG_AT = 60e3, TOO_BIG = 900e3, PUSH_MS = 4000, AGAIN_MS = 20e3;
   // what goes with the reader from device to device (not what belongs to the device: the model
   // chosen, the look of this screen, what was open)
-  const SYNCED = /^(khatmas|kh\.current|kh\.gone|theme|adhkar|adhkar\.size|adhkar\.more|pray|mu\.pace|mu\.paceT|voice\..+|hifz\.(?!open$).+|recite\.(?!view$|barUp$|model$|light$|editS$|editFrom$|live\.).+)$/;
+  const SYNCED = /^(khatmas|kh\.current|kh\.gone|theme|adhkar|adhkar\.size|adhkar\.more|pray|mu\.pace|mu\.paceT|voice\..+|hd\.read\..+|hd\.saved|hifz\.(?!open$).+|recite\.(?!view$|barUp$|model$|light$|editS$|editFrom$|live\.).+)$/;
   // records added to on each device (the recitation's, by riwaya; the days kept in الحفظ): merged, not
   // one taken in place of the other (Plan.mergeRecite, Plan.mergeDays)
   const MERGE = /^(recite\.(hafs|shouba|warsh|qaloon|doori|soosi|bazzi|qumbul)|hifz\.hist\.[a-z]+)$/;

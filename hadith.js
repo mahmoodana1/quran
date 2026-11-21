@@ -85,7 +85,7 @@ const Hadith = (() => {
     paint(false, top().y);
   }
   async function paint(fwd, y = 0) {
-    dropCanvas();
+    dropCanvas(); sheetOff(); wordOff(); cur = null;
     if (!root?.isConnected) return;
     const id = ++run, p = top();
     const pending = setTimeout(() => { if (id === run) root.innerHTML = (p.v === 'home' ? '' : bar('')) + wait; }, 120);
@@ -102,6 +102,108 @@ const Hadith = (() => {
   }
   let after = null; // what a page does once it is on the screen (the next part of a kitab watched for)
 
+  // ---------------------------------------------------------------- a hadith explained, and its words
+  // شرح الحديث from موسوعة الأحاديث النبوية (HadeethEnc.com: explanation, word meanings, lessons; built
+  // by tools/hadith_sharh.py, a hadith's narrations in the other books sharing it); a word's meaning
+  // as the explanation gives it (no guessing from other sources: a wrong meaning is worse than none)
+  let cur = null;
+  const sharhIx = () => J('sharh/index.json').catch(() => ({}));
+  const sharhId = async (b, k, j) => (await sharhIx())[`${b}:${k}:${j}`] || null;
+  const sharhOf = async id => (await J(`sharh/${id % 32}.json`))[id];
+  const HAR = /[\u064B-\u065F\u0670\u06D6-\u06ED\u0640]/g;
+  const bare = t => t.replace(HAR, '').replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').trim();
+  const sheetOff = () => document.querySelectorAll('body > .hd-sh, body > .hd-wc, body > .hd-shv').forEach(x => x.remove());
+  async function openSharh() {
+    if (!cur?.sh) return;
+    sheetOff();
+    const d = await sharhOf(cur.sh).catch(() => null);
+    if (!d) { toast('تعذّر تحميل الشرح'); return; }
+    const veil = document.createElement('div'); veil.className = 'hd-shv';
+    const el = document.createElement('section'); el.className = 'hd-sh';
+    el.innerHTML = `<div class="hd-shg"></div><header><span><small>شرح الحديث</small><b>${esc(d.t || '')}</b></span><button class="hd-shx" aria-label="إغلاق">✕</button></header>
+      <div class="hd-shb2">
+        <p class="hd-she">${esc(d.e).replace(/\n+/g, '</p><p class="hd-she">')}</p>
+        ${d.w?.length ? `<h4>معاني الكلمات</h4><dl class="hd-shw">${d.w.map(([w, m]) => `<div><dt>${esc(w)}</dt><dd>${esc(m)}</dd></div>`).join('')}</dl>` : ''}
+        ${d.h?.length ? `<h4>من فوائد الحديث</h4><ul class="hd-shh">${d.h.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
+        <p class="hd-shs">${d.g ? `${esc(d.g)}، ` : ''}${d.a ? `${esc(d.a)}. ` : ''}من موسوعة الأحاديث النبوية (HadeethEnc.com)</p></div>`;
+    const close = () => { el.classList.add('out'); veil.classList.add('out'); setTimeout(() => { el.remove(); veil.remove(); }, 220); };
+    veil.onclick = close; el.querySelector('.hd-shx').onclick = close;
+    document.body.append(veil, el);
+    haptic(6);
+  }
+  // a word held: its meaning, in a small card at the foot; a tap anywhere else lets it go
+  let wcMark = null;
+  function wordOff() { document.querySelectorAll('body > .hd-wc').forEach(x => x.remove()); if (wcMark) { const t = document.createTextNode(wcMark.textContent); wcMark.replaceWith(t); t.parentNode?.normalize(); wcMark = null; } }
+  async function openWord(x, y) {
+    const r = document.caretRangeFromPoint ? document.caretRangeFromPoint(x, y) : (p => { if (!p) return null; const r = document.createRange(); r.setStart(p.offsetNode, p.offset); return r; })(document.caretPositionFromPoint?.(x, y));
+    const node = r?.startContainer;
+    if (!node || node.nodeType !== 3 || !node.parentElement.closest('[data-hd-matn]') || node.parentElement.closest('button')) return false;
+    const t = node.textContent, stop = /[\s،؛:.؟!,«»()\[\]{}"]/;
+    let a = r.startOffset, z = r.startOffset;
+    while (a > 0 && !stop.test(t[a - 1])) a--;
+    while (z < t.length && !stop.test(t[z])) z++;
+    const word = t.slice(a, z).trim();
+    if (!word || bare(word).length < 2) return false;
+    wordOff();
+    const rg = document.createRange(); rg.setStart(node, a); rg.setEnd(node, z);
+    wcMark = document.createElement('mark'); wcMark.className = 'hd-wm'; rg.surroundContents(wcMark);
+    haptic(12);
+    const bw = bare(word);
+    let mean = null, src = '', extra = '';
+    if (cur?.sh) {
+      const d = await sharhOf(cur.sh).catch(() => null);
+      const hit = d?.w?.find(([w]) => { const b2 = bare(w); return b2 === bw || b2.split(/\s+/).includes(bw) || (bw.length > 3 && b2.includes(bw)); });
+      if (hit) { mean = hit[1]; src = 'من شرح الحديث'; }
+    }
+    const el = document.createElement('div'); el.className = 'hd-wc';
+    el.innerHTML = `<div class="hd-wch"><b>${esc(word)}</b>${extra ? `<small>${extra}</small>` : ''}</div>
+      <p class="${mean ? '' : 'none'}">${mean ? esc(mean) : cur?.sh ? 'لم تُشرح هذه الكلمة في شرح الحديث: معناها ظاهر غالبًا.' : 'لا شرح لهذا الحديث بعد في مصادرنا.'}</p>
+      <div class="hd-wcf">${src ? `<small>${src}</small>` : '<small></small>'}${cur?.sh ? '<button data-hd-wsharh>شرح الحديث</button>' : ''}</div>`;
+    el.querySelector('[data-hd-wsharh]')?.addEventListener('click', () => { wordOff(); openSharh(); });
+    document.body.append(el);
+    return true;
+  }
+  // on the hadith's text: a tap explains the hadith, a press held explains the word under it
+  let holdT = 0, held = false, hx = 0, hy = 0;
+  addEventListener('pointerdown', e => {
+    if (!e.target.closest?.('body > .hd-wc')) { if (document.querySelector('body > .hd-wc')) { wordOff(); held = 'off'; } }
+    const m = e.target.closest?.('[data-hd-matn]');
+    if (!m || e.target.closest('button')) return;
+    held = held === 'off' ? 'off' : false; hx = e.clientX; hy = e.clientY;
+    clearTimeout(holdT);
+    holdT = setTimeout(async () => { if (await openWord(hx, hy)) held = true; }, 430);
+  }, true);
+  addEventListener('pointermove', e => { if (holdT && Math.hypot(e.clientX - hx, e.clientY - hy) > 10) { clearTimeout(holdT); holdT = 0; } }, true);
+  addEventListener('pointerup', () => { clearTimeout(holdT); holdT = 0; }, true);
+  addEventListener('contextmenu', e => { if (e.target.closest?.('[data-hd-matn]')) e.preventDefault(); }, true);
+
+  // ---------------------------------------------------------------- what has been read, a book at a time
+  // hd.read.<book>: { kitab: [hadith indexes read] } (synced with the rest); hd.at.<book>: where in it
+  const readOf = b => store.get(`hd.read.${b}`, {});
+  const isRead = (b, k, j) => (readOf(b)[k] || []).includes(j);
+  function setRead(b, k, j, on) {
+    const r = readOf(b), l = new Set(r[k] || []);
+    on ? l.add(j) : l.delete(j);
+    if (l.size) r[k] = [...l].sort((x, y) => x - y); else delete r[k];
+    store.set(`hd.read.${b}`, r);
+  }
+  const readIn = (b, k) => (readOf(b)[k] || []).length;
+  const readAll = b => Object.values(readOf(b)).reduce((a, l) => a + l.length, 0);
+  const total = B => B.k.reduce((a, x) => a + x[1], 0);
+  // the next to read in a book: after the last one opened in it, else the first not read
+  function nextIn(B) {
+    const r = readOf(B.id), at = store.get(`hd.at.${B.id}`, null);
+    if (at && !(r[at.k] || []).includes(at.j)) return [at.k, at.j];
+    for (let k = at ? at.k : 0; k < B.k.length; k++) {
+      const done = new Set(r[k] || []);
+      for (let j = k === at?.k ? at.j : 0; j < B.k[k][1]; j++) if (!done.has(j)) return [k, j];
+    }
+    for (let k = 0; k < B.k.length; k++) { const done = new Set(r[k] || []); for (let j = 0; j < B.k[k][1]; j++) if (!done.has(j)) return [k, j]; }
+    return null;
+  }
+  const k0 = (B, k) => `${k || B.id !== 'muslim' ? 'كتاب ' : ''}${B.k[k][0]}`;
+  const bar_ = (n, t) => `<span class="hd-pg"><i style="width:${t ? Math.max(n ? 2 : 0, n / t * 100) : 0}%"></i></span>`;
+
   const PAGES = {
     async home() {
       const ix = await index();
@@ -116,9 +218,12 @@ const Hadith = (() => {
         } catch {}
       }
       return `<div class="hd-home">${dayHTML}
-        <div class="hd-books">${ix.books.map(b => `<button class="hd-book hd-${b.id}" data-hd-book="${b.id}">
+        <div class="hd-books">${ix.books.map(b => { const n = readAll(b.id), t = total(b), nx = n ? nextIn(b) : null;
+          return `<div class="hd-bookw"><button class="hd-book hd-${b.id}" data-hd-book="${b.id}">
           <b>${b.t}</b><small>${b.au} · ت ${ar(b.d)}هـ</small>
-          <span>${nHadith(b.nn)} · ${nKitab(b.k.length)}</span></button>`).join('')}</div>
+          <span>${nHadith(b.nn)} · ${nKitab(b.k.length)}</span></button>
+          ${n ? `<div class="hd-bfoot"><span class="hd-bp"><em>قرأت ${ar(n)}، ${ar(Math.floor(n / t * 1000) / 10)}٪</em>${bar_(n, t)}</span>
+            ${nx ? `<button class="hd-cont" data-hd-go="${b.id}:${nx[0]}:${nx[1]}">تابع ${IC.go}</button>` : ''}</div>` : ''}</div>`; }).join('')}</div>
         <div class="group">
           <button class="row" data-hd-page="topics"><span class="num hd-ic">${IC.tree}</span><span class="main"><span class="t">المواضيع</span><span class="s">أحاديث الكتب الثلاثة مرتبة بموضوعاتها: العبادات، المعاملات، الأخلاق…</span></span>${IC.go}</button>
           ${saved.length ? `<button class="row" data-hd-page="saved"><span class="num hd-ic">${IC.saved}</span><span class="main"><span class="t">المحفوظة</span><span class="s">${nHadith(saved.length)}</span></span>${IC.go}</button>` : ''}
@@ -129,10 +234,12 @@ const Hadith = (() => {
     },
 
     async book({ b }) {
-      const ix = await index(), B = ix.books.find(x => x.id === b);
-      return bar(B.t, `${B.au} · ${nHadith(B.nn)}`) + `<div class="group hd-kutub">${B.k.map(([t, n, first], k) =>
-        `<button class="row" data-hd-kitab="${b}:${k}"><span class="num">${ar(k + (b === 'muslim' ? 0 : 1))}</span>
-          <span class="main"><span class="t">${k || b !== 'muslim' ? 'كتاب ' : ''}${t}</span><span class="s">${nHadith(n)} · من ${ar(first)}</span></span>${IC.go}</button>`).join('')}</div>`;
+      const ix = await index(), B = ix.books.find(x => x.id === b), n = readAll(b), t = total(B), nx = nextIn(B);
+      const head = `<div class="hd-bprog"><div><b>${n ? `قرأت ${ar(n)}` : 'لم تبدأ هذا الكتاب بعد'}</b><small>${ar(Math.floor(n / t * 1000) / 10)}٪</small></div>${bar_(n, t)}
+        ${nx ? `<button class="hd-cont big" data-hd-go="${b}:${nx[0]}:${nx[1]}"><span>${n ? 'تابع القراءة' : 'ابدأ من أوله'}<small>${k0(B, nx[0])}، الحديث ${ar(nx[1] + 1)} فيه</small></span>${IC.go}</button>` : '<p class="hd-alld">أتممت الكتاب، ما شاء الله</p>'}</div>`;
+      return bar(B.t, `${B.au} · ${nHadith(B.nn)}`) + head + `<div class="group hd-kutub">${B.k.map(([tt, nn, first], k) => { const r = readIn(b, k);
+        return `<button class="row${r >= nn ? ' hd-kdone' : ''}" data-hd-kitab="${b}:${k}"><span class="num">${r >= nn ? '✓' : ar(k + (b === 'muslim' ? 0 : 1))}</span>
+          <span class="main"><span class="t">${k || b !== 'muslim' ? 'كتاب ' : ''}${tt}</span><span class="s">${r ? `${ar(r)} من ${ar(nn)}` : `${nHadith(nn)} · من ${ar(first)}`}</span>${r && r < nn ? bar_(r, nn) : ''}</span>${IC.go}</button>`; }).join('')}</div>`;
     },
 
     async kitab({ b, k }) {
@@ -146,6 +253,7 @@ const Hadith = (() => {
     async hadith({ b, k, j }) {
       const ix = await index(), { h, R: names } = await hadith(b, k, j), B = ix.books.find(x => x.id === b);
       store.set('hd.at', { b, k, j, l: label(b, h) });
+      store.set(`hd.at.${b}`, { k, j });
       const saved = isSaved(b, k, j);
       const last = j >= B.k[k][1] - 1 && k >= B.k.length - 1;
       const tools = `<button class="hd-tb${saved ? ' on' : ''}" data-hd-save aria-label="حفظ">${IC.star}</button>
@@ -153,7 +261,12 @@ const Hadith = (() => {
         <button class="hd-tb" data-hd-step="-1" aria-label="السابق"${!j && !k ? ' disabled' : ''}>${IC.back}</button>
         <button class="hd-tb" data-hd-step="1" aria-label="التالي"${last ? ' disabled' : ''}>${IC.next}</button>`;
       const kt = `${k || b !== 'muslim' ? 'كتاب ' : ''}${B.k[k][0]}`;
-      return bar(kt, BOOKS[b], tools) + readerHTML(b, h, names, kt);
+      const rd = isRead(b, k, j), done = readAll(b), tt = total(B);
+      const foot = `<div class="hd-rdone"><button class="hd-mark${rd ? ' on' : ''}" data-hd-mark>${rd ? '✓ قرأته' : 'علّمه مقروءًا'}</button>
+        ${last ? '' : `<button class="hd-next" data-hd-readnext><span>${rd ? 'التالي' : 'قرأته، التالي'}<small>قرأت ${ar(done)} في ${BOOKS[b]}، ${ar(Math.floor(done / tt * 1000) / 10)}٪</small></span>${IC.next}</button>`}</div>`;
+      const sh = await sharhId(b, k, j);
+      cur = { b, k, j, sh, g: h.g };
+      return bar(kt, BOOKS[b], tools) + readerHTML(b, h, names, kt, sh) + foot;
     },
 
     // every way this hadith came, in the three books, as one tree: the Prophet ﷺ at the top, the
@@ -218,10 +331,10 @@ const Hadith = (() => {
   const matnOf = h => (h.m ? h.t.slice(h.m[0], h.m[1]) : h.t).replace(/\s+/g, ' ').trim();
   function rowsHTML(b, k, p0, hs) {
     return hs.map((h, i) => {
-      const j = p0 * PART + i, g = b === 'abudawud' && h.gr?.[0];
-      return `<button class="row hd-hrow" data-hd-go="${b}:${k}:${j}"><span class="num hd-n">${star(label(b, h))}</span>
+      const j = p0 * PART + i, g = b === 'abudawud' && h.gr?.[0], rd = isRead(b, k, j);
+      return `<button class="row hd-hrow${rd ? ' hd-read' : ''}" data-hd-go="${b}:${k}:${j}"><span class="num hd-n">${star(label(b, h))}</span>
         <span class="main"><span class="s hd-prev">${esc(matnOf(h).slice(0, 180))}</span>
-        ${g || TYPE[h.ty] ? `<span class="hd-mini">${TYPE[h.ty] ? `<i class="hd-chip">${TYPE[h.ty]}</i>` : ''}${g ? `<i class="hd-chip g-${gradeCls(g[1])}">${g[1]}</i>` : ''}</span>` : ''}</span></button>`;
+        ${rd ? '<span class="hd-rtick" aria-label="مقروء">✓</span>' : ''}${g || TYPE[h.ty] ? `<span class="hd-mini">${TYPE[h.ty] ? `<i class="hd-chip">${TYPE[h.ty]}</i>` : ''}${g ? `<i class="hd-chip g-${gradeCls(g[1])}">${g[1]}</i>` : ''}</span>` : ''}</span></button>`;
     }).join('');
   }
   // the rest of a kitab, a part as its end comes near
@@ -420,7 +533,7 @@ const Hadith = (() => {
     addEventListener('keydown', function esc(e) { if (!cv.isConnected) return removeEventListener('keydown', esc); if (e.key === 'Escape') { e.stopPropagation(); back(); } }, true);
   }
 
-  function readerHTML(b, h, names, kt) {
+  function readerHTML(b, h, names, kt, sh = null) {
     const [m0, m1] = h.m || [0, h.t.length];
     // the whole text, its chain to tap and its matn marked in it (the source's matn is at times the
     // Prophet's ﷺ words alone, what was around them in the chain's part)
@@ -429,7 +542,8 @@ const Hadith = (() => {
     const others = h.o || [];
     return `<article class="hd-read">
       ${headHTML(b, h, kt)}
-      <div class="hd-box hd-matn-box"><div class="hd-matn">${marked(h, m0, m1, names)}</div>
+      <div class="hd-box hd-matn-box"><div class="hd-matn" data-hd-matn>${marked(h, m0, m1, names)}</div>
+        <p class="hd-mhint">${sh ? '<button class="hd-shb" data-hd-sharh>شرح الحديث</button>' : ''}<small>${sh ? 'اضغط على الحديث لشرحه، ومطوّلًا على كلمة لمعناها' : 'اضغط مطوّلًا على كلمة لمعناها'}</small></p>
         <div class="hd-foot"><span>${cite(b, h)}</span></div>
         ${h.hk ? `<p class="hd-hk"><b>حكم الإسناد</b> ${esc(h.hk)} <small>(موسوعة الحديث)</small></p>` : ''}</div>
       ${full ? `<details class="hd-sec hd-fold"><summary><h3>الحديث بإسناده<small>اضغط على اسم الراوي لترجمته</small></h3></summary><p class="hd-sanad">${full}</p></details>` : ''}
@@ -599,6 +713,13 @@ const Hadith = (() => {
       if (go.hasAttribute('data-hd-from-q') || q) { stack.push({ v: 'search', q }); $('#q').value = ''; $('#q').blur(); mountAgain({ v: 'hadith', b, k: +k, j: +j }); return true; }
       push({ v: 'hadith', b, k: +k, j: +j }); return true;
     }
+    if (t.closest('[data-hd-sharh]')) { openSharh(); return true; }
+    if (t.closest('[data-hd-matn]') && !t.closest('button')) {
+      if (held) { held = false; return true; }
+      if (cur?.sh) openSharh(); return true;
+    }
+    if (t.closest('[data-hd-mark]')) { const p = top(); setRead(p.b, p.k, p.j, !isRead(p.b, p.k, p.j)); haptic(6); paint(undefined, $('#sheetBody').scrollTop); return true; }
+    if (t.closest('[data-hd-readnext]')) { const p = top(); setRead(p.b, p.k, p.j, true); haptic(8); step(1); return true; }
     if (t.closest('[data-hd-tree]')) { const p = top(); push({ v: 'tree', b: p.b, k: p.k, j: p.j }); return true; }
     const rw = t.closest('[data-hd-rawi]');
     if (rw) {

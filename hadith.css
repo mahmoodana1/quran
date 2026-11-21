@@ -422,3 +422,103 @@ body > .hd-cv { position: fixed; inset: 0; z-index: 48; display: flex; flex-dire
 @keyframes hdHint { 0%, 70% { opacity: 1; } 100% { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { body > .hd-cv, .hd-cvhint { animation: none; } .hd-cvhint { display: none; } }
 .hd-cvhint { top: auto; bottom: calc(env(safe-area-inset-bottom) + 76px); }
+/* the hadith's words in the mushaf's own Hafs face: its harakat sit close on the letters and read
+   clearly (Amiri's float high above them); a touch of weight, as on the mushaf's page */
+:root { --hd-read: rw-hafs, amiri, "Noto Naskh Arabic", serif; }
+.hd-matn { font: 24px/2.05 var(--hd-read); -webkit-text-stroke: .012em currentColor; }
+.hd-sanad { font-family: var(--hd-read); font-size: 18px; -webkit-text-stroke: .01em currentColor; }
+.hd-day p { font-family: var(--hd-read); -webkit-text-stroke: .01em currentColor; }
+
+/* ---- what has been read, a book at a time ---- */
+.hd-pg { display: block; height: 4px; border-radius: 2px; overflow: hidden; background: color-mix(in srgb, var(--p-green) 13%, transparent); }
+.hd-pg i { display: block; height: 100%; border-radius: inherit; background: var(--p-green); }
+.hd-bookw { position: relative; }
+.hd-bp { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+.hd-bp em { font-style: normal; font-size: 11.5px; font-weight: 700; color: var(--p-ink); }
+.hd-cont { position: absolute; inset-inline-end: 12px; bottom: 12px; display: inline-flex; align-items: center; gap: 2px; padding: 6px 10px 6px 12px; border-radius: 99px;
+  font: 700 12.5px var(--ui); color: #fbf6ea; background: var(--p-green); box-shadow: 0 3px 8px -2px rgba(18, 58, 45, .4); }
+.hd-cont .go { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+:root[data-theme="dark"] .hd-cont { color: #f3e6c4; }
+.hd-bprog { margin: 4px 0 14px; padding: 14px; border-radius: 16px; background: var(--card); border: 1px solid var(--p-rule); display: flex; flex-direction: column; gap: 10px; }
+.hd-bprog > div { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.hd-bprog b { font-size: 15.5px; font-weight: 800; }
+.hd-bprog small { font-size: 13px; font-weight: 700; color: var(--p-ink); }
+.hd-cont.big { position: static; justify-content: space-between; padding: 10px 14px; border-radius: 13px; font-size: 15px; }
+.hd-cont.big span { display: flex; flex-direction: column; gap: 1px; text-align: start; }
+.hd-cont.big small { font-size: 12px; font-weight: 600; opacity: .85; color: inherit; }
+.hd-alld { margin: 0; font-weight: 800; color: var(--p-ink); }
+.hd-kutub .row .main .hd-pg { margin-top: 5px; max-width: 160px; }
+.hd-kutub .row.hd-kdone .num { color: #fbf6ea; background: var(--p-green); border-radius: 50%; }
+.hd-hrow.hd-read .hd-prev { color: var(--muted); }
+.hd-rtick { align-self: flex-start; font-size: 11px; font-weight: 800; color: var(--p-ink); padding: 1px 8px; border-radius: 99px; background: color-mix(in srgb, var(--p-green) 11%, transparent); }
+/* the foot of a hadith: read it, and on */
+.hd-rdone { display: flex; gap: 8px; margin: 18px 0 6px; }
+.hd-mark { flex: none; padding: 0 14px; min-height: 52px; border-radius: 14px; font: 700 14px var(--ui); color: var(--p-ink); background: var(--card); border: 1px solid var(--p-rule); }
+.hd-mark.on { color: var(--p-ink); background: color-mix(in srgb, var(--p-green) 10%, var(--card)); border-color: var(--p-green); }
+.hd-next { flex: 1; min-height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 14px; border-radius: 14px; text-align: start;
+  color: #fbf6ea; background: var(--p-pattern) 0 0 / 18px 18px, linear-gradient(160deg, var(--p-green), var(--p-green-2)); box-shadow: 0 8px 18px -10px rgba(18, 58, 45, .7); }
+:root[data-theme="dark"] .hd-next { color: #f3e6c4; }
+.hd-next span { display: flex; flex-direction: column; gap: 1px; font-size: 15.5px; font-weight: 800; }
+.hd-next small { font-size: 11.5px; font-weight: 600; opacity: .8; }
+.hd-next svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+.hd-next:active, .hd-mark:active, .hd-cont:active { transform: scale(.97); }
+.hd-bookw:has(.hd-bfoot) .hd-book { border-bottom-left-radius: 0; border-bottom-right-radius: 0; border-bottom-width: 0; }
+.hd-bfoot { display: flex; align-items: center; gap: 12px; padding: 8px 14px 10px; margin-top: -1px; border: 1px solid var(--hd-ring); border-top: 1px dotted var(--p-rule);
+  border-radius: 0 0 16px 16px; background: var(--card); }
+.hd-bfoot .hd-bp { flex: 1; margin: 0; }
+.hd-bfoot .hd-cont { position: static; }
+.hd-bookw + .hd-bookw, .hd-books > .hd-bookw { margin-bottom: 10px; }
+.hd-bookw { display: block; width: 100%; }
+.hd-bookw > .hd-book { width: 100%; box-sizing: border-box; margin: 0; }
+
+/* =====================================================================
+   شرح الحديث (a sheet from the foot) and a word's meaning (a small card)
+   ===================================================================== */
+.hd-matn[data-hd-matn] { cursor: pointer; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.hd-mhint { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px 10px; margin: -4px 16px 12px; text-align: center; }
+.hd-mhint small { font-size: 11.5px; color: var(--faint); }
+.hd-shb { padding: 5px 12px; border-radius: 99px; font: 700 12.5px var(--ui); color: var(--p-ink); background: color-mix(in srgb, var(--p-green) 10%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--p-green) 25%, transparent); }
+mark.hd-wm { color: inherit; background: color-mix(in srgb, var(--p-gold) 32%, transparent); border-radius: 6px; box-shadow: 0 0 0 3px color-mix(in srgb, var(--p-gold) 32%, transparent); }
+
+.hd-shv { position: fixed; inset: 0; z-index: 46; background: rgba(20, 14, 6, .32); animation: hdFade .2s ease; }
+.hd-sh { position: fixed; z-index: 47; left: 0; right: 0; bottom: 0; max-width: 640px; margin: 0 auto; max-height: 78vh; display: flex; flex-direction: column; direction: rtl;
+  background: var(--card); border-radius: 22px 22px 0 0; box-shadow: 0 -12px 40px -10px rgba(30, 20, 5, .35); padding-bottom: env(safe-area-inset-bottom); animation: hdUp .3s cubic-bezier(.2, .9, .3, 1); }
+.hd-sh.out { animation: hdDown .22s ease forwards; } .hd-shv.out { animation: hdFadeOut .22s ease forwards; }
+@keyframes hdUp { from { transform: translateY(40px); opacity: 0; } }
+@keyframes hdDown { to { transform: translateY(40px); opacity: 0; } }
+@keyframes hdFade { from { opacity: 0; } } @keyframes hdFadeOut { to { opacity: 0; } }
+.hd-shg { width: 40px; height: 5px; border-radius: 3px; background: var(--line); margin: 8px auto 2px; }
+.hd-sh header { display: flex; align-items: flex-start; gap: 10px; padding: 8px 18px 10px; border-bottom: .5px solid var(--line); }
+.hd-sh header span { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+.hd-sh header small { font-size: 12px; font-weight: 700; color: var(--p-ink); }
+.hd-sh header b { font-size: 17px; font-weight: 800; line-height: 1.45; }
+.hd-shx { flex: none; width: 32px; height: 32px; border-radius: 50%; color: var(--muted); background: color-mix(in srgb, var(--ink) 6%, transparent); font-size: 13px; }
+.hd-shb2 { overflow-y: auto; overscroll-behavior: contain; padding: 12px 18px 20px; }
+.hd-she { margin: 0 0 10px; font: 17px/2 var(--hd-text); color: var(--ink); }
+.hd-sh h4 { margin: 16px 0 8px; font-size: 13px; font-weight: 800; color: var(--p-ink); }
+.hd-shw { margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.hd-shw div { padding: 8px 12px; border-radius: 12px; background: color-mix(in srgb, var(--p-green) 6%, transparent); }
+.hd-shw dt { font: 700 16px/1.6 var(--hd-read, var(--hd-text)); color: var(--p-ink); }
+.hd-shw dd { margin: 2px 0 0; font-size: 14px; line-height: 1.75; color: var(--ink); }
+.hd-shh { margin: 0; padding-inline-start: 18px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; line-height: 1.8; }
+.hd-shh li::marker { color: var(--p-gold); }
+.hd-shs { margin: 18px 0 0; padding-top: 10px; border-top: .5px solid var(--line); font-size: 11.5px; color: var(--faint); }
+
+.hd-wc { position: fixed; z-index: 47; left: 12px; right: 12px; max-width: 520px; margin: 0 auto; bottom: calc(var(--dv-tabbar, 0px) + env(safe-area-inset-bottom) + 12px); direction: rtl;
+  padding: 12px 14px 10px; border-radius: 18px; background: var(--card); border: 1px solid var(--p-rule); box-shadow: 0 14px 36px -10px rgba(30, 20, 5, .35); animation: hdUp .25s cubic-bezier(.2, .9, .3, 1); }
+body.desk .hd-wc { bottom: 16px; }
+.hd-wch { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.hd-wch b { font: 22px/1.6 var(--hd-read, var(--hd-text)); color: var(--p-ink); }
+.hd-wch small { font-size: 12px; color: var(--muted); }
+.hd-wc p { margin: 4px 0 6px; font-size: 15px; line-height: 1.8; color: var(--ink); }
+.hd-wc p.none { font-size: 13.5px; color: var(--muted); }
+.hd-wcf { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.hd-wcf small { font-size: 11.5px; color: var(--faint); }
+.hd-wcf button { padding: 6px 12px; border-radius: 10px; font: 700 12.5px var(--ui); color: #fbf6ea; background: var(--p-green); }
+:root[data-theme="dark"] .hd-wcf button { color: #f3e6c4; }
+@media (prefers-reduced-motion: reduce) { .hd-sh, .hd-shv, .hd-wc { animation: none; } }
+/* (the Hafs face for letters and harakat only: its «،» is drawn as ۞; punctuation from Amiri) */
+@font-face { font-family: hd-hafs; src: url(fonts/hafs.woff2) format("woff2"); font-display: swap;
+  unicode-range: U+0621-063A, U+0640-065F, U+0670-06D3, U+06D5, U+FDF2, U+FDFA; }
+:root { --hd-read: hd-hafs, amiri, "Noto Naskh Arabic", serif; }

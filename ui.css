@@ -576,3 +576,10 @@
 :root.ui #dock .dv-micl { display: none; }
 :root.ui #dock #dockArrow { top: 50%; }
 :root.ui body.sheet-up #dock .dv-hide { visibility: hidden; }
+
+/* the large title: no size or padding animated (each frame laid the panel out again: the lag), a
+   short fade as it changes instead (opacity only, drawn by the compositor) */
+:root.ui body:not(.desk) #sheet .sheet-head, :root.ui body:not(.desk) #sheet .sheet-head h1 { transition: none !important; }
+:root.ui #sheet .sheet-head.dv-swap .sheet-title, :root.ui #sheet .sheet-head.dv-swap .dv-seg { animation: dvSwap .22s ease; }
+@keyframes dvSwap { from { opacity: 0; transform: translateY(-3px); } }
+@media (prefers-reduced-motion: reduce) { :root.ui #sheet .sheet-head.dv-swap .sheet-title, :root.ui #sheet .sheet-head.dv-swap .dv-seg { animation: none; } }

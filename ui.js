@@ -133,12 +133,27 @@
     for (const b of seg.querySelectorAll('button')) { b.classList.toggle('on', b.dataset.t === tab); b.setAttribute('aria-selected', b.dataset.t === tab); }
   }
 
-  // the large title made small once the page is scrolled (dev.css: .dv-up)
-  const body = $('#sheetBody');
+  // the large title made small once the page is scrolled (ui.css: .dv-up). In one step, not a
+  // size animated frame by frame (the whole panel laid out again on each); apart enough that the
+  // page's own move as the head changes height cannot flip it back (it went to and fro: a jitter);
+  // the page kept still under the eye by the height the head gave or took
+  const body = $('#sheetBody'), sheetEl = $('#sheet'), headEl = $('#sheet .sheet-head');
   let upRaf = 0;
+  const setUp = on => {
+    if (sheetEl.classList.contains('dv-up') === on) return;
+    const h0 = headEl.offsetHeight;
+    sheetEl.classList.toggle('dv-up', on);
+    const dh = h0 - headEl.offsetHeight;
+    if (on && dh > 0) body.scrollTop = Math.max(60, body.scrollTop - dh);
+    headEl.classList.remove('dv-swap'); void headEl.offsetWidth; headEl.classList.add('dv-swap');
+  };
   body.addEventListener('scroll', () => {
     if (upRaf) return;
-    upRaf = requestAnimationFrame(() => { upRaf = 0; $('#sheet').classList.toggle('dv-up', body.scrollTop > 24); });
+    upRaf = requestAnimationFrame(() => {
+      upRaf = 0;
+      const y = body.scrollTop, up = sheetEl.classList.contains('dv-up');
+      if (!up && y > 56) setUp(true); else if (up && y < 4) setUp(false);
+    });
   }, { passive: true });
 
   // the khatmas, opened from المزيد: back to it
@@ -207,7 +222,7 @@
       if (typeof Desk !== 'undefined') Desk.sync();
     } else render0();
     paintHead(); lightTab();
-    $('#sheet').classList.toggle('dv-up', body.scrollTop > 24);
+    sheetEl.classList.toggle('dv-up', body.scrollTop > 56);
   };
   $('#q').placeholder = 'ابحث: سورة، آية، صفحة، جزء، ذكر، أو إعداد…';
 
