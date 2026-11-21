@@ -3827,3 +3827,7 @@ b.hz4-v { font-size: 19px; font-weight: 900; }
 .tf-why-in { padding: 0 14px 12px; border-top: 1px dotted var(--p-rule); }
 .tf-why-none { display: flex; align-items: center; gap: 8px; margin: 0 2px 12px; font-size: 12.5px; color: var(--muted); }
 .tf-why-none::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: color-mix(in srgb, var(--muted) 55%, transparent); }
+
+/* dev mode (the settings' foot, isDev() in app.js): plain to see that it is on */
+:root.dev, :root.dev[data-theme] { --paper: #e53935; --paper-hi: #ef5350; --paper-lo: #d32f2f; }
+.set-dev { margin-top: 28px; }

@@ -34,6 +34,9 @@
     if (l == null) { l = (navigator.deviceMemory || 8) <= 4 || (navigator.hardwareConcurrency || 8) <= 4; localStorage.setItem('q.lite', JSON.stringify(l)); }
     if (l) document.documentElement.classList.add('lite');
   } catch (e) {}
+  // dev mode (the foot of the settings): this device only, never synced or backed up; html.dev
+  // is what the app's own experiments key on (isDev() in app.js)
+  try { if (JSON.parse(localStorage.getItem('q.ui.dev'))) document.documentElement.classList.add('dev'); } catch (e) {}
   // what the first page needs, asked for now, side by side, while the styles and scripts are
   // still coming (app.js: loadJSON takes the data from here): the surahs' list, the mushaf of
   // the khatma open, its font and the glyph font of the page it is at

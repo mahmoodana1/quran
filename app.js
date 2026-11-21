@@ -85,6 +85,10 @@ const store = {
   set(k, v) { try { localStorage.setItem('q.' + k, JSON.stringify(v)); } catch {} },
 };
 
+// dev mode, turned on at the foot of the settings: this device only (q.ui.dev: not synced, not in a
+// backup). Changes to try out go behind isDev() in code, or html.dev in the styles
+const isDev = () => document.documentElement.classList.contains('dev');
+
 const ar = n => String(n).replace(/\d/g, d => '٠١٢٣٤٥٦٧٨٩'[d]);
 const isEnd = t => /^[٠-٩]+$/.test(t) || t.endsWith('*');
 // KFGQPC QCF V2 per-page fonts (1441 Madani print): every word is a glyph
@@ -2604,7 +2608,9 @@ function settingsHTML() {
     </div>`)}
 
     ${sec('set-rw', 'riwaya', 'الرواية', 'اختيار الرواية يغيّر المصحف كله: رسمه وضبطه ووقفه وتلاوته', `<div class="group">${riwayat}</div>
-      <p class="note">التلاوات سورةً سورة من mp3quran.net مع مواضع آياتها، وبعض قرّاء حفص آيةً آية من everyayah.com.</p>`)}`;
+      <p class="note">التلاوات سورةً سورة من mp3quran.net مع مواضع آياتها، وبعض قرّاء حفص آيةً آية من everyayah.com.</p>`)}
+
+    <div class="group set-dev">${switchRow('ui.dev', 'وضع المطوّر', 'لهذا الجهاز وحده: تجارب لا تصل إلى غيرك ولا تُزامَن')}</div>`;
 }
 
 // the settings' chips: the section being read lit, and its chip brought into view in the row
@@ -3550,6 +3556,7 @@ $('#sheetBody').addEventListener('click', async e => {
     if (id === 'awake') syncAwake();
     if (id === 'norotate') syncRotate(true).then(() => { const s = sw.querySelector('.s'); if (s && !IOS) s.textContent = `تبقى الشاشة ${rotLockName()} ولو أدرت الهاتف`; });
     if (id === 'lite') document.documentElement.classList.toggle('lite', on);
+    if (id === 'ui.dev') document.documentElement.classList.toggle('dev', on);
     return;
   }
   const bk = e.target.closest('[data-backup]');
