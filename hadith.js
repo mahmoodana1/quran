@@ -364,10 +364,10 @@ const Hadith = (() => {
       const way = []; for (let n = c.up; n && n !== root; n = n.up) way.push(names[n.id]?.[0] || '');
       card = `<div class="hd-tcard r-${r}"><i class="hd-tc">${esc(initial(nm))}</i>
         <span class="hd-tcm"><b>${esc(nm)}</b><small>${c.kids.size ? RK_NAME[r] : 'المصنِّف'}${way.length ? `، عن ${esc(way[0])}` : ''}${c.kids.size ? `، ${c.routes === 1 ? 'طريق واحد' : `${ar(c.routes)} طرق`} بعده` : ''}</small></span>
-        <span class="hd-tca">${c.kids.size ? `<button data-hd-tx="${c.key}">${hidden ? 'أظهر تلاميذه' : 'أخفِ تلاميذه'}</button>` : ''}<button class="go" data-hd-rawi="${c.id}">ترجمته ${IC.go}</button></span>
-        <button class="hd-tcx" data-hd-tsel="" aria-label="إلغاء التحديد">✕</button></div>`;
+        ${c.kids.size ? `<button class="hd-tct" data-hd-tx="${c.key}" aria-label="${hidden ? 'أظهر تلاميذه' : 'أخفِ تلاميذه'}">${hidden ? `+${ar(c.routes)}` : '−'}</button>` : ''}
+        <button class="hd-tcg" data-hd-rawi="${c.id}">ترجمته</button></div>`;
     }
-    return `<div class="hd-tsc"><div class="hd-tree" style="width:${W}px;height:${H}px" data-root="${root.x}">
+    return `<div class="hd-tsc${card ? ' carded' : ''}"><div class="hd-tree" style="width:${W}px;height:${H}px" data-root="${root.x}">
       <svg class="hd-tlines" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${lines.join('')}</svg>${top}${nodes.join('')}</div></div>${card}`;
   }
   // drawn again in place (the page and where it was scrolled to kept); the node acted on kept in view
@@ -576,6 +576,8 @@ const Hadith = (() => {
     if (tsel && T) { const k = tsel.dataset.hdTsel; T.sel = k && T.sel !== k ? k : null; haptic(5); paintTree(k); return true; }
     const tx = t.closest('[data-hd-tx]');
     if (tx && T) { const k = tx.dataset.hdTx; if (T.open.has(k)) T.open.delete(k); else T.open.add(k); T.sel = k; haptic(5); paintTree(k); return true; }
+    // (a tap anywhere else on the tree's page, not on a button: the narrator chosen let go)
+    if (T?.sel && root?.querySelector('.hd-twrap') && !t.closest('.hd-tcard, button, a')) { T.sel = null; paintTree(); return true; }
     const rw = t.closest('[data-hd-rawi]');
     if (rw) {
       const q = $('#q').value.trim();
@@ -627,5 +629,7 @@ const Hadith = (() => {
     back(); return true;
   }
 
+  // (a computer: Esc lets the narrator chosen go)
+  addEventListener('keydown', e => { if (e.key === 'Escape' && T?.sel && root?.isConnected && root.querySelector('.hd-twrap')) { T.sel = null; paintTree(); } });
   return { mount, onClick, searchHTML, goBack, prefetch: () => index().catch(() => {}) };
 })();
