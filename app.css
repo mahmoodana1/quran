@@ -3699,3 +3699,18 @@ b.hz4-v { font-size: 19px; font-weight: 900; }
 .rb-group .rb-free small { flex: 1; font-size: 12px; color: var(--muted); }
 .rb-group .rb-free button { width: 26px; height: 26px; padding: 0; border-radius: 50%; display: grid; place-items: center; background: none; }
 .rb-group .rb-free i { width: 16px; height: 16px; border-radius: 50%; background: var(--mc); }
+
+/* ---- every green surface patterned, as الأذكار's cards: the faint gold stars over the green
+   (bars, dots, toggles and the heat of the days stay plain: too small for it to be seen) */
+#dockMic, .dl-actions button.primary, .actions button.primary, .pr-btn, .cover.new span, .rc-badge, .rc-review, .set-btn.on,
+.rc-tile.l4, .rc-chips button.on, .mic-pill, .in-chips button.on, .jz.on,
+.pp-c.coral .pp-c-go, .pp-c.sky .pp-c-go, .pp-c.violet .pp-c-go, .pp-c.ink .pp-c-go, .pp-per button.on, .apk-go,
+.pp-se-tools button.on, .pp-ayas button.on, .pp-fl button.on, .pp-ayas span.on, .pp-se-save button.pri,
+.sy-ico.on, .sy-acts button.primary, .vc-play.on, .hz-done, .hz-chips button.on, .hz-go-i, .hz-presets button.on, .hz-tg button.on,
+.tq-go, .hz-revgo, .hz2-n, .hz2-go, .hz-s2.on .hz-s2-i, .hz3 .hz2-steps button.ok {
+  background: var(--p-pattern) 0 0 / 22px 22px, linear-gradient(160deg, var(--p-green), var(--p-green-2));
+}
+.tq-big, .hz2-done .hz2-big, .hz3 .hz2-big, .hz3-go {
+  background: var(--p-pattern) 0 0 / 30px 30px, linear-gradient(160deg, var(--p-green), var(--p-green-2));
+}
+.tq-row:not(.amber):not(.coral):not(.done) .tq-ri { background: var(--p-pattern) 0 0 / 22px 22px, linear-gradient(160deg, var(--p-green), var(--p-green-2)); }
