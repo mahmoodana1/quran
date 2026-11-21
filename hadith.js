@@ -15,7 +15,7 @@ const Hadith = (() => {
   const PART = 100;
   const files = new Map();
   const J = u => {
-    if (!files.has(u)) files.set(u, fetch(`data/hadith/${u}?v=${V}`)
+    if (!files.has(u)) files.set(u, fetch(`data/hadith/${u}${u.includes('?') ? '&' : '?'}v=${V}`)
       .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
       .catch(e => { files.delete(u); throw e; }));
     return files.get(u);
@@ -107,9 +107,12 @@ const Hadith = (() => {
   // by tools/hadith_sharh.py, a hadith's narrations in the other books sharing it); a word's meaning
   // as the explanation gives it (no guessing from other sources: a wrong meaning is worse than none)
   let cur = null;
-  const sharhIx = () => J('sharh/index.json').catch(() => ({}));
+  // (SV: the explanations' own version — matched again on 2026-11-21 — so a phone fetches them anew
+  // and nothing else: the books kept for offline use stay as they are)
+  const SV = 2;
+  const sharhIx = () => J(`sharh/index.json?s=${SV}`).catch(() => ({}));
   const sharhId = async (b, k, j) => (await sharhIx())[`${b}:${k}:${j}`] || null;
-  const sharhOf = async id => (await J(`sharh/${id % 32}.json`))[id];
+  const sharhOf = async id => (await J(`sharh/${id % 32}.json?s=${SV}`))[id];
   const HAR = /[\u064B-\u065F\u0670\u06D6-\u06ED\u0640]/g;
   const bare = t => t.replace(HAR, '').replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').trim();
   // مختار الصحاح (data/hadith/dict, tools/hadith_dict.py): the word as it is, then without the letters
