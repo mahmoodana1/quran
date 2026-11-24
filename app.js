@@ -2044,6 +2044,10 @@ async function openTafsir(ai, mode = tfMode) {
       ? `<details class="tf-why"${whyOpen ? ' open' : ''}><summary><span class="tf-why-ic"><svg viewBox="0 0 24 24"><path d="M12 3.5l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L4.8 8.8l5-.7z"/></svg></span><b>سبب النزول</b><small>${w.n > 1 ? `${ar(w.n)} روايات` : 'رواية واحدة'}</small></summary><div class="tf-why-in">${asbabHTML(w)}</div></details>`
       : '<p class="tf-why-none">لا يُعرف لهذه الآية سبب نزول صحيح</p>';
   }).catch(() => {});
+  // the sanad of Hafs's riwaya, after the causes (the same for every aya; reading Hafs only)
+  const sanad = document.createElement('div');
+  sanad.className = 'tf-why-slot';
+  if (K.riwaya === 'hafs') sanad.innerHTML = sanadHTML();
   if (tn[4]) {
     // another tafsir: an aya at a time
     try {
@@ -2056,7 +2060,7 @@ async function openTafsir(ai, mode = tfMode) {
         html += (from !== hn ? `<div class="tf-group">من تفسير الآية ${ar(from)}، وهذه الآية فيه</div>` : '') + moreHTML(t);
       }
       if (tfAya !== ai || tfMode !== 'tafsir') return;
-      body.replaceChildren(why);
+      body.replaceChildren(why, sanad);
       body.insertAdjacentHTML('beforeend', html || `<div class="tf-wait">لم يتكلم ${tn[1]} على هذه الآية بعينها</div>`);
       body.insertAdjacentHTML('beforeend', `<p class="si-src">${tn[1]} · ${tn[2]}</p>`);
       body.scrollTop = 0;
@@ -2086,7 +2090,7 @@ async function openTafsir(ai, mode = tfMode) {
       html += (label ? `<div class="tf-group">${label}</div>` : '') + tafsirHTML(e);
     }
     if (tfAya !== ai || tfMode !== 'tafsir') return;
-    body.replaceChildren(why);
+    body.replaceChildren(why, sanad);
     body.insertAdjacentHTML('beforeend', html || '<div class="tf-wait">لا يوجد تفسير لهذه الآية</div>');
     body.scrollTop = 0;
   } catch {
@@ -2148,6 +2152,60 @@ function asbabHTML(w) {
   }
   return html + '<p class="si-src">المصادر: صحيح أسباب النزول (دراسة حديثية) لإبراهيم محمد العلي · الموسوعة القرآنية quranpedia.net</p>';
 }
+
+// ---- the sanad of Hafs's riwaya, folded at the head of the tafsir (Hafs only; the same for every aya):
+// the Prophet ﷺ, the companions he taught, the two tabi'in Asim read on, Asim, Hafs — the way of
+// Hafs (Asim: what I taught you is what I read on al-Sulami from Ali) in green, drawn as الحديث's
+// tree is; a person tapped: his way lit and a short card. From Ibn al-Jazari's al-Nashr and Ghayat
+// al-Nihaya, al-Dhahabi's Ma'rifat al-Qurra', and the Madinah mushaf's own statement of its riwaya.
+const SANAD = {
+  nabi: { d: 0, x: 50, c: 'ﷺ', n: 'النبي ﷺ', f: 'رسول الله ﷺ', m: 'عن جبريل عليه السلام عن رب العزة', b: 'نزل عليه القرآن منجّمًا في ثلاث وعشرين سنة، وكان جبريل يعارضه به في كل رمضان، وعارضه مرتين في العام الذي قُبض فيه.' },
+  ali: { d: 1, x: 90, c: 'ع', n: 'علي', f: 'علي بن أبي طالب', m: 'صحابي · ت ٤٠هـ · الكوفة', b: 'ابن عم النبي ﷺ ورابع الخلفاء. عنه قرأ السلمي، ومن طريقه رواية حفص كما أخبر عاصم.', up: ['nabi'] },
+  uthman: { d: 1, x: 70, c: 'ع', n: 'عثمان', f: 'عثمان بن عفان', m: 'صحابي · ت ٣٥هـ · المدينة', b: 'ثالث الخلفاء، جمع الناس على المصاحف وبعث بها إلى الأمصار.', up: ['nabi'] },
+  ubayy: { d: 1, x: 50, c: 'أ', n: 'أُبيّ', f: 'أُبيّ بن كعب', m: 'صحابي · ت نحو ٣٠هـ · المدينة', b: 'سيد القراء، قال فيه النبي ﷺ: «وأقرؤهم أُبيّ بن كعب».', up: ['nabi'] },
+  zayd: { d: 1, x: 30, c: 'ز', n: 'زيد', f: 'زيد بن ثابت', m: 'صحابي · ت نحو ٤٥هـ · المدينة', b: 'كاتب الوحي، جمع القرآن في عهد أبي بكر، وكان على نسخ المصاحف في عهد عثمان.', up: ['nabi'] },
+  masud: { d: 1, x: 10, c: 'م', n: 'ابن مسعود', f: 'عبد الله بن مسعود', m: 'صحابي · ت ٣٢هـ · الكوفة', b: 'أخذ من فِيِّ النبي ﷺ بضعًا وسبعين سورة، وأقرأ أهل الكوفة.', up: ['nabi'] },
+  sulami: { d: 2, x: 68, c: 'س', n: 'السُّلَمي', f: 'أبو عبد الرحمن السُّلَمي', m: 'تابعي · عبد الله بن حبيب · ت نحو ٧٤هـ · الكوفة', b: 'أقرأ الناس في مسجد الكوفة أربعين سنة، وهو راوي «خيركم من تعلّم القرآن وعلّمه».', up: ['ali', 'uthman', 'ubayy', 'zayd', 'masud'] },
+  zirr: { d: 2, x: 32, c: 'ز', n: 'زِرّ بن حُبَيش', f: 'زِرّ بن حُبَيش', m: 'تابعي · ت ٨٢هـ · الكوفة', b: 'من كبار التابعين، عُمِّر نحو مئة وعشرين سنة. عليه قرأ عاصم ما أقرأه شعبة.', up: ['ali', 'uthman', 'masud'] },
+  asim: { d: 3, x: 50, c: 'ع', n: 'عاصم', f: 'عاصم بن أبي النَّجود', m: 'القارئ · ت ١٢٧هـ · الكوفة', b: 'إمام القراءة بالكوفة بعد السلمي، جمع الفصاحة والإتقان وحسن الصوت. روى عنه حفص وشعبة.', up: ['sulami', 'zirr'] },
+  hafs: { d: 4, x: 50, c: 'ح', n: 'حفص', f: 'حفص بن سليمان الأسدي', m: 'الراوي · ٩٠–١٨٠هـ · الكوفة', b: 'ربيب عاصم وأعلم أصحابه بقراءته، وروايته أكثر ما يُقرأ به في العالم اليوم.', up: ['asim'] },
+};
+const SANAD_OWN = new Set(['nabi', 'ali', 'sulami', 'asim', 'hafs']);
+let sanadHTMLc = null;
+function sanadHTML() {
+  if (sanadHTMLc) return sanadHTMLc;
+  const RH = 76, H = 4 * RH + 52, y = d => d * RH;
+  const lines = [], nodes = [];
+  for (const [k, p] of Object.entries(SANAD)) {
+    nodes.push(`<button class="sn-n${p.d === 0 ? ' root' : p.d === 1 ? ' sh' : ''}${SANAD_OWN.has(k) ? ' own' : ''}" data-sn="${k}" style="right:${p.x}%;top:${y(p.d)}px"><i>${p.c}</i><span>${p.n}</span></button>`);
+    for (const u of p.up || []) {
+      const q = SANAD[u], x1 = 100 - q.x, y1 = y(q.d) + (q.d ? 52 : 58), x2 = 100 - p.x, y2 = y(p.d) + 1, my = (y1 + y2) / 2;
+      lines.push(`<path data-e="${u}>${k}"${SANAD_OWN.has(u) && SANAD_OWN.has(k) ? ' class="own"' : ''} d="M${x1} ${y1}C${x1} ${my} ${x2} ${my} ${x2} ${y2}"/>`);
+    }
+  }
+  return sanadHTMLc = `<details class="tf-why tf-sanad"${store.get('tf.sanad', false) ? ' open' : ''}><summary><span class="tf-why-ic"><svg viewBox="0 0 24 24"><path d="M12 4v16M12 8H6.5v4M12 8h5.5v4M6.5 12H4.5v4M6.5 12h2v4M17.5 12h-2v4M17.5 12h2v4"/></svg></span><b>سند رواية حفص</b><small>عن عاصم عن السلمي عن علي عن النبي ﷺ</small></summary>
+    <div class="tf-why-in"><div class="sn-tree" style="height:${H}px"><svg class="sn-lines" viewBox="0 0 100 ${H}" preserveAspectRatio="none">${lines.join('')}</svg>${nodes.join('')}</div>
+    <div class="sn-card" aria-live="polite"><p class="sn-hint">قال حفص: قال لي عاصم: «ما أقرأتُك به فهو ما قرأتُ به على أبي عبد الرحمن السلمي عن علي»، وهو الطريق الأخضر. اضغط على اسمٍ لترجمته.</p></div>
+    <p class="si-src">النشر وغاية النهاية لابن الجزري · معرفة القراء الكبار للذهبي</p></div></details>`;
+}
+function sanadPick(tree, k) {
+  const card = tree.parentNode.querySelector('.sn-card'), p = SANAD[k];
+  const sel = tree.querySelector('.sn-n.sel')?.dataset.sn;
+  tree.querySelectorAll('.sn-n, path').forEach(e => e.classList.remove('sel', 'dim', 'lit'));
+  if (!p || sel === k) { card.innerHTML = sanadHTML().match(/<p class="sn-hint">[^]*?<\/p>/)[0]; return; }
+  // his way up and down: his teachers' teachers and his students' students
+  const up = new Set([k]), down = new Set([k]);
+  const goUp = x => (SANAD[x].up || []).forEach(u => { up.add(u); goUp(u); });
+  const goDown = x => Object.keys(SANAD).forEach(c => { if ((SANAD[c].up || []).includes(x)) { down.add(c); goDown(c); } });
+  goUp(k); goDown(k);
+  tree.querySelectorAll('.sn-n').forEach(e => { const id = e.dataset.sn; e.classList.toggle('sel', id === k); e.classList.toggle('dim', !up.has(id) && !down.has(id)); });
+  tree.querySelectorAll('path').forEach(e => { const [a, b] = e.dataset.e.split('>'); e.classList.add((up.has(a) && up.has(b)) || (down.has(a) && down.has(b)) ? 'lit' : 'dim'); });
+  card.innerHTML = `<div class="sn-c${p.d === 0 ? ' root' : p.d === 1 ? ' sh' : ''}"><i>${p.c}</i><div><b>${p.f}</b><small>${p.m}</small><p>${p.b}</p></div></div>`;
+}
+$('#tfBody').addEventListener('click', e => {
+  const n = e.target.closest('[data-sn]'); if (n) sanadPick(n.closest('.sn-tree'), n.dataset.sn);
+});
+$('#tfBody').addEventListener('toggle', e => { if (e.target.classList?.contains('tf-sanad')) { store.set('tf.sanad', e.target.open); sanadHTMLc = null; } }, true);
 
 // the tafsirs to choose from: under the sheet's subtitle, by length, the one read ticked
 function openTfMenu() {

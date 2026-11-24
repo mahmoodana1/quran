@@ -3827,6 +3827,40 @@ b.hz4-v { font-size: 19px; font-weight: 900; }
 .tf-why-in { padding: 0 14px 12px; border-top: 1px dotted var(--p-rule); }
 .tf-why-none { display: flex; align-items: center; gap: 8px; margin: 0 2px 12px; font-size: 12.5px; color: var(--muted); }
 .tf-why-none::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: color-mix(in srgb, var(--muted) 55%, transparent); }
+/* ---- the sanad of Hafs's riwaya, folded under the causes of revelation: الحديث's tree, small ---- */
+.tf-sanad summary b { flex: none; white-space: nowrap; }
+.tf-sanad summary small { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.sn-tree { position: relative; margin: 12px 4px 4px; }
+.sn-lines { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.sn-lines path { fill: none; stroke: color-mix(in srgb, var(--p-gold) 55%, var(--line)); stroke-width: 1.3; vector-effect: non-scaling-stroke; transition: opacity .2s ease; }
+.sn-lines path.own { stroke: var(--p-green); stroke-width: 2.4; }
+.sn-lines path.dim { opacity: .18; }
+.sn-lines path.lit { stroke: var(--p-green); stroke-width: 2.6; opacity: 1; }
+.sn-n { position: absolute; width: 66px; transform: translateX(50%); display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; transition: opacity .2s ease; }
+.sn-n i { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; box-sizing: border-box; font: 700 15px/1 amiri, "Noto Naskh Arabic", serif; font-style: normal;
+  color: #fbf6ea; background: var(--p-green); border: 2px solid var(--p-green); box-shadow: 0 2px 6px rgba(40, 28, 8, .12); transition: transform .15s ease, box-shadow .15s ease; }
+.sn-n.sh i { border-color: var(--p-gold); }
+.sn-n.root i { width: 34px; height: 34px; font-size: 17px; color: #f3e6c4; border-color: var(--p-gold); background: var(--p-pattern) 0 0 / 14px 14px, linear-gradient(160deg, var(--p-green), var(--p-green-2)); }
+.sn-n span { font-size: 11.5px; font-weight: 700; line-height: 1.3; color: var(--ink); text-align: center; white-space: nowrap; }
+.sn-n.own i { box-shadow: 0 0 0 3.5px color-mix(in srgb, var(--p-green) 22%, transparent), 0 2px 6px rgba(18, 58, 45, .2); }
+.sn-n.own span { color: var(--p-ink); }
+.sn-n:active i { transform: scale(.9); }
+.sn-n.dim { opacity: .3; }
+.sn-n.sel i { box-shadow: 0 0 0 3px var(--card), 0 0 0 5.5px var(--p-gold); transform: scale(1.08); }
+:root[data-theme="dark"] .sn-n i { color: #f3e6c4; }
+.sn-card { margin: 6px 0 0; padding-top: 10px; border-top: 1px dotted var(--p-rule); }
+.sn-hint { margin: 0; font-size: 12.5px; line-height: 1.8; color: var(--muted); }
+.sn-c { display: flex; gap: 10px; align-items: flex-start; animation: sn-in .2s ease; }
+.sn-c > i { flex: none; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; box-sizing: border-box; font: 700 15px/1 amiri, serif; font-style: normal;
+  color: #fbf6ea; background: var(--p-green); border: 2px solid var(--p-green); }
+.sn-c.sh > i, .sn-c.root > i { border-color: var(--p-gold); }
+:root[data-theme="dark"] .sn-c > i { color: #f3e6c4; }
+.sn-c b { display: block; font-size: 14.5px; font-weight: 800; color: var(--ink); line-height: 1.4; }
+.sn-c small { display: block; font-size: 12px; color: var(--gold-ink); line-height: 1.5; }
+.sn-c p { margin: 4px 0 0; font-size: 13px; line-height: 1.75; color: var(--ink); }
+.tf-sanad .si-src { margin-top: 10px !important; }
+@keyframes sn-in { from { opacity: 0; transform: translateY(3px); } }
+@media (prefers-reduced-motion: reduce) { .sn-c { animation: none; } .sn-n, .sn-lines path { transition: none; } }
 
 /* dev mode (the settings' foot, isDev() in app.js): styles to try out go under :root.dev */
 .set-dev { margin-top: 28px; }
