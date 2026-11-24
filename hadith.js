@@ -254,6 +254,9 @@ const Hadith = (() => {
   const k0 = (B, k) => `${k || B.id !== 'muslim' ? 'كتاب ' : ''}${B.k[k][0]}`;
   const bar_ = (n, t) => `<span class="hd-pg"><i style="width:${t ? Math.max(n ? 2 : 0, n / t * 100) : 0}%"></i></span>`;
 
+  // each book its own look on الحديث's first page: its colour, and on its cover the letter the scholars
+  // of hadith mark it by (خ al-Bukhari, م Muslim, د Abu Dawud), with a word on its standing
+  const LOOK = { bukhari: ['خ', 'أصحّ الكتب بعد كتاب الله'], muslim: ['م', 'ثاني الصحيحين، وأحسنها سياقًا'], abudawud: ['د', 'أول السنن الأربعة، وعمدة أحاديث الأحكام'] };
   const PAGES = {
     async home() {
       const ix = await index();
@@ -269,9 +272,11 @@ const Hadith = (() => {
       }
       return `<div class="hd-home">${dayHTML}
         <div class="hd-books">${ix.books.map(b => { const n = readAll(b.id), t = total(b), nx = n ? nextIn(b) : null;
-          return `<div class="hd-bookw"><button class="hd-book hd-${b.id}" data-hd-book="${b.id}">
-          <b>${b.t}</b><small>${b.au} · ت ${ar(b.d)}هـ</small>
-          <span>${nHadith(b.nn)} · ${nKitab(b.k.length)}</span></button>
+          const [sig, tag] = LOOK[b.id] || [b.t.replace(/^(صحيح|سنن)\s+/, '')[0], ''];
+          return `<div class="hd-bookw hd-${b.id}"><button class="hd-book" data-hd-book="${b.id}">
+          <span class="hd-bk-em" aria-hidden="true"><i>${sig}</i></span>
+          <span class="hd-bk-m"><b>${b.t}</b><small>${b.au} · ت ${ar(b.d)}هـ</small>${tag ? `<em>${tag}</em>` : ''}
+            <span class="hd-bk-st"><span>${nHadith(b.nn)}</span><span>${nKitab(b.k.length)}</span></span></span>${IC.go}</button>
           ${n ? `<div class="hd-bfoot"><span class="hd-bp"><em>قرأت ${ar(n)}، ${ar(Math.floor(n / t * 1000) / 10)}٪</em>${bar_(n, t)}</span>
             ${nx ? `<button class="hd-cont" data-hd-go="${b.id}:${nx[0]}:${nx[1]}">تابع ${IC.go}</button>` : ''}</div>` : ''}</div>`; }).join('')}</div>
         <div class="group">
