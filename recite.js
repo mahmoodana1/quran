@@ -35,6 +35,9 @@ const Recite = (() => {
   const blind = () => !!G?.hide && !G.done && (G.test || store.get('recite.blind', false));
   // Muaalem listens in Hafs (its phonetic script is Hafs's)
   const MU = () => R.id === 'hafs' && typeof Mu !== 'undefined';
+  // (the tasmee without the microphone the default for everyone from 2026-11-26: once, on every
+  // phone; the microphone can be chosen again, where the phone is strong enough: power())
+  if (!store.get('recite.manualDef', false)) { store.set('recite.manual', true); store.set('recite.manualDef', true); }
   const MU_NAMES = { 's8-cpu': 'المتدفّق · ٨ بت · المعالج', 'q8-cpu': '٨ بت · المعالج', 'q8-gpu': '٨ بت · المعالج الرسومي', 'fp16-gpu': '١٦ بت · المعالج الرسومي', 'q4-cpu': '٤ بت · المعالج', 'q4-gpu': '٤ بت · المعالج الرسومي' };
   const ready = () => MU() ? Mu.ready() : Listen.ready();
   // all a recitation needs, done (prep): no update waiting, the microphone allowed, the
@@ -135,14 +138,47 @@ const Recite = (() => {
   function goManual() {
     const g = gate;
     prepRun++; clearTimeout(prepT); pending = null;
-    ['#recPrep', '#recIntro', '#recBrowser'].forEach(x => hide($(x)));
+    ['#recPrep', '#recIntro', '#recBrowser', '#recPower'].forEach(x => hide($(x)));
     store.set('recite.manual', true);
     if (G && !G.done) { if (!G.manual) muteMic(true); return; }
     toast('التسميع بلا ميكروفون — تعود إليه متى شئت من زر الميكروفون في شريط التسميع', 4200);
     if (g?.start) start(...g.start);
   }
+  // ---- the microphone's tasmee (the model on the phone) needs a strong phone: the tasmee without it is
+  // the default; the first time the microphone is asked for, that is said; and where the phone is
+  // likely to be slow or to close the page under it, it is not offered at all (why: weak())
+  // (deviceMemory and the cores only where the browser tells them truly: Chromium; Safari hides both)
+  function weak() {
+    const mem = navigator.deviceMemory, cores = navigator.hardwareConcurrency || 8;
+    if (mem != null && mem <= 2) return 'ذاكرة هذا الهاتف قليلة';
+    if (mem != null && cores <= 2) return 'معالج هذا الهاتف ضعيف';
+    if (store.get('mu.kills', 0) >= 3) return 'أغلق الهاتف التطبيق مرارًا أثناء التسميع بالميكروفون';
+    const ms = MU() && Mu.choice()?.ms;
+    if (ms && ms > SLOW_MS) return 'نموذج التعرّف بطيء على هذا الهاتف، فلن يلحق بقراءتك';
+    return null;
+  }
+  const SLOW_MS = 2000; // a model's update slower than this (timed on the phone) can't follow a reading
+  // true when the way is open; else the screen is shown, and then() follows once the reader agrees
+  function power(then, intent) {
+    const why = weak();
+    if (!why && store.get('mic.power', false)) return true;
+    gate = intent || null;
+    $('#rpwTitle').textContent = why ? 'التسميع بالميكروفون غير متاح على هذا الهاتف' : 'التسميع بالميكروفون يحتاج هاتفًا قويًا';
+    $('#rpwLead').textContent = why
+      ? `${why}، فقد يكون بطيئًا أو يُغلق التطبيق. التسميع بلا ميكروفون يعمل كما هو: تقرأ من حفظك، ثم تُظهر الآية وتعلّم أخطاءك بنفسك.`
+      : 'يعمل نموذج للتعرّف على القراءة داخل هاتفك (نحو ١٢٠ م.ب، يُنزَّل مرة واحدة) ويتابعك كلمةً كلمة. على الهواتف الحديثة يعمل جيدًا، وعلى المتوسطة والقديمة قد يتأخر أو يُغلق التطبيق؛ فإن حدث ذلك عُد إلى التسميع بلا ميكروفون.';
+    $('#rpwGo').hidden = !!why;
+    $('#rpwManual').hidden = !manualOk();
+    $('#rpwGo').onclick = () => { store.set('mic.power', true); hide($('#recPower')); then(); };
+    $('#rpwManual').onclick = () => { hide($('#recPower')); goManual(); };
+    $('#rpwLater').textContent = why ? 'حسنًا' : 'ليس الآن';
+    $('#rpwLater').onclick = () => hide($('#recPower'));
+    show($('#recPower'));
+    return false;
+  }
   function withModel(then, intent) {
     gate = intent || null;
+    if (!power(() => withModel(then, intent), intent)) return;
     if (browserFirst(() => withModel(then, intent))) return;
     if (MU()) {
       Mu.prime();
@@ -221,6 +257,8 @@ const Recite = (() => {
     li.querySelector('small').textContent = note;
   }
   async function prep(then, intent, after) {
+    // (timed just now and found too slow, or closed once too often: no further)
+    if (weak()) { hide($('#recPrep')); ['#recIntro'].forEach(x => hide($(x))); power(() => {}, intent); return; }
     const run = ++prepRun;
     prepThen = then; prepIntent = intent; gate = intent || null;
     ['update', 'mic', 'model', 'warm'].forEach(id => prepStep(id, ''));
@@ -2230,7 +2268,7 @@ const Recite = (() => {
   }
 
   // (tajweed: one setting before madd and ghunna were apart; turned off, both start off)
-  const SET_ON = { sound: true, tjMadd: store.get('recite.tajweed', true), tjGhunna: store.get('recite.tajweed', true), tjOver: true, lHeavy: true, lNear: true }; // settings on unless turned off
+  const SET_ON = { manual: true, sound: true, tjMadd: store.get('recite.tajweed', true), tjGhunna: store.get('recite.tajweed', true), tjOver: true, lHeavy: true, lNear: true }; // settings on unless turned off
   // how often the words are read (Mu.rate): the same mistakes caught either way
   const RATE_NOTE = {
     auto: 'كل ربع ثانية إن أطاق جهازك، وأقل على الأجهزة البطيئة كي لا تسخن',
@@ -3264,6 +3302,8 @@ const Recite = (() => {
     // the microphone, on or put away, from the panel's head: every session begun from then on
     if (e.target.closest('[data-rc-manual]')) {
       const off = !setting('manual');
+      // (to the microphone: only on a phone strong enough, once it is said what it needs)
+      if (!off && !(G && !G.done) && !power(() => { store.set('recite.manual', false); rerender(); toast('التسميع بالميكروفون: يتابعك التطبيق كلمةً كلمة', 3000); }, null)) return true;
       if (G && !G.done) muteMic(off); else store.set('recite.manual', off);
       if (!G || G.done) toast(off ? 'التسميع بلا ميكروفون ولا نموذج: تقرأ من حفظك ثم تُظهر الآية وتعلّم أخطاءك بنفسك' : 'التسميع بالميكروفون: يتابعك التطبيق كلمةً كلمة', 3800);
       rerender(); haptic(6);
@@ -3521,5 +3561,5 @@ const Recite = (() => {
 
   syncBubble();
 
-  return { onChange, holdStart, holdEnd, manual: () => !!G?.manual && !G.done, start, cancel, paint, onTap, card, suraCard, showWord, prepResume, wordStats, resetWord, ago, restore, syncBubble, mic, panelHTML, mounted, onSheetClick, active: () => !!G, _g: () => G };
+  return { weak: () => !!weak(), onChange, holdStart, holdEnd, manual: () => !!G?.manual && !G.done, start, cancel, paint, onTap, card, suraCard, showWord, prepResume, wordStats, resetWord, ago, restore, syncBubble, mic, panelHTML, mounted, onSheetClick, active: () => !!G, _g: () => G };
 })();
