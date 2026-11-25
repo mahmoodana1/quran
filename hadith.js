@@ -105,7 +105,7 @@ const Hadith = (() => {
   // ---------------------------------------------------------------- a hadith explained, and its words
   // شرح الحديث from موسوعة الأحاديث النبوية (HadeethEnc.com: explanation, word meanings, lessons; built
   // by tools/hadith_sharh.py, a hadith's narrations in the other books sharing it); a word's meaning
-  // as the explanation gives it (no guessing from other sources: a wrong meaning is worse than none)
+  // as the explanation gives it, on the words it explains (no other source: a wrong meaning is worse than none)
   let cur = null;
   // (SV: the explanations' own version — matched again on 2026-11-21 — so a phone fetches them anew
   // and nothing else: the books kept for offline use stay as they are)
@@ -115,41 +115,6 @@ const Hadith = (() => {
   const sharhOf = async id => (await J(`sharh/${id % 32}.json?s=${SV}`))[id];
   const HAR = /[\u064B-\u065F\u0670\u06D6-\u06ED\u0640]/g;
   const bare = t => t.replace(HAR, '').replace(/[أإآٱ]/g, 'ا').replace(/ى/g, 'ي').replace(/ة/g, 'ه').trim();
-  // مختار الصحاح (data/hadith/dict, tools/hadith_dict.py): the word as it is, then without the letters
-  // joined to it (و ف ب ل ك, ال, a pronoun, a plural's ending), with or without ال; failing those, the
-  // article of the root its letters come to (only a root the dictionary has), shown as that root
-  const dictPart = c => J(`dict/${c.codePointAt(0).toString(16)}.json`).catch(() => ({}));
-  function forms(w) {
-    const out = [w], add = x => { if (x.length >= 2 && !out.includes(x)) out.push(x); };
-    for (const x of [...out]) for (const p of ['و', 'ف']) if (x.startsWith(p) && x.length > 3) add(x.slice(1));
-    for (const x of [...out]) for (const p of ['ب', 'ل', 'ك']) if (x.startsWith(p) && x.length > 3) add(x.slice(1));
-    for (const x of [...out]) if (x.startsWith('لل') && x.length > 4) add('ال' + x.slice(2));
-    for (const x of [...out]) for (const e of ['هما', 'كما', 'هم', 'هن', 'كم', 'كن', 'ها', 'نا', 'ني', 'ه', 'ك', 'ي']) if (x.endsWith(e) && x.length - e.length >= 3) add(x.slice(0, -e.length));
-    for (const x of [...out]) for (const e of ['ون', 'ين', 'ات', 'وا', 'ان', 'تم', 'ت', 'و', 'ا']) if (x.endsWith(e) && x.length - e.length >= 3) add(x.slice(0, -e.length));
-    for (const x of [...out]) if (x.startsWith('ال') && x.length > 4) add(x.slice(2)); else if (!x.startsWith('ال') && x.length >= 3) add('ال' + x);
-    return out;
-  }
-  async function dictOf(w) {
-    const fs = forms(w), res = [];
-    for (const f of fs) {
-      const d = await dictPart(f[0]);
-      for (const [r, x] of d[f] || []) if (!res.some(y => y[0] === r && y[1] === x)) res.push([r, x]);
-      if (res.length >= 2) break;
-    }
-    if (res.length) return res.slice(0, 2);
-    // its root: the letters left without a verb's or noun's added ones (ت ي ن ا م before; ا و ي
-    // within), three or four of them, one the dictionary has
-    const roots = new Set();
-    for (const f of fs.filter(x => !x.startsWith('ال'))) {
-      const base = [f, f.replace(/^(ت|ي|ن|ا|م|است|مست|ان|افت|ت|م)/, '')];
-      for (const b of base) { const core = b.replace(/[اوي](?=.)/g, ''); for (const c of [b, core]) if (c.length === 3 || c.length === 4) roots.add(c); }
-    }
-    // (an article only when a word it explains is of its root — a few in the digital text carry the next
-    // root's words, their own heading lost)
-    const ofRoot = (x, r) => (x.match(/\(([^()]+)\)/g) || []).some(h => { const w = bare(h.slice(1, -1)); let i = 0; for (const c of w) if (c === r[i]) i++; return i >= r.length; });
-    for (const r of roots) { const d = await dictPart(r[0]); const a = d['√' + r]; if (a && ofRoot(a[1], r)) return [[a[0], a[1]]]; }
-    return [];
-  }
   const sheetOff = () => document.querySelectorAll('body > .hd-sh, body > .hd-wc, body > .hd-shv').forEach(x => x.remove());
   async function openSharh() {
     if (!cur?.sh) return;
@@ -179,53 +144,70 @@ const Hadith = (() => {
     document.body.append(veil, el);
     haptic(6);
   }
-  // a word held: its meaning, in a small card at the foot; a tap anywhere else lets it go
-  let wcMark = null;
-  function wordOff() { document.querySelectorAll('body > .hd-wc').forEach(x => x.remove()); if (wcMark) { const t = document.createTextNode(wcMark.textContent); wcMark.replaceWith(t); t.parentNode?.normalize(); wcMark = null; } }
-  async function openWord(x, y) {
-    const r = document.caretRangeFromPoint ? document.caretRangeFromPoint(x, y) : (p => { if (!p) return null; const r = document.createRange(); r.setStart(p.offsetNode, p.offset); return r; })(document.caretPositionFromPoint?.(x, y));
-    const node = r?.startContainer;
-    if (!node || node.nodeType !== 3 || !node.parentElement.closest('[data-hd-matn]') || node.parentElement.closest('button')) return false;
-    const t = node.textContent, stop = /[\s،؛:.؟!,«»()\[\]{}"]/;
-    let a = r.startOffset, z = r.startOffset;
-    while (a > 0 && !stop.test(t[a - 1])) a--;
-    while (z < t.length && !stop.test(t[z])) z++;
-    const word = t.slice(a, z).trim();
-    if (!word || bare(word).length < 2) return false;
-    wordOff();
-    const rg = document.createRange(); rg.setStart(node, a); rg.setEnd(node, z);
-    wcMark = document.createElement('mark'); wcMark.className = 'hd-wm'; rg.surroundContents(wcMark);
-    haptic(12);
-    const bw = bare(word);
-    const found = []; // [source, meaning, root]
-    if (cur?.sh) {
-      const d = await sharhOf(cur.sh).catch(() => null);
-      const hit = d?.w?.find(([w]) => { const b2 = bare(w); return b2 === bw || b2.split(/\s+/).includes(bw) || (bw.length > 3 && b2.includes(bw)); });
-      if (hit) found.push(['من شرح الحديث · موسوعة الأحاديث النبوية', hit[1], '']);
+  // the words the explanation gives a meaning for, marked lightly in the hadith (where they are found
+  // in it as they are, a phrase as a whole); a tap on one shows its meaning, as that explanation has it
+  // (nothing from elsewhere: a meaning for this hadith, or none)
+  const STOP = /[^\s،؛:.؟!,«»()\[\]{}"]+/g;
+  const norm = t => bare(t).replace(/[^ء-ي]/g, '').replace(/^[وف](?=...)/, '').replace(/^(?:ال|لل|بال|كال|فال|وال)(?=..)/, '');
+  // (the hadith's word as the explanation's, or with ب ل ك joined before it, or — its last — a pronoun after)
+  const SUF = ['ه', 'ها', 'هم', 'هما', 'هن', 'ك', 'كم', 'كما', 'ي', 'نا', 'ني'];
+  const same = (a, b, last) => a === b || (a.length > 3 && 'بلك'.includes(a[0]) && a.slice(1) === b) || (last && b.length >= 3 && a.startsWith(b) && SUF.includes(a.slice(b.length)));
+  async function markWords() {
+    const c = cur;
+    if (!c?.sh) return;
+    const d = await sharhOf(c.sh).catch(() => null);
+    const box = root?.querySelector('[data-hd-matn]');
+    if (cur !== c || !box || !d?.w?.length) return;
+    c.w = d.w;
+    // the matn's words, outside its buttons (a narrator, an aya's place) and the Quran it quotes
+    const toks = [], tw = document.createTreeWalker(box, NodeFilter.SHOW_TEXT, { acceptNode: n => n.parentElement.closest('button, .hd-q') ? 2 : 1 });
+    for (let n; (n = tw.nextNode());) for (const m of n.textContent.matchAll(STOP)) { const k = norm(m[0]); if (k) toks.push({ n, a: m.index, z: m.index + m[0].length, k }); }
+    const used = new Set(), spans = [];
+    d.w.forEach(([w], i) => {
+      const ks = (w.match(STOP) || []).map(norm).filter(Boolean);
+      if (!ks.length || (ks.length === 1 && ks[0].length < 2)) return;
+      for (let p = 0; p + ks.length <= toks.length; p++) {
+        if (!ks.every((k, q) => !used.has(p + q) && same(toks[p + q].k, k, q === ks.length - 1))) continue;
+        for (let q = 0; q < ks.length; q++) used.add(p + q);
+        // a phrase in one piece where its words are in one text, else word by word
+        let s = toks[p];
+        for (let q = 1; q <= ks.length; q++) {
+          const t = toks[p + q], e = toks[p + q - 1];
+          if (q === ks.length || t.n !== s.n) { spans.push({ n: s.n, a: s.a, z: e.z, i }); s = t; }
+        }
+        break;
+      }
+    });
+    // (from the end of each text, so the places before stay where they are)
+    const byNode = new Map();
+    for (const x of spans) (byNode.get(x.n) || byNode.set(x.n, []).get(x.n)).push(x);
+    for (const l of byNode.values()) for (const { n, a, z, i } of l.sort((x, y) => y.a - x.a)) {
+      const r = document.createRange(); r.setStart(n, a); r.setEnd(n, z);
+      const el = document.createElement('span'); el.className = 'hd-w'; el.dataset.hdW = i; el.setAttribute('role', 'button');
+      r.surroundContents(el);
     }
-    for (const [r, x] of await dictOf(bw)) found.push(['مختار الصحاح للرازي', x, r]);
-    const el = document.createElement('div'); el.className = 'hd-wc';
-    el.innerHTML = `<div class="hd-wch"><b>${esc(word)}</b></div>
-      ${found.length ? found.map(([src, m, r]) => `<div class="hd-wm2"><p>${esc(m)}</p><small>${src}${r ? ` · مادة (${esc(r)})` : ''}</small></div>`).join('')
-        : '<p class="none">لم نجد هذه الكلمة في شرح الحديث ولا في مختار الصحاح: معناها ظاهر غالبًا.</p>'}
-      ${cur?.sh ? '<div class="hd-wcf"><button data-hd-wsharh>شرح الحديث</button></div>' : ''}`;
-    el.querySelector('[data-hd-wsharh]')?.addEventListener('click', () => { wordOff(); openSharh(); });
-    document.body.append(el);
-    return true;
+    const hint = root.querySelector('.hd-mhint small');
+    if (hint) hint.textContent = spans.length ? 'اضغط على كلمة مظلّلة لمعناها' : '';
   }
-  // on the hadith's text: a tap explains the hadith, a press held explains the word under it
-  let holdT = 0, held = false, hx = 0, hy = 0;
-  addEventListener('pointerdown', e => {
-    if (!e.target.closest?.('body > .hd-wc')) { if (document.querySelector('body > .hd-wc')) { wordOff(); held = 'off'; } }
-    const m = e.target.closest?.('[data-hd-matn]');
-    if (!m || e.target.closest('button')) return;
-    held = held === 'off' ? 'off' : false; hx = e.clientX; hy = e.clientY;
-    clearTimeout(holdT);
-    holdT = setTimeout(async () => { if (await openWord(hx, hy)) held = true; }, 430);
-  }, true);
-  addEventListener('pointermove', e => { if (holdT && Math.hypot(e.clientX - hx, e.clientY - hy) > 10) { clearTimeout(holdT); holdT = 0; } }, true);
-  addEventListener('pointerup', () => { clearTimeout(holdT); holdT = 0; }, true);
-  addEventListener('contextmenu', e => { if (e.target.closest?.('[data-hd-matn]')) e.preventDefault(); }, true);
+  function wordOff() {
+    document.querySelectorAll('body > .hd-wc').forEach(x => x.remove());
+    document.querySelectorAll('.hd-w.on').forEach(x => x.classList.remove('on'));
+  }
+  function openWord(span) {
+    const [w, m] = cur?.w?.[+span.dataset.hdW] || [];
+    if (!m) return;
+    wordOff();
+    span.classList.add('on');
+    haptic(6);
+    const el = document.createElement('div'); el.className = 'hd-wc';
+    el.innerHTML = `<div class="hd-wch"><b>${esc(span.textContent)}</b></div>
+      <div class="hd-wm2"><p>${esc(m)}</p><small>من شرح الحديث · موسوعة الأحاديث النبوية</small></div>
+      <div class="hd-wcf"><button data-hd-wsharh>شرح الحديث</button></div>`;
+    el.querySelector('[data-hd-wsharh]').addEventListener('click', () => { wordOff(); openSharh(); });
+    document.body.append(el);
+  }
+  // a tap anywhere but on the card or another marked word lets the card go
+  addEventListener('pointerdown', e => { if (!e.target.closest?.('body > .hd-wc, .hd-w') && document.querySelector('body > .hd-wc')) wordOff(); }, true);
 
   // ---------------------------------------------------------------- what has been read, a book at a time
   // hd.read.<book>: { kitab: [hadith indexes read] } (synced with the rest); hd.at.<book>: where in it
@@ -321,6 +303,7 @@ const Hadith = (() => {
         ${last ? '' : `<button class="hd-next" data-hd-readnext><span>${rd ? 'التالي' : 'قرأته، التالي'}<small>قرأت ${ar(done)} في ${BOOKS[b]}، ${ar(Math.floor(done / tt * 1000) / 10)}٪</small></span>${IC.next}</button>`}</div>`;
       const sh = await sharhId(b, k, j);
       cur = { b, k, j, sh, g: h.g };
+      after = markWords;
       return bar(kt, BOOKS[b], tools) + readerHTML(b, h, names, kt, sh) + foot;
     },
 
@@ -598,7 +581,7 @@ const Hadith = (() => {
     return `<article class="hd-read">
       ${headHTML(b, h, kt)}
       <div class="hd-box hd-matn-box"><div class="hd-matn" data-hd-matn>${marked(h, m0, m1, names)}</div>
-        <p class="hd-mhint">${sh ? '<button class="hd-shb" data-hd-sharh>شرح الحديث</button>' : ''}<small>${sh ? 'اضغط على الحديث لشرحه، ومطوّلًا على كلمة لمعناها' : 'اضغط مطوّلًا على كلمة لمعناها'}</small></p>
+        <p class="hd-mhint">${sh ? '<button class="hd-shb" data-hd-sharh>شرح الحديث</button>' : ''}<small></small></p>
         <div class="hd-foot"><span>${cite(b, h)}</span></div>
         ${h.hk ? `<p class="hd-hk"><b>حكم الإسناد</b> ${esc(h.hk)} <small>(موسوعة الحديث)</small></p>` : ''}</div>
       ${full ? `<details class="hd-sec hd-fold"><summary><h3>الحديث بإسناده<small>اضغط على اسم الراوي لترجمته</small></h3></summary><p class="hd-sanad">${full}</p></details>` : ''}
@@ -769,10 +752,9 @@ const Hadith = (() => {
       push({ v: 'hadith', b, k: +k, j: +j }); return true;
     }
     if (t.closest('[data-hd-sharh]')) { openSharh(); return true; }
-    if (t.closest('[data-hd-matn]') && !t.closest('button')) {
-      if (held) { held = false; return true; }
-      if (cur?.sh) openSharh(); return true;
-    }
+    const wd = t.closest('[data-hd-w]');
+    if (wd) { openWord(wd); return true; }
+    if (t.closest('[data-hd-matn]') && !t.closest('button')) return true;
     if (t.closest('[data-hd-mark]')) { const p = top(); setRead(p.b, p.k, p.j, !isRead(p.b, p.k, p.j)); haptic(6); paint(undefined, $('#sheetBody').scrollTop); return true; }
     if (t.closest('[data-hd-readnext]')) { const p = top(); setRead(p.b, p.k, p.j, true); haptic(8); step(1); return true; }
     if (t.closest('[data-hd-tree]')) { const p = top(); push({ v: 'tree', b: p.b, k: p.k, j: p.j }); return true; }

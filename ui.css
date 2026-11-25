@@ -190,6 +190,8 @@
 }
 :root.ui #sheet .group-label::after { display: none; }
 :root.ui #sheet .row { min-height: 56px; padding: 10px 16px; gap: 14px; }
+/* a ribbon's row keeps room for its «⌄» (the row rule above took it, and the arrow sat on the ٪) */
+:root.ui #sheet .rb-row { min-height: 64px; padding-inline-end: 56px; gap: 12px; }
 :root.ui #sheet .row + .row::before { border-top: var(--dv-hair); left: 0; right: 16px; }
 :root.ui #sheet .row .num + .main, :root.ui #sheet .row + .row:has(.num)::before { }
 :root.ui #sheet .row .t { font-size: 16.5px; font-weight: 600; }

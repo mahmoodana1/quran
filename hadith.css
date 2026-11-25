@@ -496,7 +496,10 @@ body > .hd-cv { position: fixed; inset: 0; z-index: 48; display: flex; flex-dire
 /* =====================================================================
    شرح الحديث (a sheet from the foot) and a word's meaning (a small card)
    ===================================================================== */
-.hd-matn[data-hd-matn] { cursor: pointer; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+.hd-matn[data-hd-matn] { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+/* a word the explanation gives a meaning for: lightly shaded, a tap shows it */
+.hd-w { cursor: pointer; border-radius: 6px; background: color-mix(in srgb, var(--p-green) 9%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--p-green) 9%, transparent); -webkit-box-decoration-break: clone; box-decoration-break: clone; transition: background .15s; }
+.hd-w.on, .hd-w:active { background: color-mix(in srgb, var(--p-green) 20%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--p-green) 20%, transparent); }
 .hd-mhint { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 6px 10px; margin: -4px 16px 12px; text-align: center; }
 .hd-mhint small { font-size: 11.5px; color: var(--faint); }
 .hd-shb { padding: 5px 12px; border-radius: 99px; font: 700 12.5px var(--ui); color: var(--p-ink); background: color-mix(in srgb, var(--p-green) 10%, transparent);
@@ -559,3 +562,20 @@ body.desk .hd-wc { bottom: 16px; }
 /* (the grip: a slim bar to see, a finger's height to take hold of) */
 .hd-sh .hd-shg { width: 100%; height: 22px; margin: 0; background: none; position: relative; }
 .hd-sh .hd-shg::before { content: ""; position: absolute; left: 50%; top: 9px; width: 44px; height: 5px; margin-left: -22px; border-radius: 3px; background: var(--line); }
+
+/* the three books, plainly: one look for all (no colour of its own), a plain bound cover with its letter,
+   the name in the text's colour and the app's own type, the rest quiet */
+.hd-bookw, .hd-bookw.hd-muslim, .hd-bookw.hd-abudawud,
+:root[data-theme] .hd-bookw.hd-muslim, :root[data-theme] .hd-bookw.hd-abudawud { --bk: var(--muted); --bk-2: var(--muted); --bk-ink: var(--ink); }
+.hd-book, :root.ui .hd-book { background: var(--surface, var(--card)); border: 1px solid var(--p-rule); box-shadow: none; }
+.hd-bk-em { width: 40px; height: 52px; border-radius: 3px 7px 7px 3px; background: var(--card); border: 1.5px solid color-mix(in srgb, var(--muted) 55%, transparent); border-inline-start-width: 5px; box-shadow: none; }
+.hd-bk-em::after { display: none; }
+.hd-bk-em i { font: 700 19px/1 var(--ui); color: var(--muted); text-shadow: none; margin: 0; }
+.hd-bk-m b { font: 700 18px/1.5 var(--ui); color: var(--ink); }
+.hd-bk-m em { font-weight: 500; color: var(--muted); }
+.hd-bk-st span { font-weight: 600; color: var(--muted); background: none; box-shadow: inset 0 0 0 1px var(--p-rule); }
+.hd-book > .go { stroke: var(--muted); }
+.hd-bfoot { border-color: var(--p-rule); }
+.hd-bfoot .hd-pg { background: color-mix(in srgb, var(--p-green) 13%, transparent); }
+.hd-bfoot .hd-pg i, .hd-bfoot .hd-cont { background: var(--p-green); }
+.hd-bfoot .hd-bp em { color: var(--muted); }
