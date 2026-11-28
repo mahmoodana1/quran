@@ -190,10 +190,10 @@ $('#dockMic').onclick = () => {
   if (micHeld) { micHeld = false; return; }
   if (typeof Recite === 'undefined') return;
   haptic(8);
-  if (store.get('mic.told', false) || Recite.active() || Recite.weak()) return Recite.mic(); // (a weak phone: told at once it isn't for it)
+  if (store.get('mic.told', false) || Recite.active()) return Recite.mic();
   show($('#micIntro'));
 };
-$('#miGo').onclick = () => { store.set('mic.told', true); store.set('mic.power', true); hide($('#micIntro')); Recite.mic(); };
+$('#miGo').onclick = () => { store.set('mic.told', true); hide($('#micIntro')); Recite.mic(); };
 $('#miLater').onclick = () => { store.set('mic.told', true); hide($('#micIntro')); };
 $('#dockQuran').onclick = () => {
   closeSheet();

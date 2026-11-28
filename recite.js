@@ -144,34 +144,40 @@ const Recite = (() => {
     toast('التسميع بلا ميكروفون — تعود إليه متى شئت من زر الميكروفون في شريط التسميع', 4200);
     if (g?.start) start(...g.start);
   }
-  // ---- the microphone's tasmee (the model on the phone) needs a strong phone: the tasmee without it is
-  // the default; the first time the microphone is asked for, that is said; and where the phone is
-  // likely to be slow or to close the page under it, it is not offered at all (why: weak())
-  // (deviceMemory and the cores only where the browser tells them truly: Chromium; Safari hides both)
-  function weak() {
-    const mem = navigator.deviceMemory, cores = navigator.hardwareConcurrency || 8;
-    if (mem != null && mem <= 2) return 'ذاكرة هذا الهاتف قليلة';
-    if (mem != null && cores <= 2) return 'معالج هذا الهاتف ضعيف';
-    if (store.get('mu.kills', 0) >= 3) return 'أغلق الهاتف التطبيق مرارًا أثناء التسميع بالميكروفون';
+  // ---- the microphone's tasmee (the model on the phone) is heavy: where the phone looks likely to be
+  // slow (slow()), it is said once, plainly, before it is first used; one tap on «تابع» and it is
+  // never asked again. Nothing is refused: a phone that looks slow may run it well enough.
+  // Signals: deviceMemory and cores only where the browser tells them (Chromium; Safari hides both,
+  // so an iPhone is judged by its timing alone), the model's timed update, and the page closed
+  // more than once lately while listening (kills, the last 14 days only)
+  const SLOW_MS = 3000; // a model's update slower than this (timed on the phone) may lag behind a reading
+  const KILL_DAYS = 14;
+  function recentKills() {
+    const at = store.get('mu.killsAt', []), since = Date.now() - KILL_DAYS * 864e5;
+    return (Array.isArray(at) ? at : []).filter(t => t > since).length;
+  }
+  function slow() {
+    const mem = navigator.deviceMemory, cores = navigator.hardwareConcurrency;
+    if (mem != null && mem <= 3) return 'ذاكرة هذا الهاتف قليلة';
+    if (cores != null && cores <= 2) return 'معالج هذا الهاتف ضعيف';
     const ms = MU() && Mu.choice()?.ms;
-    if (ms && ms > SLOW_MS) return 'نموذج التعرّف بطيء على هذا الهاتف، فلن يلحق بقراءتك';
+    if (ms && ms > SLOW_MS) return 'نموذج التعرّف بطيء على هذا الهاتف';
+    if (recentKills() >= 2) return 'أُغلق التطبيق أكثر من مرة أثناء التسميع بالميكروفون';
     return null;
   }
-  const SLOW_MS = 2000; // a model's update slower than this (timed on the phone) can't follow a reading
-  // true when the way is open; else the screen is shown, and then() follows once the reader agrees
+  // true when the way is open (a phone that looks fine, or the reader agreed once); else the
+  // warning is shown, and then() follows once the reader taps «تابع»
   function power(then, intent) {
-    const why = weak();
-    if (!why && store.get('mic.power', false)) return true;
+    const why = slow();
+    if (!why || store.get('mic.slowOk', false)) return true;
     gate = intent || null;
-    $('#rpwTitle').textContent = why ? 'التسميع بالميكروفون غير متاح على هذا الهاتف' : 'التسميع بالميكروفون يحتاج هاتفًا قويًا';
-    $('#rpwLead').textContent = why
-      ? `${why}، فقد يكون بطيئًا أو يُغلق التطبيق. التسميع بلا ميكروفون يعمل كما هو: تقرأ من حفظك، ثم تُظهر الآية وتعلّم أخطاءك بنفسك.`
-      : 'يعمل نموذج للتعرّف على القراءة داخل هاتفك (نحو ١٢٠ م.ب، يُنزَّل مرة واحدة) ويتابعك كلمةً كلمة. على الهواتف الحديثة يعمل جيدًا، وعلى المتوسطة والقديمة قد يتأخر أو يُغلق التطبيق؛ فإن حدث ذلك عُد إلى التسميع بلا ميكروفون.';
-    $('#rpwGo').hidden = !!why;
+    $('#rpwTitle').textContent = 'قد يكون بطيئًا على هذا الهاتف';
+    $('#rpwLead').textContent = `${why}، فقد يعمل التسميع بالميكروفون ببطء ويستهلك كثيرًا من موارد الهاتف (الذاكرة والبطارية). هل تريد المتابعة؟`;
+    $('#rpwGo').hidden = false;
     $('#rpwManual').hidden = !manualOk();
-    $('#rpwGo').onclick = () => { store.set('mic.power', true); hide($('#recPower')); then(); };
+    $('#rpwGo').onclick = () => { store.set('mic.slowOk', true); hide($('#recPower')); then(); };
     $('#rpwManual').onclick = () => { hide($('#recPower')); goManual(); };
-    $('#rpwLater').textContent = why ? 'حسنًا' : 'ليس الآن';
+    $('#rpwLater').textContent = 'لا';
     $('#rpwLater').onclick = () => hide($('#recPower'));
     show($('#recPower'));
     return false;
@@ -257,8 +263,8 @@ const Recite = (() => {
     li.querySelector('small').textContent = note;
   }
   async function prep(then, intent, after) {
-    // (timed just now and found too slow, or closed once too often: no further)
-    if (weak()) { hide($('#recPrep')); ['#recIntro'].forEach(x => hide($(x))); power(() => {}, intent); return; }
+    // (timed just now and found slow, or closed lately: said once, then on)
+    if (!power(() => prep(then, intent, after), intent)) { hide($('#recPrep')); hide($('#recIntro')); return; }
     const run = ++prepRun;
     prepThen = then; prepIntent = intent; gate = intent || null;
     ['update', 'mic', 'model', 'warm'].forEach(id => prepStep(id, ''));
@@ -448,6 +454,7 @@ const Recite = (() => {
   }
   async function killed(a) {
     store.set('mu.kills', store.get('mu.kills', 0) + 1);
+    store.set('mu.killsAt', [...(store.get('mu.killsAt', []) || []), Date.now()].slice(-10));
     // the session as it was kept (the model is ready by then: it comes back at once) and on, listening
     const then = () => {
       if (!G) restore();
@@ -3302,7 +3309,7 @@ const Recite = (() => {
     // the microphone, on or put away, from the panel's head: every session begun from then on
     if (e.target.closest('[data-rc-manual]')) {
       const off = !setting('manual');
-      // (to the microphone: only on a phone strong enough, once it is said what it needs)
+      // (to the microphone: on a phone that looks slow, said once first)
       if (!off && !(G && !G.done) && !power(() => { store.set('recite.manual', false); rerender(); toast('التسميع بالميكروفون: يتابعك التطبيق كلمةً كلمة', 3000); }, null)) return true;
       if (G && !G.done) muteMic(off); else store.set('recite.manual', off);
       if (!G || G.done) toast(off ? 'التسميع بلا ميكروفون ولا نموذج: تقرأ من حفظك ثم تُظهر الآية وتعلّم أخطاءك بنفسك' : 'التسميع بالميكروفون: يتابعك التطبيق كلمةً كلمة', 3800);
@@ -3561,5 +3568,5 @@ const Recite = (() => {
 
   syncBubble();
 
-  return { weak: () => !!weak(), onChange, holdStart, holdEnd, manual: () => !!G?.manual && !G.done, start, cancel, paint, onTap, card, suraCard, showWord, prepResume, wordStats, resetWord, ago, restore, syncBubble, mic, panelHTML, mounted, onSheetClick, active: () => !!G, _g: () => G };
+  return { slow: () => !!slow(), onChange, holdStart, holdEnd, manual: () => !!G?.manual && !G.done, start, cancel, paint, onTap, card, suraCard, showWord, prepResume, wordStats, resetWord, ago, restore, syncBubble, mic, panelHTML, mounted, onSheetClick, active: () => !!G, _g: () => G };
 })();
